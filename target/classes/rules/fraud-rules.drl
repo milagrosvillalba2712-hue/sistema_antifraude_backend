@@ -1,0 +1,45 @@
+package com.antifraude.drools;
+
+import com.antifraude.transactions.Transaccion;
+
+global com.antifraude.drools.DroolsService.ScoreTracker scoreTracker;
+
+rule "Monto elevado"
+    when
+        $t : Transaccion(monto > 10000)
+    then
+        scoreTracker.addScore(30);
+        System.out.println("[Drools] Monto elevado detectado: " + $t.getMonto());
+end
+
+rule "Transaccion internacional"
+    when
+        $t : Transaccion(paisOrigen != null && !paisOrigen.equalsIgnoreCase("NACIONAL"))
+    then
+        scoreTracker.addScore(20);
+        System.out.println("[Drools] Pais internacional detectado: " + $t.getPaisOrigen());
+end
+
+rule "Transferencia internacional"
+    when
+        $t : Transaccion(canal != null && canal.equalsIgnoreCase("TRANSFERENCIA_INTERNACIONAL"))
+    then
+        scoreTracker.addScore(25);
+        System.out.println("[Drools] Transferencia internacional detectada");
+end
+
+rule "Frecuencia alta - multiples transacciones"
+    when
+        $t : Transaccion($doc : identificadorDocumento)
+    then
+        // Evaluado via servicio
+        System.out.println("[Drools] Evaluando documento: " + $doc);
+end
+
+rule "Horario no habitual"
+    when
+        $t : Transaccion(fechaTransaccion.hour <= 5 || fechaTransaccion.hour >= 23)
+    then
+        scoreTracker.addScore(15);
+        System.out.println("[Drools] Horario no habitual detectado");
+end
