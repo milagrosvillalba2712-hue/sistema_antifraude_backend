@@ -47,4 +47,7 @@ public class Alerta {
 
     @Column(name = "fecha_resolucion")
     private LocalDateTime fechaResolucion;
+
+    @Column(name = "fecha_asignacion")
+    private LocalDateTime fechaAsignacion;
 }

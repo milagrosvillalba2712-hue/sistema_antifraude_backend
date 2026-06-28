@@ -2,6 +2,7 @@ package com.antifraude.alerts;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -16,6 +17,8 @@ public interface AlertaRepository extends JpaRepository<Alerta, Long> {
     List<Alerta> findByTransaccionId(Long transaccionId);
 
     long countByEstado(String estado);
+
+    long countByAsignadoAIdAndEstadoIn(Long asignadoAId, List<String> estados);
 
     @Query("SELECT a.estado, COUNT(a) FROM Alerta a GROUP BY a.estado")
     List<Object[]> countByEstadoGrouped();

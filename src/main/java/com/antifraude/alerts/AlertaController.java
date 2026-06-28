@@ -1,6 +1,6 @@
 package com.antifraude.alerts;
 
-import com.antifraude.dto.AlertaResponse;
+import com.antifraude.dto.*;
 import com.antifraude.users.Usuario;
 import com.antifraude.users.UsuarioService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -48,11 +48,38 @@ public class AlertaController {
     }
 
     @PostMapping("/{id}/asignar")
-    public ResponseEntity<AlertaResponse> asignar(@PathVariable Long id, Authentication auth,
-                                                   HttpServletRequest request) {
+    public ResponseEntity<AlertaResponse> asignar(@PathVariable Long id,
+                                                    @RequestBody(required = false) AsignarAlertaRequest body,
+                                                    Authentication auth,
+                                                    HttpServletRequest request) {
         log.info("[ALERTS] POST /api/alertas/{}/asignar - Usuario: {} - IP: {}", id, auth.getName(), request.getRemoteAddr());
-        Usuario analista = usuarioService.buscarPorEmail(auth.getName());
+        Usuario analista;
+        if (body != null && body.analistaId() != null) {
+            analista = usuarioService.buscarPorId(body.analistaId());
+        } else {
+            analista = usuarioService.buscarPorEmail(auth.getName());
+        }
         return ResponseEntity.ok(toResponse(alertaService.asignarAlerta(id, analista, request)));
+    }
+
+    @PostMapping("/{id}/auto-assign")
+    public ResponseEntity<AlertaResponse> autoAsignar(@PathVariable Long id,
+                                                       Authentication auth,
+                                                       HttpServletRequest request) {
+        log.info("[ALERTS] POST /api/alertas/{}/auto-assign", id);
+        return ResponseEntity.ok(toResponse(alertaService.autoAsignarAlerta(id, request)));
+    }
+
+    @PostMapping("/{id}/reassign")
+    public ResponseEntity<AlertaResponse> reasignar(@PathVariable Long id,
+                                                      @RequestBody ReasignarAlertaRequest body,
+                                                      Authentication auth,
+                                                      HttpServletRequest request) {
+        log.info("[ALERTS] POST /api/alertas/{}/reassign - Nuevo analista: {} - Motivo: {}",
+                id, body.analistaId(), body.motivo());
+        Usuario origen = usuarioService.buscarPorEmail(auth.getName());
+        return ResponseEntity.ok(toResponse(
+                alertaService.reasignarAlerta(id, body.analistaId(), body.motivo(), origen, request)));
     }
 
     @PostMapping("/{id}/resolver")
@@ -62,6 +89,34 @@ public class AlertaController {
         String observacion = body.getOrDefault("observacion", "");
         log.info("[ALERTS] POST /api/alertas/{}/resolver - Observacion: {} - IP: {}", id, observacion, request.getRemoteAddr());
         return ResponseEntity.ok(toResponse(alertaService.resolverAlerta(id, observacion, request)));
+    }
+
+    @GetMapping("/{id}/history")
+    public ResponseEntity<List<HistorialAsignacionResponse>> historial(@PathVariable Long id) {
+        log.info("[ALERTS] GET /api/alertas/{}/history", id);
+        List<HistorialAsignacionResponse> response = alertaService.obtenerHistorial(id).stream()
+                .map(h -> new HistorialAsignacionResponse(
+                        h.getId(),
+                        h.getAlerta().getId(),
+                        h.getUsuarioOrigen() != null ? h.getUsuarioOrigen().getId() : null,
+                        h.getUsuarioOrigen() != null ? h.getUsuarioOrigen().getNombre() : null,
+                        h.getUsuarioDestino().getId(),
+                        h.getUsuarioDestino().getNombre(),
+                        h.getFecha(),
+                        h.getMotivo(),
+                        h.getTipo()))
+                .toList();
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/timeline")
+    public ResponseEntity<List<TimelineEventResponse>> timeline(@PathVariable Long id) {
+        log.info("[ALERTS] GET /api/alertas/{}/timeline", id);
+        List<TimelineEventResponse> response = alertaService.obtenerTimeline(id).stream()
+                .map(e -> new TimelineEventResponse(
+                        null, e.tipo(), e.descripcion(), e.fecha(), e.usuario()))
+                .toList();
+        return ResponseEntity.ok(response);
     }
 
     private AlertaResponse toResponse(Alerta a) {
