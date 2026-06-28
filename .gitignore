@@ -1,0 +1,32 @@
+# Build artifacts
+target/
+*.class
+*.jar
+*.war
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Session files
+session-*.md
+
+# Local documentation
+GUIA_DE_PRUEBAS.md
+GUIA_EJECUCION.md
+guia_backend_sistema_antifraude_completo.md
