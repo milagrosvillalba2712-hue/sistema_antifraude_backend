@@ -28,6 +28,9 @@ public class Alerta {
     @JoinColumn(name = "regla_id")
     private ReglaRiesgo regla;
 
+    @Column(unique = true, length = 30)
+    private String codigo;
+
     @Column(length = 20)
     private String prioridad;
 

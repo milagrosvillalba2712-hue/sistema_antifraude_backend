@@ -1,0 +1,34 @@
+package com.antifraude.drools;
+
+import com.antifraude.drools.RiskContext;
+import com.antifraude.drools.fact.TransaccionFact;
+
+global com.antifraude.drools.DroolsService.ScoreTracker scoreTracker;
+
+rule "Transaccion internacional"
+    when
+        $ctx : RiskContext()
+        $t : TransaccionFact(esInternacional == true) from $ctx.getTransaccionFact()
+    then
+        scoreTracker.addScore(20);
+        System.out.println("[Drools] Transaccion internacional detectada - Pais origen: " + $t.getPaisOrigenCodigo());
+end
+
+rule "Pais de alto riesgo"
+    when
+        $ctx : RiskContext()
+        $t : TransaccionFact(paisOrigenCodigo != null, paisOrigenCodigo != "PRY") from $ctx.getTransaccionFact()
+    then
+        scoreTracker.addScore(15);
+        System.out.println("[Drools] Pais de alto riesgo detectado: " + $t.getPaisOrigenCodigo());
+end
+
+rule "Pais destino diferente a origen"
+    when
+        $ctx : RiskContext()
+        $t : TransaccionFact(paisOrigenCodigo != null, paisDestinoCodigo != null, 
+                             paisOrigenCodigo != paisDestinoCodigo) from $ctx.getTransaccionFact()
+    then
+        scoreTracker.addScore(10);
+        System.out.println("[Drools] Pais destino diferente a origen");
+end

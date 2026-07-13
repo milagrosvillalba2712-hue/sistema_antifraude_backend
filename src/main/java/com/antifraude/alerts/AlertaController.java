@@ -82,6 +82,12 @@ public class AlertaController {
                 alertaService.reasignarAlerta(id, body.analistaId(), body.motivo(), origen, request)));
     }
 
+    @PostMapping("/{id}/cerrar")
+    public ResponseEntity<AlertaResponse> cerrar(@PathVariable Long id) {
+        log.info("[ALERTS] POST /api/alertas/{}/cerrar", id);
+        return ResponseEntity.ok(toResponse(alertaService.cerrarAlerta(id)));
+    }
+
     @PostMapping("/{id}/resolver")
     public ResponseEntity<AlertaResponse> resolver(@PathVariable Long id,
                                                     @RequestBody Map<String, String> body,

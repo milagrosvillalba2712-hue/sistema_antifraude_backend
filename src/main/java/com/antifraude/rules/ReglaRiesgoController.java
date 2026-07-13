@@ -82,6 +82,47 @@ public class ReglaRiesgoController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/{id}/activar")
+    public ResponseEntity<Void> activar(@PathVariable Long id) {
+        log.info("[RULES] POST /api/reglas/{}/activar", id);
+        reglaRiesgoService.activar(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{id}/desactivar")
+    public ResponseEntity<Void> desactivar(@PathVariable Long id) {
+        log.info("[RULES] POST /api/reglas/{}/desactivar", id);
+        reglaRiesgoService.desactivar(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{id}/version")
+    public ResponseEntity<ReglaRiesgoResponse> crearVersion(@PathVariable Long id) {
+        log.info("[RULES] POST /api/reglas/{}/version", id);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(reglaRiesgoService.crearNuevaVersion(id)));
+    }
+
+    @GetMapping("/{id}/historial")
+    public ResponseEntity<List<ReglaRiesgoResponse>> historial(@PathVariable Long id) {
+        log.info("[RULES] GET /api/reglas/{}/historial", id);
+        List<ReglaRiesgoResponse> response = reglaRiesgoService.listarHistorial(id).stream().map(this::toResponse).toList();
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/escenario/{escenarioId}")
+    public ResponseEntity<List<ReglaRiesgoResponse>> listarPorEscenario(@PathVariable Long escenarioId) {
+        log.info("[RULES] GET /api/reglas/escenario/{}", escenarioId);
+        List<ReglaRiesgoResponse> response = reglaRiesgoService.listarPorEscenario(escenarioId).stream().map(this::toResponse).toList();
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/estado/{estado}")
+    public ResponseEntity<List<ReglaRiesgoResponse>> listarPorEstado(@PathVariable String estado) {
+        log.info("[RULES] GET /api/reglas/estado/{}", estado);
+        List<ReglaRiesgoResponse> response = reglaRiesgoService.listarPorEstado(estado).stream().map(this::toResponse).toList();
+        return ResponseEntity.ok(response);
+    }
+
     private ReglaRiesgoResponse toResponse(ReglaRiesgo r) {
         return new ReglaRiesgoResponse(
                 r.getId(), r.getNombre(), r.getDescripcion(), r.getTipoRegla(),

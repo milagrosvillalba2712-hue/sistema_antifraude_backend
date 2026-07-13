@@ -63,8 +63,24 @@ public class TransaccionController {
 
     private TransaccionResponse toResponse(Transaccion t) {
         return new TransaccionResponse(
-                t.getId(), t.getTransactionUuid().toString(), t.getIdentificadorDocumento(),
-                t.getMonto(), t.getMoneda(), t.getCanal(), t.getTipoTransaccion(),
-                t.getEstado(), t.getScoreRiesgo(), t.getFechaTransaccion(), t.getFechaProcesamiento());
+                t.getId(),
+                t.getTransactionUuid().toString(),
+                t.getCodigo(),
+                t.getIdentificadorDocumento(),
+                t.getMonto(),
+                t.getMoneda(),
+                t.getCanal(),
+                t.getTipoTransaccion(),
+                t.getEstado(),
+                t.getEstadoEvaluacion() != null ? t.getEstadoEvaluacion().name() : null,
+                t.getScoreRiesgo(),
+                t.getFechaTransaccion(),
+                t.getFechaProcesamiento(),
+                t.getPersonaRemitente() != null ? t.getPersonaRemitente().getNombreCompleto() : null,
+                t.getPersonaBeneficiario() != null ? t.getPersonaBeneficiario().getNombreCompleto() : null,
+                t.getProducto() != null ? t.getProducto().getNombre() : null,
+                t.getPaisOrigenRef() != null ? t.getPaisOrigenRef().getNombre() : t.getPaisOrigen(),
+                t.getPaisDestinoRef() != null ? t.getPaisDestinoRef().getNombre() : null,
+                t.getNivelRiesgo() != null ? t.getNivelRiesgo().getCodigo() : null);
     }
 }

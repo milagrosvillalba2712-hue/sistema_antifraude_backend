@@ -1,5 +1,6 @@
 package com.antifraude.users;
 
+import com.antifraude.common.entity.AuditableEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -7,11 +8,14 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "usuarios")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Usuario {
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
+public class Usuario extends AuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,7 +31,8 @@ public class Usuario {
     private String passwordHash;
 
     @Column(nullable = false, length = 30)
-    private String rol;
+    @Enumerated(EnumType.STRING)
+    private Rol rol;
 
     @Column(nullable = false)
     @Builder.Default
@@ -37,7 +42,26 @@ public class Usuario {
     @Builder.Default
     private Integer intentosFallidos = 0;
 
-    @Column(name = "fecha_creacion", updatable = false)
-    @Builder.Default
-    private LocalDateTime fechaCreacion = LocalDateTime.now();
+    @Column(name = "bloqueado_hasta")
+    private LocalDateTime bloqueadoHasta;
+
+    public enum Rol {
+        ADMINISTRADOR, SUPERVISOR, ANALISTA, AUDITOR
+    }
+
+    public boolean isBlocked() {
+        return bloqueadoHasta != null && LocalDateTime.now().isBefore(bloqueadoHasta);
+    }
+
+    public void incrementFailedAttempts() {
+        this.intentosFallidos++;
+        if (this.intentosFallidos >= 5) {
+            this.bloqueadoHasta = LocalDateTime.now().plusMinutes(15);
+        }
+    }
+
+    public void resetFailedAttempts() {
+        this.intentosFallidos = 0;
+        this.bloqueadoHasta = null;
+    }
 }

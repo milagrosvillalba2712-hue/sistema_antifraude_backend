@@ -1,0 +1,15 @@
+package com.antifraude.drools;
+
+import com.antifraude.drools.RiskContext;
+import com.antifraude.drools.fact.PeptFact;
+
+global com.antifraude.drools.DroolsService.ScoreTracker scoreTracker;
+
+rule "PEP detectado"
+    when
+        $ctx : RiskContext()
+        $p : PeptFact() from $ctx.getRegistrosPEP()
+    then
+        scoreTracker.addScore(40);
+        System.out.println("[Drools] PEP detectado: " + $p.getNombreCompleto() + " - Cargo: " + $p.getCargo());
+end

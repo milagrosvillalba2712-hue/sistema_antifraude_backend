@@ -67,13 +67,13 @@ public class AuthService {
         usuario.setIntentosFallidos(0);
         usuarioRepository.save(usuario);
 
-        String token = jwtTokenProvider.generateToken(usuario.getEmail(), usuario.getRol());
+        String token = jwtTokenProvider.generateToken(usuario.getEmail(), usuario.getRol().name());
         log.info("[AUTH] Token generado para {} - Rol: {} - IP: {}", usuario.getEmail(), usuario.getRol(), ip);
 
         auditoriaService.registrar(usuario.getId(), "LOGIN", "Inicio de sesion exitoso",
                 ip, "usuarios", usuario.getId());
 
-        return new LoginResponse(token, "Bearer", usuario.getEmail(), usuario.getRol());
+        return new LoginResponse(token, "Bearer", usuario.getEmail(), usuario.getRol().name());
     }
 
     public void registrarUsuario(Usuario usuario) {

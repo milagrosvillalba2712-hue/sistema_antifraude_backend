@@ -184,6 +184,16 @@ public class AlertaService {
         return alertaRepository.countByEstado(estado);
     }
 
+    public Alerta cerrarAlerta(Long alertaId) {
+        log.info("[ALERTS] Cerrando alerta ID: {}", alertaId);
+        Alerta alerta = buscarPorId(alertaId);
+        alerta.setEstado("CERRADA");
+        alerta.setFechaResolucion(LocalDateTime.now());
+        Alerta cerrada = alertaRepository.save(alerta);
+        log.info("[ALERTS] Alerta ID: {} cerrada exitosamente", alertaId);
+        return cerrada;
+    }
+
     @Transactional(readOnly = true)
     public List<HistorialAsignacion> obtenerHistorial(Long alertaId) {
         buscarPorId(alertaId);

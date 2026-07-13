@@ -24,8 +24,12 @@ public class ReglaRiesgoService {
     public ReglaRiesgo crear(ReglaRiesgo regla) {
         log.info("[RULES] Creando regla: {} - Tipo: {} - Severidad: {}",
                 regla.getNombre(), regla.getTipoRegla(), regla.getSeveridad());
+        if (regla.getVersion() == null) {
+            regla.setVersion(1);
+        }
         ReglaRiesgo creada = reglaRiesgoRepository.save(regla);
-        log.info("[RULES] Regla creada - ID: {} - Nombre: {}", creada.getId(), creada.getNombre());
+        log.info("[RULES] Regla creada - ID: {} - Nombre: {} - Version: {}",
+                creada.getId(), creada.getNombre(), creada.getVersion());
         return creada;
     }
 
@@ -50,6 +54,11 @@ public class ReglaRiesgoService {
         return reglaRiesgoRepository.findByActivaTrue();
     }
 
+    public List<ReglaRiesgo> listarPorEscenario(Long escenarioId) {
+        log.debug("[RULES] Listando reglas por escenario: {}", escenarioId);
+        return reglaRiesgoRepository.findByEscenarioId(escenarioId);
+    }
+
     public ReglaRiesgo actualizar(Long id, ReglaRiesgo actualizada) {
         log.info("[RULES] Actualizando regla ID: {}", id);
         ReglaRiesgo regla = buscarPorId(id);
@@ -59,10 +68,42 @@ public class ReglaRiesgoService {
         regla.setSeveridad(actualizada.getSeveridad());
         regla.setCondicion(actualizada.getCondicion());
         regla.setActiva(actualizada.getActiva());
+        regla.setEscenario(actualizada.getEscenario());
+        regla.setScoreBase(actualizada.getScoreBase());
+        regla.setParametros(actualizada.getParametros());
+        regla.setEstado(actualizada.getEstado());
         regla.setFechaModificacion(LocalDateTime.now());
         ReglaRiesgo guardada = reglaRiesgoRepository.save(regla);
-        log.info("[RULES] Regla actualizada - ID: {} - Nombre: {}", id, guardada.getNombre());
+        log.info("[RULES] Regla actualizada - ID: {} - Nombre: {} - Version: {}",
+                id, guardada.getNombre(), guardada.getVersion());
         return guardada;
+    }
+
+    public ReglaRiesgo crearNuevaVersion(Long reglaId) {
+        log.info("[RULES] Creando nueva version de regla ID: {}", reglaId);
+        ReglaRiesgo original = buscarPorId(reglaId);
+
+        ReglaRiesgo nuevaVersion = ReglaRiesgo.builder()
+                .nombre(original.getNombre())
+                .codigo(original.getCodigo())
+                .descripcion(original.getDescripcion())
+                .tipoRegla(original.getTipoRegla())
+                .severidad(original.getSeveridad())
+                .prioridad(original.getPrioridad())
+                .condicion(original.getCondicion())
+                .escenario(original.getEscenario())
+                .scoreBase(original.getScoreBase())
+                .parametros(original.getParametros())
+                .version(original.getVersion() + 1)
+                .versionAnteriorId(original.getId())
+                .activa(false)
+                .estado("BORRADOR")
+                .creadaPor(original.getCreadaPor())
+                .build();
+
+        ReglaRiesgo creada = reglaRiesgoRepository.save(nuevaVersion);
+        log.info("[RULES] Nueva version creada - ID: {} - Version: {}", creada.getId(), creada.getVersion());
+        return creada;
     }
 
     public void toggleActiva(Long id) {
@@ -72,5 +113,36 @@ public class ReglaRiesgoService {
         regla.setFechaModificacion(LocalDateTime.now());
         reglaRiesgoRepository.save(regla);
         log.info("[RULES] Regla ID: {} - Activa: {}", id, regla.getActiva());
+    }
+
+    public void activar(Long id) {
+        log.info("[RULES] Activando regla ID: {}", id);
+        ReglaRiesgo regla = buscarPorId(id);
+        regla.setActiva(true);
+        regla.setEstado("ACTIVA");
+        regla.setFechaModificacion(LocalDateTime.now());
+        reglaRiesgoRepository.save(regla);
+        log.info("[RULES] Regla ID: {} activada", id);
+    }
+
+    public void desactivar(Long id) {
+        log.info("[RULES] Desactivando regla ID: {}", id);
+        ReglaRiesgo regla = buscarPorId(id);
+        regla.setActiva(false);
+        regla.setEstado("INACTIVA");
+        regla.setFechaModificacion(LocalDateTime.now());
+        reglaRiesgoRepository.save(regla);
+        log.info("[RULES] Regla ID: {} desactivada", id);
+    }
+
+    public List<ReglaRiesgo> listarPorEstado(String estado) {
+        log.debug("[RULES] Listando reglas por estado: {}", estado);
+        return reglaRiesgoRepository.findByEstado(estado);
+    }
+
+    public List<ReglaRiesgo> listarHistorial(Long id) {
+        log.debug("[RULES] Listando historial de versiones para regla ID: {}", id);
+        ReglaRiesgo regla = buscarPorId(id);
+        return reglaRiesgoRepository.findByNombreOrderByVersionDesc(regla.getNombre());
     }
 }

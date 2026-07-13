@@ -1,0 +1,15 @@
+package com.antifraude.drools;
+
+import com.antifraude.drools.RiskContext;
+import com.antifraude.drools.fact.ObservadoFact;
+
+global com.antifraude.drools.DroolsService.ScoreTracker scoreTracker;
+
+rule "Cliente observado detectado"
+    when
+        $ctx : RiskContext()
+        $o : ObservadoFact() from $ctx.getRegistrosObservados()
+    then
+        scoreTracker.addScore(60);
+        System.out.println("[Drools] Cliente OBSERVADO detectado: " + $o.getNombreCompleto() + " - Motivo: " + $o.getMotivo());
+end
