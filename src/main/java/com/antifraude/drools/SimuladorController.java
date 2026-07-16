@@ -2,7 +2,8 @@ package com.antifraude.drools;
 
 import com.antifraude.common.entity.*;
 import com.antifraude.common.repository.*;
-import com.antifraude.dto.TransaccionRequest;
+import com.antifraude.dto.SimuladorRequest;
+import com.antifraude.dto.SimuladorResponse;
 import com.antifraude.transactions.Transaccion;
 import com.antifraude.transactions.Transaccion.EstadoEvaluacion;
 import org.slf4j.Logger;
@@ -10,8 +11,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -26,38 +27,45 @@ public class SimuladorController {
     private final MonedaRepository monedaRepository;
     private final CanalRepository canalRepository;
     private final ProductoRepository productoRepository;
-    private final PersonaRepository personaRepository;
 
     public SimuladorController(RiskContextBuilder riskContextBuilder, DroolsService droolsService,
                                PaisRepository paisRepository, MonedaRepository monedaRepository,
-                               CanalRepository canalRepository, ProductoRepository productoRepository,
-                               PersonaRepository personaRepository) {
+                               CanalRepository canalRepository, ProductoRepository productoRepository) {
         this.riskContextBuilder = riskContextBuilder;
         this.droolsService = droolsService;
         this.paisRepository = paisRepository;
         this.monedaRepository = monedaRepository;
         this.canalRepository = canalRepository;
         this.productoRepository = productoRepository;
-        this.personaRepository = personaRepository;
     }
 
     @PostMapping("/evaluar")
-    public ResponseEntity<SimulacionResponse> evaluar(@RequestBody TransaccionRequest request) {
+    public ResponseEntity<SimuladorResponse> evaluar(@RequestBody SimuladorRequest request) {
         log.info("[SIM] POST /api/simulador/evaluar - UUID: {} - Monto: {}",
-                request.transactionUuid(), request.monto());
+                "SIMULACION", request.monto());
 
         Transaccion transaccion = construirTransaccion(request);
 
         RiskContext context = riskContextBuilder.build(transaccion);
         RiskResult result = droolsService.evaluar(context);
 
-        SimulacionResponse response = new SimulacionResponse(
+        List<SimuladorResponse.ReglaResultado> reglas = result.reglasDisparadas().stream()
+                .map(r -> new SimuladorResponse.ReglaResultado(r.codigo(), r.descripcion(), true, r.score(), r.severidad()))
+                .toList();
+        List<String> acciones = result.reglasDisparadas().stream()
+                .map(RiskResult.ReglaDisparada::accionRecomendada)
+                .filter(a -> a != null && !a.isBlank())
+                .toList();
+
+        SimuladorResponse response = new SimuladorResponse(
                 result.scoreTotal(),
                 result.nivelRiesgo(),
                 result.requiereAccionInmediata(),
                 result.observaciones(),
                 transaccion.getEstado(),
-                transaccion.getEstadoEvaluacion() != null ? transaccion.getEstadoEvaluacion().name() : null
+                transaccion.getEstadoEvaluacion() != null ? transaccion.getEstadoEvaluacion().name() : null,
+                reglas,
+                acciones
         );
 
         log.info("[SIM] Simulacion completada - Score: {} - Nivel: {}",
@@ -65,42 +73,35 @@ public class SimuladorController {
         return ResponseEntity.ok(response);
     }
 
-    private Transaccion construirTransaccion(TransaccionRequest request) {
-        UUID uuid = UUID.fromString(request.transactionUuid());
+    private Transaccion construirTransaccion(SimuladorRequest request) {
+        UUID uuid = UUID.randomUUID();
 
-        Moneda moneda = request.moneda() != null
-                ? monedaRepository.findByCodigoIso(request.moneda()).orElse(null) : null;
-        Canal canal = request.canal() != null
-                ? canalRepository.findByCodigo(request.canal()).orElse(null) : null;
-        Pais paisOrigen = resolvePais(request.paisOrigen());
-        Pais paisDestino = request.paisDestino() != null
-                ? paisRepository.findByCodigoIso(request.paisDestino()).orElse(null) : null;
-        Producto producto = request.productoId() != null
-                ? productoRepository.findById(request.productoId()).orElse(null) : null;
-        Persona remitente = request.personaRemitenteId() != null
-                ? personaRepository.findById(request.personaRemitenteId()).orElse(null) : null;
-        Persona beneficiario = request.personaBeneficiarioId() != null
-                ? personaRepository.findById(request.personaBeneficiarioId()).orElse(null) : null;
+        Moneda moneda = request.monedaCodigo() != null
+                ? monedaRepository.findByCodigoIso(request.monedaCodigo()).orElse(null) : null;
+        Canal canal = request.canalCodigo() != null
+                ? canalRepository.findByCodigo(request.canalCodigo()).orElse(null) : null;
+        Pais paisOrigen = resolvePais(request.paisOrigenCodigo());
+        Pais paisDestino = request.paisDestinoCodigo() != null
+                ? paisRepository.findByCodigoIso(request.paisDestinoCodigo()).orElse(null) : null;
+        Producto producto = request.productoCodigo() != null
+                ? productoRepository.findByCodigo(request.productoCodigo()).orElse(null) : null;
 
         return Transaccion.builder()
                 .transactionUuid(uuid)
-                .identificadorDocumento(request.identificadorDocumento())
-                .cuentaOrigen(request.cuentaOrigen())
-                .cuentaDestino(request.cuentaDestino())
+                .identificadorDocumento(request.documentoCliente())
+                .cuentaOrigen("SIMULACION")
+                .cuentaDestino("SIMULACION")
                 .monto(request.monto())
-                .moneda(request.moneda())
+                .moneda(request.monedaCodigo())
                 .monedaRef(moneda)
-                .canal(request.canal())
+                .canal(request.canalCodigo())
                 .canalRef(canal)
-                .tipoTransaccion(request.tipoTransaccion())
-                .ipOrigen(request.ipOrigen())
-                .paisOrigen(request.paisOrigen())
+                .tipoTransaccion("SIMULACION")
+                .paisOrigen(request.paisOrigenCodigo())
                 .paisOrigenRef(paisOrigen)
                 .paisDestinoRef(paisDestino)
-                .personaRemitente(remitente)
-                .personaBeneficiario(beneficiario)
                 .producto(producto)
-                .fechaTransaccion(request.fechaTransaccion())
+                .fechaTransaccion(request.fechaHora() != null ? request.fechaHora() : LocalDateTime.now())
                 .estado("SIMULACION")
                 .estadoEvaluacion(EstadoEvaluacion.PENDIENTE)
                 .build();
@@ -111,13 +112,4 @@ public class SimuladorController {
         return paisRepository.findByNombre(nombre)
                 .orElseGet(() -> paisRepository.findByCodigoIso(nombre).orElse(null));
     }
-
-    public record SimulacionResponse(
-            BigDecimal scoreTotal,
-            String nivelRiesgo,
-            boolean requiereAccionInmediata,
-            String observaciones,
-            String estado,
-            String estadoEvaluacion
-    ) {}
 }

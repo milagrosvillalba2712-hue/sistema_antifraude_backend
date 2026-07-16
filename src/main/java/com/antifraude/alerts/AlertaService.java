@@ -4,10 +4,10 @@ import com.antifraude.audit.AuditoriaService;
 import com.antifraude.exception.BusinessException;
 import com.antifraude.exception.ResourceNotFoundException;
 import com.antifraude.profile.DisponibilidadService;
-import com.antifraude.profile.PerfilService;
 import com.antifraude.rules.ReglaRiesgo;
 import com.antifraude.transactions.Transaccion;
 import com.antifraude.users.Usuario;
+import com.antifraude.users.UsuarioRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,15 +27,18 @@ public class AlertaService {
     private final HistorialAsignacionRepository historialRepository;
     private final AuditoriaService auditoriaService;
     private final DisponibilidadService disponibilidadService;
+    private final UsuarioRepository usuarioRepository;
 
     public AlertaService(AlertaRepository alertaRepository,
                           HistorialAsignacionRepository historialRepository,
                           AuditoriaService auditoriaService,
-                          DisponibilidadService disponibilidadService) {
+                          DisponibilidadService disponibilidadService,
+                          UsuarioRepository usuarioRepository) {
         this.alertaRepository = alertaRepository;
         this.historialRepository = historialRepository;
         this.auditoriaService = auditoriaService;
         this.disponibilidadService = disponibilidadService;
+        this.usuarioRepository = usuarioRepository;
     }
 
     public Alerta crearAlerta(Transaccion transaccion, ReglaRiesgo regla, String prioridad) {
@@ -44,8 +47,9 @@ public class AlertaService {
         Alerta alerta = Alerta.builder()
                 .transaccion(transaccion)
                 .regla(regla)
+                .codigo("ALT-" + java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase())
                 .prioridad(prioridad)
-                .estado("PENDIENTE")
+                .estado("NUEVA")
                 .build();
         Alerta creada = alertaRepository.save(alerta);
         log.info("[ALERTS] Alerta creada - ID: {} - Prioridad: {}", creada.getId(), prioridad);
@@ -141,7 +145,9 @@ public class AlertaService {
             throw new BusinessException("ALREADY_ASSIGNED", "La alerta ya tiene un analista asignado");
         }
 
-        List<Usuario> analistas = List.of();
+        List<Usuario> analistas = usuarioRepository.findByRolAndActivoTrue(Usuario.Rol.ANALISTA).stream()
+                .filter(u -> disponibilidadService.estaDisponible(u.getId()))
+                .toList();
         if (!analistas.isEmpty()) {
             Usuario asignado = analistas.get(0);
             alerta.setAsignadoA(asignado);
@@ -167,7 +173,7 @@ public class AlertaService {
         log.info("[ALERTS] Resolviendo alerta ID: {} - Observacion: {} - IP: {}",
                 alertaId, observacion, request.getRemoteAddr());
         Alerta alerta = buscarPorId(alertaId);
-        alerta.setEstado("RESUELTA");
+        alerta.setEstado("CERRADA");
         alerta.setObservacion(observacion);
         alerta.setFechaResolucion(LocalDateTime.now());
         if (alerta.getAsignadoA() != null) {

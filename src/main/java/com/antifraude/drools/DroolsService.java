@@ -26,14 +26,17 @@ public class DroolsService {
     private final ReglaRiesgoService reglaRiesgoService;
     private final AlertaService alertaService;
     private final EjecucionReglaRepository ejecucionReglaRepository;
+    private final ConditionEvaluator conditionEvaluator;
 
     public DroolsService(KieContainer kieContainer, ReglaRiesgoService reglaRiesgoService,
                          AlertaService alertaService,
-                         EjecucionReglaRepository ejecucionReglaRepository) {
+                         EjecucionReglaRepository ejecucionReglaRepository,
+                         ConditionEvaluator conditionEvaluator) {
         this.kieContainer = kieContainer;
         this.reglaRiesgoService = reglaRiesgoService;
         this.alertaService = alertaService;
         this.ejecucionReglaRepository = ejecucionReglaRepository;
+        this.conditionEvaluator = conditionEvaluator;
     }
 
     /**
@@ -49,10 +52,13 @@ public class DroolsService {
 
             kieSession.insert(context);
 
-            List<RiskResult.ReglaDisparada> reglasDisparadas = new ArrayList<>();
-
             kieSession.fireAllRules();
             BigDecimal score = tracker.getScore();
+            List<RiskResult.ReglaDisparada> reglasDisparadas = evaluarReglasGuiadas(context);
+            BigDecimal scoreGuiado = reglasDisparadas.stream()
+                    .map(RiskResult.ReglaDisparada::score)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            score = score.add(scoreGuiado);
 
             if (score.compareTo(BigDecimal.ZERO) == 0) {
                 score = calcularScoreDefault(context.getTransaccionFact());
@@ -63,36 +69,62 @@ public class DroolsService {
             log.info("[DROOLS] Score final para UUID: {} - Score: {} - Nivel: {}",
                     context.getTransaccionFact().getTransactionUuid(), score, nivel);
 
-            registrarEjecucion(context, score, nivel);
-
             if (score.compareTo(new BigDecimal("70")) >= 0) {
                 log.warn("[DROOLS] Score alto detectado - UUID: {} - Score: {} - Generando alertas",
                         context.getTransaccionFact().getTransactionUuid(), score);
-                crearAlertasDesdeResultado(context.getTransaccion(), score, nivel);
+                crearAlertasDesdeResultado(context.getTransaccion(), reglasDisparadas, score, nivel);
             }
 
-            return new RiskResult(score, nivel, reglasDisparadas, false, null);
+            return new RiskResult(score, nivel, reglasDisparadas, score.compareTo(new BigDecimal("70")) >= 0, null);
         } finally {
             kieSession.dispose();
         }
     }
 
-    private void registrarEjecucion(RiskContext context, BigDecimal score, String nivel) {
+    private List<RiskResult.ReglaDisparada> evaluarReglasGuiadas(RiskContext context) {
+        List<RiskResult.ReglaDisparada> reglasDisparadas = new ArrayList<>();
+        List<ReglaRiesgo> reglasActivas = reglaRiesgoService.listarActivas();
+        for (ReglaRiesgo regla : reglasActivas) {
+            long inicio = System.currentTimeMillis();
+            boolean cumplida = conditionEvaluator.evaluate(regla.getCondicionesJson(), context);
+            BigDecimal score = cumplida && regla.getScoreBase() != null ? regla.getScoreBase() : BigDecimal.ZERO;
+            registrarEjecucion(context, regla, cumplida, score, System.currentTimeMillis() - inicio);
+            if (cumplida) {
+                reglasDisparadas.add(new RiskResult.ReglaDisparada(
+                        regla.getId(),
+                        regla.getCodigo(),
+                        regla.getNombre(),
+                        score,
+                        regla.getSeveridad(),
+                        regla.getAccionesJson()));
+            }
+        }
+        return reglasDisparadas;
+    }
+
+    private void registrarEjecucion(RiskContext context, ReglaRiesgo regla, boolean cumplida, BigDecimal score, Long tiempoMs) {
         try {
+            if (context.getTransaccion() == null || regla == null) {
+                return;
+            }
             EjecucionRegla ejecucion = EjecucionRegla.builder()
+                    .regla(regla)
+                    .transaccion(context.getTransaccion())
                     .scoreRegla(score)
-                    .resultadoEvaluacion(nivel)
-                    .condicionEvaluada("Evaluacion Drools - RiskContext")
+                    .resultadoEvaluacion(cumplida ? "CUMPLIO" : "NO_CUMPLIO")
+                    .condicionEvaluada(regla.getCondicion())
+                    .tiempoEjecucionMs(tiempoMs)
                     .fechaEjecucion(LocalDateTime.now())
+                    .detalle(regla.getAccionesJson())
                     .build();
             ejecucionReglaRepository.save(ejecucion);
-            log.debug("[DROOLS] Ejecucion registrada - Score: {} - Nivel: {}", score, nivel);
+            log.debug("[DROOLS] Ejecucion registrada - Regla: {} - Cumplida: {}", regla.getCodigo(), cumplida);
         } catch (Exception e) {
             log.warn("[DROOLS] No se pudo registrar ejecucion: {}", e.getMessage());
         }
     }
 
-    private void crearAlertasDesdeResultado(Transaccion transaccion, BigDecimal score, String nivel) {
+    private void crearAlertasDesdeResultado(Transaccion transaccion, List<RiskResult.ReglaDisparada> reglasDisparadas, BigDecimal score, String nivel) {
         String prioridad;
         if ("CRITICO".equals(nivel)) {
             prioridad = "CRITICA";
@@ -102,9 +134,9 @@ public class DroolsService {
             prioridad = "MEDIA";
         }
 
-        List<ReglaRiesgo> reglasActivas = reglaRiesgoService.listarActivas();
-        for (ReglaRiesgo regla : reglasActivas) {
-            if ("ALTA".equals(regla.getSeveridad()) || "CRITICA".equals(regla.getSeveridad())) {
+        for (RiskResult.ReglaDisparada disparada : reglasDisparadas) {
+            if ("ALTA".equals(disparada.severidad()) || "CRITICA".equals(disparada.severidad())) {
+                ReglaRiesgo regla = reglaRiesgoService.buscarPorId(disparada.reglaId());
                 alertaService.crearAlerta(transaccion, regla, prioridad);
             }
         }

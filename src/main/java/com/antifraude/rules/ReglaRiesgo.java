@@ -41,6 +41,12 @@ public class ReglaRiesgo {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String condicion;
 
+    @Column(name = "condiciones_json", columnDefinition = "TEXT")
+    private String condicionesJson;
+
+    @Column(name = "acciones_json", columnDefinition = "TEXT")
+    private String accionesJson;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "escenario_id")
     private Escenario escenario;
