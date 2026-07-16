@@ -49,6 +49,7 @@ public class SecurityConfig {
                     .requestMatchers("/api-docs/**").permitAll()
                     .requestMatchers("/api/admin/**").hasRole("ADMINISTRADOR")
                     .requestMatchers("/api/reglas/**").hasAnyRole("ADMINISTRADOR", "SUPERVISOR")
+                    .requestMatchers("/api/rule-engine/**").hasAnyRole("ADMINISTRADOR", "SUPERVISOR")
                     .requestMatchers("/api/simulador/**").hasAnyRole("ADMINISTRADOR", "SUPERVISOR")
                     .requestMatchers("/api/escenarios/**").hasAnyRole("ADMINISTRADOR", "SUPERVISOR")
                     .requestMatchers("/api/casos/**").hasAnyRole("ADMINISTRADOR", "SUPERVISOR", "ANALISTA")

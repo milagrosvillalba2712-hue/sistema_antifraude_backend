@@ -64,7 +64,7 @@ public class AuthService {
                     return new AuthenticationErrorException("Usuario no encontrado");
                 });
 
-        usuario.setIntentosFallidos(0);
+        usuario.resetFailedAttempts();
         usuarioRepository.save(usuario);
 
         String token = jwtTokenProvider.generateToken(usuario.getEmail(), usuario.getRol().name());
@@ -88,10 +88,9 @@ public class AuthService {
 
     private void incrementarIntentosFallidos(String email) {
         usuarioRepository.findByEmail(email).ifPresent(usuario -> {
-            int intentos = usuario.getIntentosFallidos() + 1;
-            usuario.setIntentosFallidos(intentos);
+            usuario.incrementFailedAttempts();
             usuarioRepository.save(usuario);
-            log.warn("[AUTH] Intentos fallidos para {}: {}/5 - IP: {}", email, intentos);
+            log.warn("[AUTH] Intentos fallidos para {}: {}/5", email, usuario.getIntentosFallidos());
         });
     }
 }
