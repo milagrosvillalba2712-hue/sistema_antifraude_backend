@@ -51,7 +51,7 @@ public class AdminController {
                 .nombre(request.nombre())
                 .email(request.email())
                 .passwordHash(request.password())
-                .rol(request.rol())
+                .rol(Usuario.Rol.valueOf(request.rol()))
                 .build();
         Usuario creado = usuarioService.crearUsuario(usuario);
         auditoriaService.registrar(creado.getId(), "CREAR_USUARIO",
@@ -69,7 +69,7 @@ public class AdminController {
                 .nombre(request.nombre())
                 .email(request.email())
                 .passwordHash(request.password())
-                .rol(request.rol())
+                .rol(Usuario.Rol.valueOf(request.rol()))
                 .build();
         Usuario guardado = usuarioService.actualizar(id, actualizado);
         auditoriaService.registrar(guardado.getId(), "ACTUALIZAR_USUARIO",
@@ -92,7 +92,7 @@ public class AdminController {
 
     private UsuarioResponse toResponse(Usuario u) {
         return new UsuarioResponse(
-                u.getId(), u.getNombre(), u.getEmail(), u.getRol(),
-                u.getActivo(), u.getIntentosFallidos(), u.getFechaCreacion());
+                u.getId(), u.getNombre(), u.getEmail(), u.getRol().name(),
+                u.getActivo(), u.getIntentosFallidos(), u.getFechaHoraCreacion());
     }
 }

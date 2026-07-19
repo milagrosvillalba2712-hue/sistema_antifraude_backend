@@ -18,6 +18,8 @@ public interface AlertaRepository extends JpaRepository<Alerta, Long> {
 
     long countByEstado(String estado);
 
+    long countByAsignadoAIsNullAndEstado(String estado);
+
     long countByAsignadoAIdAndEstadoIn(Long asignadoAId, List<String> estados);
 
     @Query("SELECT a.estado, COUNT(a) FROM Alerta a GROUP BY a.estado")

@@ -1,0 +1,30 @@
+package com.antifraude.drools;
+
+import com.antifraude.drools.RiskContext;
+import com.antifraude.drools.fact.TransaccionFact;
+import com.antifraude.drools.fact.HorarioRiesgoFact;
+import java.time.LocalTime;
+
+global com.antifraude.drools.DroolsService.ScoreTracker scoreTracker;
+
+rule "Horario no habitual"
+    when
+        $ctx : RiskContext()
+        $t : TransaccionFact(fechaTransaccion != null) from $ctx.getTransaccionFact()
+        eval($t.getFechaTransaccion().getHour() <= 5 || $t.getFechaTransaccion().getHour() >= 23)
+    then
+        scoreTracker.addScore(15);
+        System.out.println("[Drools] Horario no habitual detectado: " + $t.getFechaTransaccion().getHour() + "h");
+end
+
+rule "Horario de riesgo configurado"
+    when
+        $ctx : RiskContext()
+        $t : TransaccionFact(fechaTransaccion != null) from $ctx.getTransaccionFact()
+        $h : HorarioRiesgoFact() from $ctx.getHorariosRiesgo()
+        eval($t.getFechaTransaccion().toLocalTime().isAfter($h.getHoraDesde()) && 
+              $t.getFechaTransaccion().toLocalTime().isBefore($h.getHoraHasta()))
+    then
+        scoreTracker.addScore($h.getPorcentajeExtra() / 10);
+        System.out.println("[Drools] Horario de riesgo activo: " + $h.getDescripcion());
+end

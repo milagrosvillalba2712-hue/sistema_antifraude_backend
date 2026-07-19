@@ -48,6 +48,13 @@ public class SecurityConfig {
                     .requestMatchers("/swagger-ui.html").permitAll()
                     .requestMatchers("/api-docs/**").permitAll()
                     .requestMatchers("/api/admin/**").hasRole("ADMINISTRADOR")
+                    .requestMatchers("/api/reglas/**").hasAnyRole("ADMINISTRADOR", "SUPERVISOR")
+                    .requestMatchers("/api/rule-engine/**").hasAnyRole("ADMINISTRADOR", "SUPERVISOR")
+                    .requestMatchers("/api/simulador/**").hasAnyRole("ADMINISTRADOR", "SUPERVISOR")
+                    .requestMatchers("/api/escenarios/**").hasAnyRole("ADMINISTRADOR", "SUPERVISOR")
+                    .requestMatchers("/api/casos/**").hasAnyRole("ADMINISTRADOR", "SUPERVISOR", "ANALISTA")
+                    .requestMatchers("/api/reportes/**").hasAnyRole("ADMINISTRADOR", "SUPERVISOR", "ANALISTA")
+                    .requestMatchers("/api/auditoria/**").hasAnyRole("ADMINISTRADOR", "AUDITOR")
                     .anyRequest().authenticated())
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

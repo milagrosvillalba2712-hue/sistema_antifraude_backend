@@ -50,7 +50,7 @@ public class AssignmentEngine {
         log.info("[ASSIGNMENT] Iniciando asignacion para alerta ID: {}", alerta.getId());
 
         List<Usuario> analistas = usuarioRepository.findAll().stream()
-                .filter(u -> "ANALISTA".equals(u.getRol()) && u.getActivo())
+                .filter(u -> Usuario.Rol.ANALISTA.equals(u.getRol()) && Boolean.TRUE.equals(u.getActivo()))
                 .filter(u -> disponibilidadService.estaDisponible(u.getId()))
                 .toList();
 
@@ -133,7 +133,7 @@ public class AssignmentEngine {
 
     public void rebalancearTodos() {
         log.info("[ASSIGNMENT] Rebalanceo global iniciado");
-        List<Alerta> pendientes = alertaRepository.findByEstado("PENDIENTE").stream()
+        List<Alerta> pendientes = alertaRepository.findByEstado("NUEVA").stream()
                 .filter(a -> a.getAsignadoA() == null)
                 .toList();
         for (Alerta alerta : pendientes) {
@@ -154,9 +154,9 @@ public class AssignmentEngine {
                         .build());
 
         long asignadas = alertaRepository.countByAsignadoAIdAndEstadoIn(
-                usuarioId, List.of("PENDIENTE", "ASIGNADA", "INVESTIGANDO"));
+                usuarioId, List.of("NUEVA", "ASIGNADA", "EN_REVISION"));
         long resueltas = alertaRepository.countByAsignadoAIdAndEstadoIn(
-                usuarioId, List.of("RESUELTA", "DESCARTADA"));
+                usuarioId, List.of("CERRADA"));
 
         stats.setAlertasPendientes((int) asignadas);
         stats.setAlertasAsignadas(stats.getAlertasAsignadas() + 1);

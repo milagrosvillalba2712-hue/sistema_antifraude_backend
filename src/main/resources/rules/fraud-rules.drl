@@ -1,45 +1,37 @@
 package com.antifraude.drools;
 
-import com.antifraude.transactions.Transaccion;
+import com.antifraude.drools.RiskContext;
+import com.antifraude.drools.fact.TransaccionFact;
 
 global com.antifraude.drools.DroolsService.ScoreTracker scoreTracker;
 
-rule "Monto elevado"
+rule "Fallback - Monto alto"
+    salience -100
     when
-        $t : Transaccion(monto > 10000)
+        $ctx : RiskContext()
+        $t : TransaccionFact(monto > 10000) from $ctx.getTransaccionFact()
     then
         scoreTracker.addScore(30);
-        System.out.println("[Drools] Monto elevado detectado: " + $t.getMonto());
+        System.out.println("[Drools] Fallback - Monto alto: " + $t.getMonto());
 end
 
-rule "Transaccion internacional"
+rule "Fallback - Internacional"
+    salience -100
     when
-        $t : Transaccion(paisOrigen != null && !paisOrigen.equalsIgnoreCase("NACIONAL"))
+        $ctx : RiskContext()
+        $t : TransaccionFact(esInternacional == true) from $ctx.getTransaccionFact()
     then
         scoreTracker.addScore(20);
-        System.out.println("[Drools] Pais internacional detectado: " + $t.getPaisOrigen());
+        System.out.println("[Drools] Fallback - Internacional: " + $t.getPaisOrigenCodigo());
 end
 
-rule "Transferencia internacional"
+rule "Fallback - Horario inhabil"
+    salience -100
     when
-        $t : Transaccion(canal != null && canal.equalsIgnoreCase("TRANSFERENCIA_INTERNACIONAL"))
-    then
-        scoreTracker.addScore(25);
-        System.out.println("[Drools] Transferencia internacional detectada");
-end
-
-rule "Frecuencia alta - multiples transacciones"
-    when
-        $t : Transaccion($doc : identificadorDocumento)
-    then
-        // Evaluado via servicio
-        System.out.println("[Drools] Evaluando documento: " + $doc);
-end
-
-rule "Horario no habitual"
-    when
-        $t : Transaccion(fechaTransaccion.hour <= 5 || fechaTransaccion.hour >= 23)
+        $ctx : RiskContext()
+        $t : TransaccionFact(fechaTransaccion != null) from $ctx.getTransaccionFact()
+        eval($t.getFechaTransaccion().getHour() <= 5 || $t.getFechaTransaccion().getHour() >= 23)
     then
         scoreTracker.addScore(15);
-        System.out.println("[Drools] Horario no habitual detectado");
+        System.out.println("[Drools] Fallback - Horario inhabil");
 end

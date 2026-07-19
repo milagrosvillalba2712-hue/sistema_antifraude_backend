@@ -64,16 +64,16 @@ public class AuthService {
                     return new AuthenticationErrorException("Usuario no encontrado");
                 });
 
-        usuario.setIntentosFallidos(0);
+        usuario.resetFailedAttempts();
         usuarioRepository.save(usuario);
 
-        String token = jwtTokenProvider.generateToken(usuario.getEmail(), usuario.getRol());
+        String token = jwtTokenProvider.generateToken(usuario.getEmail(), usuario.getRol().name());
         log.info("[AUTH] Token generado para {} - Rol: {} - IP: {}", usuario.getEmail(), usuario.getRol(), ip);
 
         auditoriaService.registrar(usuario.getId(), "LOGIN", "Inicio de sesion exitoso",
                 ip, "usuarios", usuario.getId());
 
-        return new LoginResponse(token, "Bearer", usuario.getEmail(), usuario.getRol());
+        return new LoginResponse(token, "Bearer", usuario.getEmail(), usuario.getRol().name());
     }
 
     public void registrarUsuario(Usuario usuario) {
@@ -88,10 +88,9 @@ public class AuthService {
 
     private void incrementarIntentosFallidos(String email) {
         usuarioRepository.findByEmail(email).ifPresent(usuario -> {
-            int intentos = usuario.getIntentosFallidos() + 1;
-            usuario.setIntentosFallidos(intentos);
+            usuario.incrementFailedAttempts();
             usuarioRepository.save(usuario);
-            log.warn("[AUTH] Intentos fallidos para {}: {}/5 - IP: {}", email, intentos);
+            log.warn("[AUTH] Intentos fallidos para {}: {}/5", email, usuario.getIntentosFallidos());
         });
     }
 }

@@ -47,6 +47,12 @@ public class AlertaController {
         return ResponseEntity.ok(alertaService.buscarPorEstado(estado).stream().map(this::toResponse).toList());
     }
 
+    @GetMapping("/sin-asignar/count")
+    public ResponseEntity<Map<String, Long>> contarSinAsignar() {
+        log.info("[ALERTS] GET /api/alertas/sin-asignar/count");
+        return ResponseEntity.ok(Map.of("count", alertaService.contarSinAsignar()));
+    }
+
     @PostMapping("/{id}/asignar")
     public ResponseEntity<AlertaResponse> asignar(@PathVariable Long id,
                                                     @RequestBody(required = false) AsignarAlertaRequest body,
@@ -62,14 +68,6 @@ public class AlertaController {
         return ResponseEntity.ok(toResponse(alertaService.asignarAlerta(id, analista, request)));
     }
 
-    @PostMapping("/{id}/auto-assign")
-    public ResponseEntity<AlertaResponse> autoAsignar(@PathVariable Long id,
-                                                       Authentication auth,
-                                                       HttpServletRequest request) {
-        log.info("[ALERTS] POST /api/alertas/{}/auto-assign", id);
-        return ResponseEntity.ok(toResponse(alertaService.autoAsignarAlerta(id, request)));
-    }
-
     @PostMapping("/{id}/reassign")
     public ResponseEntity<AlertaResponse> reasignar(@PathVariable Long id,
                                                       @RequestBody ReasignarAlertaRequest body,
@@ -80,6 +78,12 @@ public class AlertaController {
         Usuario origen = usuarioService.buscarPorEmail(auth.getName());
         return ResponseEntity.ok(toResponse(
                 alertaService.reasignarAlerta(id, body.analistaId(), body.motivo(), origen, request)));
+    }
+
+    @PostMapping("/{id}/cerrar")
+    public ResponseEntity<AlertaResponse> cerrar(@PathVariable Long id) {
+        log.info("[ALERTS] POST /api/alertas/{}/cerrar", id);
+        return ResponseEntity.ok(toResponse(alertaService.cerrarAlerta(id)));
     }
 
     @PostMapping("/{id}/resolver")

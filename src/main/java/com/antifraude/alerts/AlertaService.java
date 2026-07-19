@@ -3,8 +3,6 @@ package com.antifraude.alerts;
 import com.antifraude.audit.AuditoriaService;
 import com.antifraude.exception.BusinessException;
 import com.antifraude.exception.ResourceNotFoundException;
-import com.antifraude.profile.DisponibilidadService;
-import com.antifraude.profile.PerfilService;
 import com.antifraude.rules.ReglaRiesgo;
 import com.antifraude.transactions.Transaccion;
 import com.antifraude.users.Usuario;
@@ -26,26 +24,27 @@ public class AlertaService {
     private final AlertaRepository alertaRepository;
     private final HistorialAsignacionRepository historialRepository;
     private final AuditoriaService auditoriaService;
-    private final DisponibilidadService disponibilidadService;
 
     public AlertaService(AlertaRepository alertaRepository,
                           HistorialAsignacionRepository historialRepository,
-                          AuditoriaService auditoriaService,
-                          DisponibilidadService disponibilidadService) {
+                          AuditoriaService auditoriaService) {
         this.alertaRepository = alertaRepository;
         this.historialRepository = historialRepository;
         this.auditoriaService = auditoriaService;
-        this.disponibilidadService = disponibilidadService;
     }
 
     public Alerta crearAlerta(Transaccion transaccion, ReglaRiesgo regla, String prioridad) {
         log.info("[ALERTS] Creando alerta - Transaccion ID: {} - Regla: {} - Prioridad: {}",
-                transaccion.getId(), regla.getNombre(), prioridad);
+                transaccion.getId(), regla != null ? regla.getNombre() : "Score de riesgo", prioridad);
         Alerta alerta = Alerta.builder()
                 .transaccion(transaccion)
                 .regla(regla)
+                .codigo("ALT-" + java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase())
                 .prioridad(prioridad)
-                .estado("PENDIENTE")
+                .estado("NUEVA")
+                .observacion(regla != null
+                        ? "Generada por regla: " + regla.getNombre()
+                        : "Generada por score de riesgo alto sin regla guiada critica asociada")
                 .build();
         Alerta creada = alertaRepository.save(alerta);
         log.info("[ALERTS] Alerta creada - ID: {} - Prioridad: {}", creada.getId(), prioridad);
@@ -71,6 +70,10 @@ public class AlertaService {
     public List<Alerta> buscarPorEstado(String estado) {
         log.debug("[ALERTS] Buscando alertas por estado: {}", estado);
         return alertaRepository.findByEstado(estado);
+    }
+
+    public long contarSinAsignar() {
+        return alertaRepository.countByAsignadoAIsNullAndEstado("NUEVA");
     }
 
     public Alerta asignarAlerta(Long alertaId, Usuario analista, HttpServletRequest request) {
@@ -134,40 +137,11 @@ public class AlertaService {
         return alertaRepository.save(alerta);
     }
 
-    public Alerta autoAsignarAlerta(Long alertaId, HttpServletRequest request) {
-        log.info("[ALERTS] Auto-asignando alerta ID: {}", alertaId);
-        Alerta alerta = buscarPorId(alertaId);
-        if (alerta.getAsignadoA() != null) {
-            throw new BusinessException("ALREADY_ASSIGNED", "La alerta ya tiene un analista asignado");
-        }
-
-        List<Usuario> analistas = List.of();
-        if (!analistas.isEmpty()) {
-            Usuario asignado = analistas.get(0);
-            alerta.setAsignadoA(asignado);
-            alerta.setEstado("ASIGNADA");
-            alerta.setFechaAsignacion(LocalDateTime.now());
-
-            HistorialAsignacion historial = HistorialAsignacion.builder()
-                    .alerta(alerta)
-                    .usuarioDestino(asignado)
-                    .motivo("Asignacion automatica por motor")
-                    .tipo("ASIGNACION")
-                    .build();
-            historialRepository.save(historial);
-
-            auditoriaService.registrar(asignado.getId(), "AUTO_ASIGNAR_ALERTA",
-                    "Alerta " + alertaId + " auto-asignada a " + asignado.getEmail(),
-                    request.getRemoteAddr(), "alertas", alertaId);
-        }
-        return alertaRepository.save(alerta);
-    }
-
     public Alerta resolverAlerta(Long alertaId, String observacion, HttpServletRequest request) {
         log.info("[ALERTS] Resolviendo alerta ID: {} - Observacion: {} - IP: {}",
                 alertaId, observacion, request.getRemoteAddr());
         Alerta alerta = buscarPorId(alertaId);
-        alerta.setEstado("RESUELTA");
+        alerta.setEstado("CERRADA");
         alerta.setObservacion(observacion);
         alerta.setFechaResolucion(LocalDateTime.now());
         if (alerta.getAsignadoA() != null) {
@@ -182,6 +156,16 @@ public class AlertaService {
 
     public long contarPorEstado(String estado) {
         return alertaRepository.countByEstado(estado);
+    }
+
+    public Alerta cerrarAlerta(Long alertaId) {
+        log.info("[ALERTS] Cerrando alerta ID: {}", alertaId);
+        Alerta alerta = buscarPorId(alertaId);
+        alerta.setEstado("CERRADA");
+        alerta.setFechaResolucion(LocalDateTime.now());
+        Alerta cerrada = alertaRepository.save(alerta);
+        log.info("[ALERTS] Alerta ID: {} cerrada exitosamente", alertaId);
+        return cerrada;
     }
 
     @Transactional(readOnly = true)

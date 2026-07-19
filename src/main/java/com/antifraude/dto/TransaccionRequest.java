@@ -18,5 +18,9 @@ public record TransaccionRequest(
         @NotBlank String tipoTransaccion,
         String ipOrigen,
         String paisOrigen,
-        @NotNull LocalDateTime fechaTransaccion) {
+        String paisDestino,
+        @NotNull LocalDateTime fechaTransaccion,
+        Long productoId,
+        Long personaRemitenteId,
+        Long personaBeneficiarioId) {
 }

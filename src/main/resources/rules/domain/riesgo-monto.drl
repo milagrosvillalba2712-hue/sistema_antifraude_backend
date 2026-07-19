@@ -1,0 +1,33 @@
+package com.antifraude.drools;
+
+import com.antifraude.drools.RiskContext;
+import com.antifraude.drools.fact.TransaccionFact;
+
+global com.antifraude.drools.DroolsService.ScoreTracker scoreTracker;
+
+rule "Monto alto"
+    when
+        $ctx : RiskContext()
+        $t : TransaccionFact(monto > 10000) from $ctx.getTransaccionFact()
+    then
+        scoreTracker.addScore(30);
+        System.out.println("[Drools] Monto alto detectado: " + $t.getMonto());
+end
+
+rule "Monto muy alto"
+    when
+        $ctx : RiskContext()
+        $t : TransaccionFact(monto > 50000) from $ctx.getTransaccionFact()
+    then
+        scoreTracker.addScore(20);
+        System.out.println("[Drools] Monto muy alto detectado: " + $t.getMonto());
+end
+
+rule "Monto exacto sospechoso"
+    when
+        $ctx : RiskContext()
+        $t : TransaccionFact(monto == 10000 || monto == 9999 || monto == 99999) from $ctx.getTransaccionFact()
+    then
+        scoreTracker.addScore(15);
+        System.out.println("[Drools] Monto exacto sospechoso detectado: " + $t.getMonto());
+end

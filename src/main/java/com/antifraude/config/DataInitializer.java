@@ -29,7 +29,7 @@ public class DataInitializer implements CommandLineRunner {
                     .nombre(nombre)
                     .email(email)
                     .passwordHash(passwordEncoder.encode(rawPassword))
-                    .rol(rol)
+                    .rol(Usuario.Rol.valueOf(rol))
                     .activo(true)
                     .intentosFallidos(0)
                     .build();
