@@ -49,8 +49,7 @@ public class AssignmentEngine {
     public Usuario asignar(Alerta alerta) {
         log.info("[ASSIGNMENT] Iniciando asignacion para alerta ID: {}", alerta.getId());
 
-        List<Usuario> analistas = usuarioRepository.findAll().stream()
-                .filter(u -> Usuario.Rol.ANALISTA.equals(u.getRol()) && Boolean.TRUE.equals(u.getActivo()))
+        List<Usuario> analistas = usuarioRepository.findActivosByRolCodigo("ANALISTA").stream()
                 .filter(u -> disponibilidadService.estaDisponible(u.getId()))
                 .toList();
 

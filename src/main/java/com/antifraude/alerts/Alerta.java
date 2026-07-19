@@ -3,6 +3,7 @@ package com.antifraude.alerts;
 import com.antifraude.transactions.Transaccion;
 import com.antifraude.rules.ReglaRiesgo;
 import com.antifraude.users.Usuario;
+import com.antifraude.licensing.Empresa;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -23,6 +24,10 @@ public class Alerta {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "transaccion_id")
     private Transaccion transaccion;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "regla_id")

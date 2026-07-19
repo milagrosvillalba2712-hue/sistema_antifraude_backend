@@ -1,6 +1,7 @@
 package com.antifraude.transactions;
 
 import com.antifraude.common.entity.*;
+import com.antifraude.licensing.Empresa;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -28,6 +29,10 @@ public class Transaccion {
 
     @Column(name = "transaction_uuid", nullable = false, unique = true)
     private UUID transactionUuid;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 
     @Column(name = "codigo", length = 30, unique = true)
     private String codigo;

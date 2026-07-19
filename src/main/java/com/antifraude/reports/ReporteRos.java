@@ -1,6 +1,7 @@
 package com.antifraude.reports;
 
 import com.antifraude.alerts.Alerta;
+import com.antifraude.licensing.Empresa;
 import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
@@ -22,6 +23,10 @@ public class ReporteRos {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "alerta_id")
     private Alerta alerta;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "generado_por")

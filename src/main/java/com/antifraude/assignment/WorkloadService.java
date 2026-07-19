@@ -34,9 +34,7 @@ public class WorkloadService {
     }
 
     public List<WorkloadResponse> obtenerCargaTodos() {
-        List<Usuario> analistas = usuarioRepository.findAll().stream()
-                .filter(u -> Usuario.Rol.ANALISTA.equals(u.getRol()) && Boolean.TRUE.equals(u.getActivo()))
-                .toList();
+        List<Usuario> analistas = usuarioRepository.findActivosByRolCodigo("ANALISTA");
 
         return analistas.stream().map(analista -> {
             int pendientes = (int) alertaRepository.countByAsignadoAIdAndEstadoIn(

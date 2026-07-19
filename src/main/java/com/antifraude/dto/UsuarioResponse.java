@@ -7,6 +7,8 @@ public record UsuarioResponse(
         String nombre,
         String email,
         String rol,
+        Long empresaId,
+        String empresaNombre,
         Boolean activo,
         Integer intentosFallidos,
         LocalDateTime fechaCreacion) {

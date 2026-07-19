@@ -1,5 +1,6 @@
 package com.antifraude.common.entity;
 
+import com.antifraude.licensing.Empresa;
 import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -17,6 +18,10 @@ public class Caso extends BaseEntity {
 
     @Column(nullable = false, unique = true, length = 30)
     private String codigo;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 
     @Column(nullable = false, length = 150)
     private String titulo;

@@ -30,7 +30,7 @@ public class AlertaController {
     @GetMapping
     public ResponseEntity<List<AlertaResponse>> listar() {
         log.info("[ALERTS] GET /api/alertas");
-        List<AlertaResponse> response = alertaService.listarTodas().stream().map(this::toResponse).toList();
+        List<AlertaResponse> response = alertaService.listarTodas().stream().map(alertaService::toAlertaResponse).toList();
         log.info("[ALERTS] Retornando {} alertas", response.size());
         return ResponseEntity.ok(response);
     }
@@ -38,19 +38,31 @@ public class AlertaController {
     @GetMapping("/{id}")
     public ResponseEntity<AlertaResponse> buscar(@PathVariable Long id) {
         log.info("[ALERTS] GET /api/alertas/{}", id);
-        return ResponseEntity.ok(toResponse(alertaService.buscarPorId(id)));
+        return ResponseEntity.ok(alertaService.toAlertaResponse(alertaService.buscarPorId(id)));
+    }
+
+    @GetMapping("/{id}/detalle")
+    public ResponseEntity<AlertaDetalleResponse> detalle(@PathVariable Long id) {
+        log.info("[ALERTS] GET /api/alertas/{}/detalle", id);
+        return ResponseEntity.ok(alertaService.obtenerDetalleFormal(id));
     }
 
     @GetMapping("/estado/{estado}")
     public ResponseEntity<List<AlertaResponse>> buscarPorEstado(@PathVariable String estado) {
         log.info("[ALERTS] GET /api/alertas/estado/{}", estado);
-        return ResponseEntity.ok(alertaService.buscarPorEstado(estado).stream().map(this::toResponse).toList());
+        return ResponseEntity.ok(alertaService.buscarPorEstado(estado).stream().map(alertaService::toAlertaResponse).toList());
     }
 
     @GetMapping("/sin-asignar/count")
     public ResponseEntity<Map<String, Long>> contarSinAsignar() {
         log.info("[ALERTS] GET /api/alertas/sin-asignar/count");
         return ResponseEntity.ok(Map.of("count", alertaService.contarSinAsignar()));
+    }
+
+    @GetMapping("/analistas-disponibles")
+    public ResponseEntity<List<AnalistaDisponibleResponse>> analistasDisponibles() {
+        log.info("[ALERTS] GET /api/alertas/analistas-disponibles");
+        return ResponseEntity.ok(alertaService.listarAnalistasDisponibles());
     }
 
     @PostMapping("/{id}/asignar")
@@ -65,7 +77,15 @@ public class AlertaController {
         } else {
             analista = usuarioService.buscarPorEmail(auth.getName());
         }
-        return ResponseEntity.ok(toResponse(alertaService.asignarAlerta(id, analista, request)));
+        return ResponseEntity.ok(alertaService.toAlertaResponse(alertaService.asignarAlerta(id, analista, request)));
+    }
+
+    @PostMapping("/{id}/autoasignarme")
+    public ResponseEntity<AlertaResponse> autoasignarme(@PathVariable Long id,
+                                                        Authentication auth,
+                                                        HttpServletRequest request) {
+        Usuario analista = usuarioService.buscarPorEmail(auth.getName());
+        return ResponseEntity.ok(alertaService.toAlertaResponse(alertaService.asignarAlerta(id, analista, request)));
     }
 
     @PostMapping("/{id}/reassign")
@@ -76,14 +96,14 @@ public class AlertaController {
         log.info("[ALERTS] POST /api/alertas/{}/reassign - Nuevo analista: {} - Motivo: {}",
                 id, body.analistaId(), body.motivo());
         Usuario origen = usuarioService.buscarPorEmail(auth.getName());
-        return ResponseEntity.ok(toResponse(
+        return ResponseEntity.ok(alertaService.toAlertaResponse(
                 alertaService.reasignarAlerta(id, body.analistaId(), body.motivo(), origen, request)));
     }
 
     @PostMapping("/{id}/cerrar")
     public ResponseEntity<AlertaResponse> cerrar(@PathVariable Long id) {
         log.info("[ALERTS] POST /api/alertas/{}/cerrar", id);
-        return ResponseEntity.ok(toResponse(alertaService.cerrarAlerta(id)));
+        return ResponseEntity.ok(alertaService.toAlertaResponse(alertaService.cerrarAlerta(id)));
     }
 
     @PostMapping("/{id}/resolver")
@@ -92,7 +112,17 @@ public class AlertaController {
                                                     HttpServletRequest request) {
         String observacion = body.getOrDefault("observacion", "");
         log.info("[ALERTS] POST /api/alertas/{}/resolver - Observacion: {} - IP: {}", id, observacion, request.getRemoteAddr());
-        return ResponseEntity.ok(toResponse(alertaService.resolverAlerta(id, observacion, request)));
+        return ResponseEntity.ok(alertaService.toAlertaResponse(alertaService.resolverAlerta(id, observacion, request)));
+    }
+
+    @PostMapping("/{id}/resolver-formal")
+    public ResponseEntity<ResolucionAlertaResponse> resolverFormal(@PathVariable Long id,
+                                                                    @RequestBody ResolucionAlertaRequest body,
+                                                                    Authentication auth,
+                                                                    HttpServletRequest request) {
+        Usuario usuario = usuarioService.buscarPorEmail(auth.getName());
+        return ResponseEntity.ok(alertaService.toResolucionResponse(
+                alertaService.resolverFormalmente(id, usuario, body, request)));
     }
 
     @GetMapping("/{id}/history")
@@ -121,15 +151,5 @@ public class AlertaController {
                         null, e.tipo(), e.descripcion(), e.fecha(), e.usuario()))
                 .toList();
         return ResponseEntity.ok(response);
-    }
-
-    private AlertaResponse toResponse(Alerta a) {
-        return new AlertaResponse(
-                a.getId(),
-                a.getTransaccion() != null ? a.getTransaccion().getId() : null,
-                a.getRegla() != null ? a.getRegla().getId() : null,
-                a.getPrioridad(), a.getEstado(), a.getObservacion(),
-                a.getAsignadoA() != null ? a.getAsignadoA().getId() : null,
-                a.getFechaGeneracion(), a.getFechaResolucion());
     }
 }

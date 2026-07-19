@@ -30,10 +30,6 @@ public class Usuario extends AuditableEntity {
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
-    @Column(nullable = false, length = 30)
-    @Enumerated(EnumType.STRING)
-    private Rol rol;
-
     @Column(nullable = false)
     @Builder.Default
     private Boolean activo = true;
@@ -44,10 +40,6 @@ public class Usuario extends AuditableEntity {
 
     @Column(name = "bloqueado_hasta")
     private LocalDateTime bloqueadoHasta;
-
-    public enum Rol {
-        ADMINISTRADOR, SUPERVISOR, ANALISTA, AUDITOR
-    }
 
     public boolean isBlocked() {
         return bloqueadoHasta != null && LocalDateTime.now().isBefore(bloqueadoHasta);
