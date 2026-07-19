@@ -20,6 +20,9 @@ public class Auditoria {
     @Column(name = "usuario_id")
     private Long usuarioId;
 
+    @Column(name = "empresa_id")
+    private Long empresaId;
+
     @Column(nullable = false, length = 100)
     private String accion;
 
@@ -29,11 +32,20 @@ public class Auditoria {
     @Column(name = "direccion_ip", length = 100)
     private String direccionIp;
 
+    @Column(name = "user_agent", length = 500)
+    private String userAgent;
+
     @Column(name = "entidad_afectada", length = 100)
     private String entidadAfectada;
 
     @Column(name = "entidad_id")
     private Long entidadId;
+
+    @Column(name = "valor_anterior_json", columnDefinition = "TEXT")
+    private String valorAnteriorJson;
+
+    @Column(name = "valor_nuevo_json", columnDefinition = "TEXT")
+    private String valorNuevoJson;
 
     @Column(name = "fecha_evento", updatable = false)
     @Builder.Default

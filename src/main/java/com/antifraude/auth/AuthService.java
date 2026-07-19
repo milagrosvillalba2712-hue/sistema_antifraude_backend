@@ -4,6 +4,7 @@ import com.antifraude.audit.AuditoriaService;
 import com.antifraude.dto.LoginRequest;
 import com.antifraude.dto.LoginResponse;
 import com.antifraude.exception.AuthenticationErrorException;
+import com.antifraude.licensing.PermissionService;
 import com.antifraude.security.JwtTokenProvider;
 import com.antifraude.users.Usuario;
 import com.antifraude.users.UsuarioRepository;
@@ -28,15 +29,17 @@ public class AuthService {
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditoriaService auditoriaService;
+    private final PermissionService permissionService;
 
     public AuthService(AuthenticationManager authenticationManager, JwtTokenProvider jwtTokenProvider,
                        UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder,
-                       AuditoriaService auditoriaService) {
+                       AuditoriaService auditoriaService, PermissionService permissionService) {
         this.authenticationManager = authenticationManager;
         this.jwtTokenProvider = jwtTokenProvider;
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditoriaService = auditoriaService;
+        this.permissionService = permissionService;
     }
 
     public LoginResponse login(LoginRequest request, HttpServletRequest httpRequest) {
@@ -67,13 +70,16 @@ public class AuthService {
         usuario.resetFailedAttempts();
         usuarioRepository.save(usuario);
 
-        String token = jwtTokenProvider.generateToken(usuario.getEmail(), usuario.getRol().name());
-        log.info("[AUTH] Token generado para {} - Rol: {} - IP: {}", usuario.getEmail(), usuario.getRol(), ip);
+        PermissionService.SessionAccess access = permissionService.buildAccess(usuario);
+        String token = jwtTokenProvider.generateToken(usuario.getEmail(), access.rol(),
+                access.empresaId(), access.rolId(), access.permisos());
+        log.info("[AUTH] Token generado para {} - Rol: {} - IP: {}", usuario.getEmail(), access.rol(), ip);
 
         auditoriaService.registrar(usuario.getId(), "LOGIN", "Inicio de sesion exitoso",
                 ip, "usuarios", usuario.getId());
 
-        return new LoginResponse(token, "Bearer", usuario.getEmail(), usuario.getRol().name());
+        return new LoginResponse(token, "Bearer", usuario.getEmail(), access.rol(),
+                access.empresaId(), access.rolId(), access.permisos());
     }
 
     public void registrarUsuario(Usuario usuario) {

@@ -1,9 +1,11 @@
 package com.antifraude.ruleengine;
 
 import com.antifraude.alerts.*;
+import com.antifraude.audit.AuditoriaService;
 import com.antifraude.audit.Auditoria;
 import com.antifraude.common.entity.*;
 import com.antifraude.external.ConsultaExterna;
+import com.antifraude.licensing.*;
 import com.antifraude.profile.DisponibilidadUsuario;
 import com.antifraude.profile.PerfilUsuario;
 import com.antifraude.reports.ReporteRos;
@@ -11,11 +13,15 @@ import com.antifraude.rules.EjecucionRegla;
 import com.antifraude.rules.ReglaRiesgo;
 import com.antifraude.transactions.Transaccion;
 import com.antifraude.users.Usuario;
+import com.antifraude.users.UsuarioRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.transaction.Transactional;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.lang.reflect.Field;
@@ -31,10 +37,17 @@ import java.util.*;
 public class RuleEngineEntityController {
 
     private final EntityManager entityManager;
+    private final AuditoriaService auditoriaService;
+    private final UsuarioRepository usuarioRepository;
+    private final ObjectMapper objectMapper;
     private final Map<String, Class<?>> entities;
 
-    public RuleEngineEntityController(EntityManager entityManager) {
+    public RuleEngineEntityController(EntityManager entityManager, AuditoriaService auditoriaService,
+                                      UsuarioRepository usuarioRepository, ObjectMapper objectMapper) {
         this.entityManager = entityManager;
+        this.auditoriaService = auditoriaService;
+        this.usuarioRepository = usuarioRepository;
+        this.objectMapper = objectMapper;
         this.entities = buildEntities();
     }
 
@@ -83,12 +96,15 @@ public class RuleEngineEntityController {
 
     @PostMapping("/{entity}")
     @Transactional
-    public ResponseEntity<Map<String, Object>> crear(@PathVariable String entity, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<Map<String, Object>> crear(@PathVariable String entity, @RequestBody Map<String, Object> payload,
+                                                     Authentication authentication, HttpServletRequest request) {
         Class<?> type = resolve(entity);
         Object row = instantiate(type);
         applyPayload(row, payload);
         entityManager.persist(row);
         entityManager.flush();
+        registrarAuditoria(authentication, request, "CREAR_REGISTRO", tableName(type), readIdAsLong(row),
+                null, toJson(flatten(row)));
         return ResponseEntity.ok(flatten(row));
     }
 
@@ -96,18 +112,27 @@ public class RuleEngineEntityController {
     @Transactional
     public ResponseEntity<Map<String, Object>> actualizar(@PathVariable String entity,
                                                           @PathVariable Long id,
-                                                          @RequestBody Map<String, Object> payload) {
+                                                          @RequestBody Map<String, Object> payload,
+                                                          Authentication authentication,
+                                                          HttpServletRequest request) {
         Object row = findRequired(resolve(entity), id);
+        String anterior = toJson(flatten(row));
         applyPayload(row, payload);
         entityManager.flush();
+        registrarAuditoria(authentication, request, "EDITAR_REGISTRO", tableName(row.getClass()), id,
+                anterior, toJson(flatten(row)));
         return ResponseEntity.ok(flatten(row));
     }
 
     @DeleteMapping("/{entity}/{id}")
     @Transactional
-    public ResponseEntity<Void> eliminar(@PathVariable String entity, @PathVariable Long id) {
+    public ResponseEntity<Void> eliminar(@PathVariable String entity, @PathVariable Long id,
+                                         Authentication authentication, HttpServletRequest request) {
         Object row = findRequired(resolve(entity), id);
+        String anterior = toJson(flatten(row));
         entityManager.remove(row);
+        registrarAuditoria(authentication, request, "ELIMINAR_REGISTRO", tableName(row.getClass()), id,
+                anterior, null);
         return ResponseEntity.noContent().build();
     }
 
@@ -121,7 +146,10 @@ public class RuleEngineEntityController {
                 HistorialEstadoCaso.class, HorarioLaboralUsuario.class, HorarioRiesgo.class, ListaRegulatoria.class,
                 Moneda.class, NivelRiesgo.class, Pais.class, PaisRiesgo.class, PerfilCliente.class,
                 PerfilUsuario.class, Persona.class, Producto.class, ReglaRiesgo.class, ReporteRos.class,
-                ServicioExterno.class, TipoDocumento.class, Transaccion.class, Usuario.class);
+                ServicioExterno.class, TipoDocumento.class, Transaccion.class, Usuario.class,
+                Empresa.class, PlanLicencia.class, Suscripcion.class, Contrato.class, Pago.class,
+                UsoSuscripcion.class, RolSistema.class, PermisoSistema.class, RolPermiso.class, UsuarioEmpresa.class,
+                ResolucionAlerta.class, ConsultaKycAlerta.class, DecisionCaso.class, AprobacionSupervisor.class);
         return map;
     }
 
@@ -215,6 +243,12 @@ public class RuleEngineEntityController {
         }
     }
 
+    private Long readIdAsLong(Object value) {
+        Object id = readId(value);
+        if (id instanceof Number number) return number.longValue();
+        return id != null ? Long.valueOf(String.valueOf(id)) : null;
+    }
+
     private String label(Object value) {
         for (String getter : List.of("getNombre", "getCodigo", "getEmail", "getCodigoIso", "getDescripcion")) {
             try {
@@ -289,6 +323,27 @@ public class RuleEngineEntityController {
     private String tableName(Class<?> type) {
         jakarta.persistence.Table table = type.getAnnotation(jakarta.persistence.Table.class);
         return table != null && !table.name().isBlank() ? table.name() : type.getSimpleName().toLowerCase();
+    }
+
+    private void registrarAuditoria(Authentication authentication, HttpServletRequest request, String accion,
+                                    String entidad, Long entidadId, String anterior, String nuevo) {
+        Long usuarioId = null;
+        if (authentication != null && authentication.getName() != null) {
+            usuarioId = usuarioRepository.findByEmail(authentication.getName()).map(Usuario::getId).orElse(null);
+        }
+        auditoriaService.registrar(usuarioId, null, accion,
+                accion + " en " + entidad + (entidadId != null ? " #" + entidadId : ""),
+                request != null ? request.getRemoteAddr() : null,
+                request != null ? request.getHeader("User-Agent") : null,
+                entidad, entidadId, anterior, nuevo);
+    }
+
+    private String toJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            return String.valueOf(value);
+        }
     }
 
     public record EntitySummary(String key, String table, Long count, Boolean editable) {}

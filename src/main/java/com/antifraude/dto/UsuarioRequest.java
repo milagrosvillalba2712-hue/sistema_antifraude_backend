@@ -7,5 +7,6 @@ public record UsuarioRequest(
         @NotBlank String nombre,
         @NotBlank @Email String email,
         String password,
-        @NotBlank String rol) {
+        @NotBlank String rol,
+        Long empresaId) {
 }

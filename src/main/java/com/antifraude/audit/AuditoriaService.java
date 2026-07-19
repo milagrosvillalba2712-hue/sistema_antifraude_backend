@@ -22,15 +22,25 @@ public class AuditoriaService {
 
     public void registrar(Long usuarioId, String accion, String descripcion,
                           String direccionIp, String entidadAfectada, Long entidadId) {
+        registrar(usuarioId, null, accion, descripcion, direccionIp, null, entidadAfectada, entidadId, null, null);
+    }
+
+    public void registrar(Long usuarioId, Long empresaId, String accion, String descripcion,
+                          String direccionIp, String userAgent, String entidadAfectada, Long entidadId,
+                          String valorAnteriorJson, String valorNuevoJson) {
         log.debug("[AUDIT] Registrando: {} - Usuario: {} - IP: {} - Entidad: {}:{}",
                 accion, usuarioId, direccionIp, entidadAfectada, entidadId);
         Auditoria auditoria = Auditoria.builder()
                 .usuarioId(usuarioId)
+                .empresaId(empresaId)
                 .accion(accion)
                 .descripcion(descripcion)
                 .direccionIp(direccionIp)
+                .userAgent(userAgent)
                 .entidadAfectada(entidadAfectada)
                 .entidadId(entidadId)
+                .valorAnteriorJson(valorAnteriorJson)
+                .valorNuevoJson(valorNuevoJson)
                 .build();
         auditoriaRepository.save(auditoria);
         log.debug("[AUDIT] Evento registrado - Accion: {} - Usuario: {}", accion, usuarioId);

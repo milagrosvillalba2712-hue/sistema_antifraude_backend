@@ -3,6 +3,7 @@ package com.antifraude.users;
 import com.antifraude.audit.AuditoriaService;
 import com.antifraude.dto.UsuarioRequest;
 import com.antifraude.dto.UsuarioResponse;
+import com.antifraude.licensing.UsuarioEmpresa;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -15,7 +16,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/users")
-@PreAuthorize("hasRole('ADMINISTRADOR')")
 public class AdminController {
 
     private static final Logger log = LoggerFactory.getLogger(AdminController.class);
@@ -29,6 +29,7 @@ public class AdminController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAuthority('USUARIOS_VER')")
     public ResponseEntity<List<UsuarioResponse>> listar() {
         log.info("[ADMIN] GET /api/admin/users");
         List<UsuarioResponse> response = usuarioService.listarTodos().stream()
@@ -38,12 +39,14 @@ public class AdminController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('USUARIOS_VER')")
     public ResponseEntity<UsuarioResponse> buscar(@PathVariable Long id) {
         log.info("[ADMIN] GET /api/admin/users/{}", id);
         return ResponseEntity.ok(toResponse(usuarioService.buscarPorId(id)));
     }
 
     @PostMapping
+    @PreAuthorize("hasAuthority('USUARIOS_CREAR')")
     public ResponseEntity<UsuarioResponse> crear(@Valid @RequestBody UsuarioRequest request,
                                                   HttpServletRequest httpRequest) {
         log.info("[ADMIN] POST /api/admin/users - Email: {}", request.email());
@@ -51,9 +54,8 @@ public class AdminController {
                 .nombre(request.nombre())
                 .email(request.email())
                 .passwordHash(request.password())
-                .rol(Usuario.Rol.valueOf(request.rol()))
                 .build();
-        Usuario creado = usuarioService.crearUsuario(usuario);
+        Usuario creado = usuarioService.crearUsuario(usuario, request.rol(), request.empresaId());
         auditoriaService.registrar(creado.getId(), "CREAR_USUARIO",
                 "Usuario creado: " + creado.getEmail(),
                 httpRequest.getRemoteAddr(), "usuarios", creado.getId());
@@ -61,6 +63,7 @@ public class AdminController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('USUARIOS_EDITAR')")
     public ResponseEntity<UsuarioResponse> actualizar(@PathVariable Long id,
                                                        @Valid @RequestBody UsuarioRequest request,
                                                        HttpServletRequest httpRequest) {
@@ -69,9 +72,8 @@ public class AdminController {
                 .nombre(request.nombre())
                 .email(request.email())
                 .passwordHash(request.password())
-                .rol(Usuario.Rol.valueOf(request.rol()))
                 .build();
-        Usuario guardado = usuarioService.actualizar(id, actualizado);
+        Usuario guardado = usuarioService.actualizar(id, actualizado, request.rol(), request.empresaId());
         auditoriaService.registrar(guardado.getId(), "ACTUALIZAR_USUARIO",
                 "Usuario actualizado: " + guardado.getEmail(),
                 httpRequest.getRemoteAddr(), "usuarios", id);
@@ -79,6 +81,7 @@ public class AdminController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('USUARIOS_EDITAR')")
     public ResponseEntity<Void> desactivar(@PathVariable Long id,
                                             HttpServletRequest httpRequest) {
         log.info("[ADMIN] DELETE /api/admin/users/{}", id);
@@ -91,8 +94,11 @@ public class AdminController {
     }
 
     private UsuarioResponse toResponse(Usuario u) {
+        UsuarioEmpresa asignacion = usuarioService.asignacionPrincipal(u);
         return new UsuarioResponse(
-                u.getId(), u.getNombre(), u.getEmail(), u.getRol().name(),
+                u.getId(), u.getNombre(), u.getEmail(), usuarioService.rolPrincipal(u),
+                asignacion != null && asignacion.getEmpresa() != null ? asignacion.getEmpresa().getId() : null,
+                asignacion != null && asignacion.getEmpresa() != null ? asignacion.getEmpresa().getNombre() : null,
                 u.getActivo(), u.getIntentosFallidos(), u.getFechaHoraCreacion());
     }
 }

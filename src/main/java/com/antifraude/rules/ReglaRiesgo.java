@@ -1,6 +1,7 @@
 package com.antifraude.rules;
 
 import com.antifraude.common.entity.Escenario;
+import com.antifraude.licensing.Empresa;
 import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
@@ -25,6 +26,10 @@ public class ReglaRiesgo {
 
     @Column(unique = true, length = 30)
     private String codigo;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 
     @Column(columnDefinition = "TEXT")
     private String descripcion;
