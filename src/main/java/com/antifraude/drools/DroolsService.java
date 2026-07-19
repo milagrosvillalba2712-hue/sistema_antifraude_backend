@@ -125,6 +125,11 @@ public class DroolsService {
     }
 
     private void crearAlertasDesdeResultado(Transaccion transaccion, List<RiskResult.ReglaDisparada> reglasDisparadas, BigDecimal score, String nivel) {
+        if (transaccion == null) {
+            log.warn("[DROOLS] No se genero alerta porque la transaccion es nula");
+            return;
+        }
+
         String prioridad;
         if ("CRITICO".equals(nivel)) {
             prioridad = "CRITICA";
@@ -134,11 +139,19 @@ public class DroolsService {
             prioridad = "MEDIA";
         }
 
+        int alertasCreadas = 0;
         for (RiskResult.ReglaDisparada disparada : reglasDisparadas) {
             if ("ALTA".equals(disparada.severidad()) || "CRITICA".equals(disparada.severidad())) {
                 ReglaRiesgo regla = reglaRiesgoService.buscarPorId(disparada.reglaId());
                 alertaService.crearAlerta(transaccion, regla, prioridad);
+                alertasCreadas++;
             }
+        }
+
+        if (alertasCreadas == 0) {
+            log.warn("[DROOLS] Score alto sin regla guiada critica - Transaccion ID: {} - Score: {} - Generando alerta general",
+                    transaccion.getId(), score);
+            alertaService.crearAlerta(transaccion, null, prioridad);
         }
     }
 
