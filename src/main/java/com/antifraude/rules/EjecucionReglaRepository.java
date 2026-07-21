@@ -14,6 +14,8 @@ public interface EjecucionReglaRepository extends JpaRepository<EjecucionRegla, 
 
     List<EjecucionRegla> findByReglaId(Long reglaId);
 
+    List<EjecucionRegla> findByTransaccionIdAndResultadoEvaluacionOrderByFechaEjecucionDesc(Long transaccionId, String resultadoEvaluacion);
+
     List<EjecucionRegla> findByFechaEjecucionBetween(LocalDateTime inicio, LocalDateTime fin);
 
     long countByReglaIdAndResultadoEvaluacion(Long reglaId, String resultado);

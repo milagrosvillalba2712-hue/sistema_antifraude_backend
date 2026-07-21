@@ -1,14 +1,19 @@
 package com.antifraude.dto;
 
 import java.util.List;
-import java.util.Map;
 
 public record AlertaDetalleResponse(AlertaResponse alerta,
-                                    Map<String, Object> transaccion,
-                                    Map<String, Object> regla,
-                                    Map<String, Object> cliente,
-                                    List<Map<String, Object>> historialTransaccional,
-                                    List<Map<String, Object>> serviciosExternos,
+                                    TransaccionAlertaResponse transaccion,
+                                    ReglaAlertaResponse regla,
+                                    List<ReglaAlertaResponse> reglasDisparadas,
+                                    List<HallazgoAlertaResponse> hallazgosRegulatorios,
+                                    ClienteAlertaResponse cliente,
+                                    List<TransaccionAlertaResponse> historialTransaccional,
+                                    List<ServicioExternoAlertaResponse> serviciosExternos,
                                     List<TimelineEventResponse> timeline,
-                                    ResolucionAlertaResponse resolucion) {
+                                    List<TimelineEventResponse> accionesTimeline,
+                                    List<EvidenciaAlertaResponse> evidencias,
+                                    ResolucionAlertaResponse resolucion,
+                                    AprobacionSupervisorResponse aprobacion,
+                                    List<String> accionesDisponibles) {
 }

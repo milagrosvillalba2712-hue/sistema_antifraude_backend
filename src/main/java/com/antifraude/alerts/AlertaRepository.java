@@ -1,6 +1,7 @@
 package com.antifraude.alerts;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -8,7 +9,9 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface AlertaRepository extends JpaRepository<Alerta, Long> {
+public interface AlertaRepository extends JpaRepository<Alerta, Long>, JpaSpecificationExecutor<Alerta> {
+
+    List<Alerta> findAllByOrderByFechaGeneracionDesc();
 
     List<Alerta> findByEstado(String estado);
 

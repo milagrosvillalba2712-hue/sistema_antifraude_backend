@@ -9,7 +9,7 @@ import java.util.Optional;
 @Repository
 public interface ReglaRiesgoRepository extends JpaRepository<ReglaRiesgo, Long> {
 
-    List<ReglaRiesgo> findByActivaTrue();
+    List<ReglaRiesgo> findByActivaTrueAndEstado(String estado);
 
     List<ReglaRiesgo> findBySeveridad(String severidad);
 

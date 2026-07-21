@@ -78,7 +78,7 @@ public class AuthService {
         auditoriaService.registrar(usuario.getId(), "LOGIN", "Inicio de sesion exitoso",
                 ip, "usuarios", usuario.getId());
 
-        return new LoginResponse(token, "Bearer", usuario.getEmail(), access.rol(),
+        return new LoginResponse(token, "Bearer", usuario.getId(), usuario.getEmail(), access.rol(),
                 access.empresaId(), access.rolId(), access.permisos());
     }
 

@@ -77,7 +77,7 @@ public class ReglaRiesgoService {
 
     public List<ReglaRiesgo> listarActivas() {
         log.debug("[RULES] Listando reglas activas");
-        return reglaRiesgoRepository.findByActivaTrue();
+        return reglaRiesgoRepository.findByActivaTrueAndEstado("ACTIVA");
     }
 
     public List<ReglaRiesgo> listarPorEscenario(Long escenarioId) {

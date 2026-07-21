@@ -4,5 +4,6 @@ import jakarta.validation.constraints.NotNull;
 
 public record ReasignarAlertaRequest(
         @NotNull Long analistaId,
-        String motivo) {
+        String motivo,
+        String observacion) {
 }
