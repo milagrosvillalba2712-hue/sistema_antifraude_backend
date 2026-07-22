@@ -31,6 +31,14 @@ public class EjecucionRegla extends BaseEntity {
     @Column(name = "score_regla", precision = 5, scale = 2)
     private BigDecimal scoreRegla;
 
+    @Column
+    @Builder.Default
+    private Boolean cumplida = false;
+
+    @Column(name = "score_generado", precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal scoreGenerado = BigDecimal.ZERO;
+
     @Column(name = "condicion_evaluada", columnDefinition = "TEXT")
     private String condicionEvaluada;
 

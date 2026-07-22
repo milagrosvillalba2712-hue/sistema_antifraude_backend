@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS alertas (
     prioridad VARCHAR(20),
     estado VARCHAR(30),
     observacion TEXT,
-    asignado_a BIGINT REFERENCES usuarios(id),
+    analista_asignado_id BIGINT REFERENCES usuarios(id),
     fecha_generacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     fecha_resolucion TIMESTAMP
 );

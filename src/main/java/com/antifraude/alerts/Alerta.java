@@ -46,7 +46,7 @@ public class Alerta {
     private String observacion;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "asignado_a")
+    @JoinColumn(name = "analista_asignado_id")
     private Usuario asignadoA;
 
     @Column(name = "fecha_generacion", updatable = false)

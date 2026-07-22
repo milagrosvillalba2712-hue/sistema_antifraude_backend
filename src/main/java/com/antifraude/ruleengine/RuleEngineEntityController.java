@@ -149,7 +149,9 @@ public class RuleEngineEntityController {
                 ServicioExterno.class, TipoDocumento.class, Transaccion.class, Usuario.class,
                 Empresa.class, PlanLicencia.class, Suscripcion.class, Contrato.class, Pago.class,
                 UsoSuscripcion.class, RolSistema.class, PermisoSistema.class, RolPermiso.class, UsuarioEmpresa.class,
-                ResolucionAlerta.class, ConsultaKycAlerta.class, DecisionCaso.class, AprobacionSupervisor.class);
+                ResolucionAlerta.class, ConsultaKycAlerta.class, DecisionCaso.class, AprobacionSupervisor.class,
+                FuenteDatosRiesgo.class, SujetoRiesgo.class, SujetoRiesgoAlias.class, SujetoRiesgoDocumento.class,
+                SujetoRiesgoRelacion.class, CoincidenciaListaAlerta.class);
         return map;
     }
 

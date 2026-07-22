@@ -15,6 +15,12 @@ public class Moneda extends BaseEntity {
     @Column(name = "codigo_iso", nullable = false, unique = true, length = 3)
     private String codigoIso;
 
-    @Column(nullable = false, length = 40)
+    @Column(nullable = false, length = 120)
     private String nombre;
+
+    @Column(name = "nombre_en", length = 120)
+    private String nombreEn;
+
+    @Column(length = 120)
+    private String fuente;
 }

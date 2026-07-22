@@ -29,7 +29,29 @@ public class RuleEngineFactsController {
                 new FactDefinition("observado", "Cliente observado", "BOOLEANO", null,
                         List.of("exists", "==")),
                 new FactDefinition("listas", "Presente en listas regulatorias", "EXISTENCIA", null,
-                        List.of("exists", "=="))
+                        List.of("exists", "==")),
+                new FactDefinition("remitenteEnLista", "Remitente en lista de riesgo", "BOOLEANO", null,
+                        List.of("exists", "==")),
+                new FactDefinition("beneficiarioEnLista", "Beneficiario en lista de riesgo", "BOOLEANO", null,
+                        List.of("exists", "==")),
+                new FactDefinition("documentoEnLista", "Documento en lista de riesgo", "BOOLEANO", null,
+                        List.of("exists", "==")),
+                new FactDefinition("cuentaEnLista", "Cuenta en lista de riesgo", "BOOLEANO", null,
+                        List.of("exists", "==")),
+                new FactDefinition("paisOrigenAltoRiesgo", "País origen de alto riesgo", "BOOLEANO", null,
+                        List.of("exists", "==")),
+                new FactDefinition("paisDestinoAltoRiesgo", "País destino de alto riesgo", "BOOLEANO", null,
+                        List.of("exists", "==")),
+                new FactDefinition("paisOrigenMonitoreado", "País origen bajo monitoreo", "BOOLEANO", null,
+                        List.of("exists", "==")),
+                new FactDefinition("paisDestinoMonitoreado", "País destino bajo monitoreo", "BOOLEANO", null,
+                        List.of("exists", "==")),
+                new FactDefinition("tipoLista", "Tipo de lista coincidente", "CATALOGO", "fuente_datos_riesgo",
+                        List.of("==", "!=", "in")),
+                new FactDefinition("fuenteLista", "Fuente de lista coincidente", "CATALOGO", "fuente_datos_riesgo",
+                        List.of("==", "!=", "in")),
+                new FactDefinition("severidadLista", "Severidad de lista coincidente", "CATALOGO", "nivel_riesgo",
+                        List.of("==", "!=", "in"))
         ));
     }
 

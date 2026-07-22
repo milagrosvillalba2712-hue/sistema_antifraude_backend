@@ -111,6 +111,8 @@ public class DroolsService {
                     .regla(regla)
                     .transaccion(context.getTransaccion())
                     .scoreRegla(score)
+                    .cumplida(cumplida)
+                    .scoreGenerado(score)
                     .resultadoEvaluacion(cumplida ? "CUMPLIO" : "NO_CUMPLIO")
                     .condicionEvaluada(regla.getCondicion())
                     .tiempoEjecucionMs(tiempoMs)

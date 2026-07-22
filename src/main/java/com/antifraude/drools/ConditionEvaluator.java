@@ -90,10 +90,28 @@ public class ConditionEvaluator {
             facts.put("producto", t.getProductoNombre());
             facts.put("fecha", t.getFechaTransaccion());
             facts.put("fechahora", t.getFechaTransaccion());
+            facts.put("cuentaorigen", t.getCuentaOrigen());
+            facts.put("cuentadestino", t.getCuentaDestino());
+            facts.put("remitente", t.getPersonaRemitenteNombre());
+            facts.put("remitentenombre", t.getPersonaRemitenteNombre());
+            facts.put("beneficiario", t.getPersonaBeneficiarioNombre());
+            facts.put("beneficiarionombre", t.getPersonaBeneficiarioNombre());
         }
         facts.put("pep", !context.getRegistrosPEP().isEmpty());
         facts.put("observado", !context.getRegistrosObservados().isEmpty());
         facts.put("listas", listDocuments(context));
+        facts.put("sujetoenlista", !context.getCoincidenciasListas().isEmpty());
+        facts.put("remitenteenlista", context.isRemitenteEnLista());
+        facts.put("beneficiarioenlista", context.isBeneficiarioEnLista());
+        facts.put("documentoenlista", context.isDocumentoEnLista());
+        facts.put("cuentaenlista", context.isCuentaEnLista());
+        facts.put("paisorigenaltoriesgo", context.isPaisOrigenAltoRiesgo());
+        facts.put("paisdestinoaltoriesgo", context.isPaisDestinoAltoRiesgo());
+        facts.put("paisorigenmonitoreado", context.isPaisOrigenMonitoreado());
+        facts.put("paisdestinomonitoreado", context.isPaisDestinoMonitoreado());
+        facts.put("tipolista", listValues(context, "categoria"));
+        facts.put("fuentelista", listValues(context, "fuente"));
+        facts.put("severidadlista", listValues(context, "severidad"));
         facts.put("horario", !context.getHorariosRiesgo().isEmpty());
         facts.put("frecuencia", context.getHistorialTransacciones().size());
         facts.put("fechaactual", context.getFechaHoraActual() != null ? context.getFechaHoraActual() : LocalDateTime.now());
@@ -105,6 +123,22 @@ public class ConditionEvaluator {
         context.getListasNegras().forEach(l -> values.add(l.getDocumentoIdentidad()));
         context.getListasGrises().forEach(l -> values.add(l.getDocumentoIdentidad()));
         context.getListasBlancas().forEach(l -> values.add(l.getDocumentoIdentidad()));
+        return values;
+    }
+
+    private Set<String> listValues(RiskContext context, String field) {
+        Set<String> values = new HashSet<>();
+        context.getCoincidenciasListas().forEach(c -> {
+            String value = switch (field) {
+                case "categoria" -> c.getCategoria();
+                case "fuente" -> c.getFuenteCodigo();
+                case "severidad" -> c.getSeveridad();
+                default -> null;
+            };
+            if (value != null && !value.isBlank()) {
+                values.add(value);
+            }
+        });
         return values;
     }
 

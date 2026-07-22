@@ -98,15 +98,15 @@ public class CatalogSeedRunner implements CommandLineRunner {
     }
 
     private void seedTipoDocumento() {
-        insert("tipo_documento", "codigo", "DNI", "INSERT INTO tipo_documento (codigo,nombre,activo) VALUES ('DNI','Documento Nacional de Identidad',true)");
-        insert("tipo_documento", "codigo", "PASAPORTE", "INSERT INTO tipo_documento (codigo,nombre,activo) VALUES ('PASAPORTE','Pasaporte',true)");
-        insert("tipo_documento", "codigo", "CUIT", "INSERT INTO tipo_documento (codigo,nombre,activo) VALUES ('CUIT','Clave Unica de Identificacion Tributaria',true)");
-        insert("tipo_documento", "codigo", "CUIL", "INSERT INTO tipo_documento (codigo,nombre,activo) VALUES ('CUIL','Clave Unica de Identificacion Laboral',true)");
-        insert("tipo_documento", "codigo", "CDI", "INSERT INTO tipo_documento (codigo,nombre,activo) VALUES ('CDI','Cedula de Identidad',true)");
-        insert("tipo_documento", "codigo", "RUC", "INSERT INTO tipo_documento (codigo,nombre,activo) VALUES ('RUC','Registro Unico de Contribuyente',true)");
-        insert("tipo_documento", "codigo", "CI", "INSERT INTO tipo_documento (codigo,nombre,activo) VALUES ('CI','Cedula de Identidad',true)");
-        insert("tipo_documento", "codigo", "NIT", "INSERT INTO tipo_documento (codigo,nombre,activo) VALUES ('NIT','Numero de Identificacion Tributaria',true)");
-        insert("tipo_documento", "codigo", "SSN", "INSERT INTO tipo_documento (codigo,nombre,activo) VALUES ('SSN','Social Security Number',true)");
+        insert("tipo_documento", "codigo", "DNI", "INSERT INTO tipo_documento (codigo,nombre,pais_relacion_id,activo) SELECT 'DNI','Documento Nacional de Identidad',p.id,true FROM pais p WHERE p.codigo_iso='AR'");
+        insert("tipo_documento", "codigo", "PASAPORTE", "INSERT INTO tipo_documento (codigo,nombre,pais_relacion_id,activo) VALUES ('PASAPORTE','Pasaporte',NULL,true)");
+        insert("tipo_documento", "codigo", "CUIT", "INSERT INTO tipo_documento (codigo,nombre,pais_relacion_id,activo) SELECT 'CUIT','Clave Unica de Identificacion Tributaria',p.id,true FROM pais p WHERE p.codigo_iso='AR'");
+        insert("tipo_documento", "codigo", "CUIL", "INSERT INTO tipo_documento (codigo,nombre,pais_relacion_id,activo) SELECT 'CUIL','Clave Unica de Identificacion Laboral',p.id,true FROM pais p WHERE p.codigo_iso='AR'");
+        insert("tipo_documento", "codigo", "CDI", "INSERT INTO tipo_documento (codigo,nombre,pais_relacion_id,activo) SELECT 'CDI','Cedula de Identidad',p.id,true FROM pais p WHERE p.codigo_iso='PY'");
+        insert("tipo_documento", "codigo", "RUC", "INSERT INTO tipo_documento (codigo,nombre,pais_relacion_id,activo) SELECT 'RUC','Registro Unico de Contribuyente',p.id,true FROM pais p WHERE p.codigo_iso='PY'");
+        insert("tipo_documento", "codigo", "CI", "INSERT INTO tipo_documento (codigo,nombre,pais_relacion_id,activo) SELECT 'CI','Cedula de Identidad',p.id,true FROM pais p WHERE p.codigo_iso='PY'");
+        insert("tipo_documento", "codigo", "NIT", "INSERT INTO tipo_documento (codigo,nombre,pais_relacion_id,activo) SELECT 'NIT','Numero de Identificacion Tributaria',p.id,true FROM pais p WHERE p.codigo_iso='CO'");
+        insert("tipo_documento", "codigo", "SSN", "INSERT INTO tipo_documento (codigo,nombre,pais_relacion_id,activo) SELECT 'SSN','Social Security Number',p.id,true FROM pais p WHERE p.codigo_iso='US'");
         insert("tipo_documento", "codigo", "OTRO", "INSERT INTO tipo_documento (codigo,nombre,activo) VALUES ('OTRO','Otro documento',true)");
     }
 
