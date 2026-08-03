@@ -288,6 +288,8 @@ public class RiskContextBuilder {
         fact.setMonedaCodigo(t.getMoneda());
         fact.setCanalCodigo(t.getCanal());
         fact.setTipoTransaccion(t.getTipoTransaccion());
+        fact.setInfraestructuraPago(t.getCanal());
+        fact.setModuloSipap(t.getCanal() != null && t.getCanal().toUpperCase().contains("SPI") ? "SPI" : null);
         fact.setIpOrigen(t.getIpOrigen());
         fact.setPaisOrigenCodigo(t.getPaisOrigen());
         fact.setFechaTransaccion(t.getFechaTransaccion());

@@ -4,6 +4,8 @@ import com.antifraude.common.entity.AuditableEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "empresa")
 @Getter
@@ -14,8 +16,8 @@ import lombok.*;
 public class Empresa extends AuditableEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false, unique = true, length = 30)
     private String codigo;

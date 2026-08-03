@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -27,7 +28,7 @@ public class KycService {
         this.consultaExternaRepository = consultaExternaRepository;
     }
 
-    public KycResponse consultar(KycRequest request, Long usuarioId) {
+    public KycResponse consultar(KycRequest request, UUID usuarioId) {
         log.info("[KYC] Consultando {} - Documento: {} - UsuarioId: {}",
                 request.tipoConsulta(), request.identificadorDocumento(), usuarioId);
         try {

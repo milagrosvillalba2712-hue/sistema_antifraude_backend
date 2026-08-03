@@ -27,7 +27,7 @@ public class KycController {
                                                   Authentication auth, HttpServletRequest httpRequest) {
         log.info("[KYC] POST /api/kyc/consultar - Documento: {} - Usuario: {} - IP: {}",
                 request.identificadorDocumento(), auth.getName(), httpRequest.getRemoteAddr());
-        KycResponse response = kycService.consultar(request, 0L);
+        KycResponse response = kycService.consultar(request, null);
         log.info("[KYC] Consulta completada - Documento: {} - Resultado: {}",
                 request.identificadorDocumento(), response.resultado());
         return ResponseEntity.ok(response);

@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -27,12 +28,12 @@ public class PerfilService {
     }
 
     @Transactional
-    public PerfilUsuario obtenerPorUsuarioId(Long usuarioId) {
+    public PerfilUsuario obtenerPorUsuarioId(UUID usuarioId) {
         return perfilRepository.findByUsuarioId(usuarioId)
                 .orElseGet(() -> crearPerfilPorDefecto(usuarioId));
     }
 
-    public PerfilUsuario actualizarPerfil(Long usuarioId, String nombreVisible, String imagenPerfil) {
+    public PerfilUsuario actualizarPerfil(UUID usuarioId, String nombreVisible, String imagenPerfil) {
         log.info("[PROFILE] Actualizando perfil usuario ID: {}", usuarioId);
         PerfilUsuario perfil = obtenerPorUsuarioId(usuarioId);
         if (nombreVisible != null) {
@@ -44,7 +45,7 @@ public class PerfilService {
         return perfilRepository.save(perfil);
     }
 
-    public PerfilUsuario cambiarEstado(Long usuarioId, String estado, String estadoPersonalizado) {
+    public PerfilUsuario cambiarEstado(UUID usuarioId, String estado, String estadoPersonalizado) {
         log.info("[PROFILE] Cambiando estado usuario ID: {} a {}", usuarioId, estado);
         PerfilUsuario perfil = obtenerPorUsuarioId(usuarioId);
         perfil.setEstado(estado);
@@ -53,14 +54,14 @@ public class PerfilService {
         return perfilRepository.save(perfil);
     }
 
-    public PerfilUsuario actualizarImagen(Long usuarioId, String imagenBase64) {
+    public PerfilUsuario actualizarImagen(UUID usuarioId, String imagenBase64) {
         log.info("[PROFILE] Actualizando imagen usuario ID: {}", usuarioId);
         PerfilUsuario perfil = obtenerPorUsuarioId(usuarioId);
         perfil.setImagenPerfil(imagenBase64);
         return perfilRepository.save(perfil);
     }
 
-    private PerfilUsuario crearPerfilPorDefecto(Long usuarioId) {
+    private PerfilUsuario crearPerfilPorDefecto(UUID usuarioId) {
         log.info("[PROFILE] Creando perfil por defecto para usuario ID: {}", usuarioId);
         Usuario usuario = usuarioService.buscarPorId(usuarioId);
         PerfilUsuario perfil = PerfilUsuario.builder()

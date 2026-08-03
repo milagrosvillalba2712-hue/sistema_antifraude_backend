@@ -12,28 +12,47 @@ import java.math.BigDecimal;
 @EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "control_importe", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"producto_id", "moneda_id", "monto_minimo"})
+    @UniqueConstraint(columnNames = {"empresa_id", "codigo"})
 })
 public class ControlImporte extends BaseEntity {
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "producto_id", nullable = false)
-    private Producto producto;
+    @Column(name = "empresa_id", nullable = false)
+    private java.util.UUID empresaId;
+
+    @Column(nullable = false, length = 60)
+    private String codigo;
+
+    @Column(nullable = false, length = 160)
+    private String nombre;
+
+    @Column(name = "tipo_transaccion_id")
+    private Long tipoTransaccionId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "moneda_id", nullable = false)
+    @JoinColumn(name = "moneda_id")
     private Moneda moneda;
 
-    @Column(name = "monto_minimo", nullable = false, precision = 18, scale = 2)
+    @Column(name = "monto_minimo", precision = 18, scale = 2)
     private BigDecimal montoMinimo = BigDecimal.ZERO;
 
-    @Column(name = "monto_maximo", nullable = false, precision = 18, scale = 2)
+    @Column(name = "monto_maximo", precision = 18, scale = 2)
     private BigDecimal montoMaximo;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "nivel_riesgo_id", nullable = false)
-    private NivelRiesgo nivelRiesgo;
+    @Column(nullable = false, length = 30)
+    private String severidad = "MEDIA";
 
-    @Column(nullable = false)
-    private Short prioridad;
+    @Transient
+    public Producto getProducto() {
+        return null;
+    }
+
+    @Transient
+    public NivelRiesgo getNivelRiesgo() {
+        return null;
+    }
+
+    @Transient
+    public Short getPrioridad() {
+        return null;
+    }
 }

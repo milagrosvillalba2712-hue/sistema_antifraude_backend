@@ -18,10 +18,12 @@ public class ClientePEP extends BaseEntity {
     @JoinColumn(name = "persona_id")
     private Persona persona;
 
+    @Transient
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tipo_documento_id", nullable = false)
     private TipoDocumento tipoDocumento;
 
+    @Transient
     @Column(name = "numero_documento", nullable = false, length = 30)
     private String numeroDocumento;
 
@@ -35,6 +37,7 @@ public class ClientePEP extends BaseEntity {
     @Enumerated(EnumType.STRING)
     private TipoPEP tipoPEP;
 
+    @Transient
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "nivel_riesgo_id", nullable = false)
     private NivelRiesgo nivelRiesgo;
@@ -45,10 +48,12 @@ public class ClientePEP extends BaseEntity {
     @Column(name = "fecha_fin")
     private LocalDate fechaFin;
 
+    @Transient
     @Column(nullable = false, length = 30)
     @Enumerated(EnumType.STRING)
     private FuentePEP fuente;
 
+    @Transient
     @Column(length = 500)
     private String observacion;
 

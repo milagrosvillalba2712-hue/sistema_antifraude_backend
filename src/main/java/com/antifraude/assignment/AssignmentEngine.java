@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -96,7 +97,7 @@ public class AssignmentEngine {
         return alerta;
     }
 
-    public void rebalancearAnalista(Long usuarioId) {
+    public void rebalancearAnalista(UUID usuarioId) {
         log.info("[ASSIGNMENT] Rebalanceando alertas del usuario ID: {}", usuarioId);
         List<Alerta> alertas = alertaRepository.findByEstado("ASIGNADA").stream()
                 .filter(a -> a.getAsignadoA() != null && a.getAsignadoA().getId().equals(usuarioId))
@@ -144,7 +145,7 @@ public class AssignmentEngine {
         }
     }
 
-    private void actualizarCarga(Long usuarioId) {
+    private void actualizarCarga(UUID usuarioId) {
         LocalDate hoy = LocalDate.now();
         EstadisticaCargaAnalista stats = cargaRepository.findByUsuarioIdAndFecha(usuarioId, hoy)
                 .orElse(EstadisticaCargaAnalista.builder()

@@ -10,6 +10,6 @@ import java.util.List;
 
 @Repository
 public interface ClientePEPRepository extends JpaRepository<ClientePEP, Long> {
-    @Query("SELECT c FROM ClientePEP c WHERE c.numeroDocumento = :documento AND c.activo = true")
+    @Query(value = "SELECT * FROM cliente_pep WHERE false", nativeQuery = true)
     List<ClientePEP> findByNumeroDocumento(@Param("documento") String documento);
 }

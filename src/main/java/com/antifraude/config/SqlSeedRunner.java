@@ -3,6 +3,7 @@ package com.antifraude.config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @Order(2)
+@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true", matchIfMissing = true)
 public class SqlSeedRunner implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(SqlSeedRunner.class);

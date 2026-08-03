@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -76,7 +77,7 @@ public class CasoService {
         return guardada;
     }
 
-    public Caso asignarAnalista(Long casoId, Long analistaId) {
+    public Caso asignarAnalista(Long casoId, UUID analistaId) {
         log.info("[CASES] Asignando caso ID: {} a analista ID: {}", casoId, analistaId);
         Caso caso = buscarPorId(casoId);
         com.antifraude.users.Usuario analista = new com.antifraude.users.Usuario();

@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -20,16 +21,18 @@ public class AuditoriaService {
         this.auditoriaRepository = auditoriaRepository;
     }
 
-    public void registrar(Long usuarioId, String accion, String descripcion,
-                          String direccionIp, String entidadAfectada, Long entidadId) {
-        registrar(usuarioId, null, accion, descripcion, direccionIp, null, entidadAfectada, entidadId, null, null);
+    public void registrar(UUID usuarioId, String accion, String descripcion,
+                          String direccionIp, String entidadAfectada, Object entidadId) {
+        registrar(usuarioId, null, accion, descripcion, direccionIp, null, entidadAfectada,
+                entidadId != null ? String.valueOf(entidadId) : null, null, null);
     }
 
-    public void registrar(Long usuarioId, Long empresaId, String accion, String descripcion,
-                          String direccionIp, String userAgent, String entidadAfectada, Long entidadId,
+    public void registrar(UUID usuarioId, UUID empresaId, String accion, String descripcion,
+                          String direccionIp, String userAgent, String entidadAfectada, Object entidadId,
                           String valorAnteriorJson, String valorNuevoJson) {
+        String entidadIdTexto = entidadId != null ? String.valueOf(entidadId) : null;
         log.debug("[AUDIT] Registrando: {} - Usuario: {} - IP: {} - Entidad: {}:{}",
-                accion, usuarioId, direccionIp, entidadAfectada, entidadId);
+                accion, usuarioId, direccionIp, entidadAfectada, entidadIdTexto);
         Auditoria auditoria = Auditoria.builder()
                 .usuarioId(usuarioId)
                 .empresaId(empresaId)
@@ -38,7 +41,7 @@ public class AuditoriaService {
                 .direccionIp(direccionIp)
                 .userAgent(userAgent)
                 .entidadAfectada(entidadAfectada)
-                .entidadId(entidadId)
+                .entidadId(entidadIdTexto)
                 .valorAnteriorJson(valorAnteriorJson)
                 .valorNuevoJson(valorNuevoJson)
                 .build();
@@ -58,7 +61,7 @@ public class AuditoriaService {
         return eventos;
     }
 
-    public List<Auditoria> buscarPorUsuario(Long usuarioId) {
+    public List<Auditoria> buscarPorUsuario(UUID usuarioId) {
         log.debug("[AUDIT] Buscando eventos por usuario ID: {}", usuarioId);
         return auditoriaRepository.findByUsuarioIdOrderByFechaEventoDesc(usuarioId);
     }

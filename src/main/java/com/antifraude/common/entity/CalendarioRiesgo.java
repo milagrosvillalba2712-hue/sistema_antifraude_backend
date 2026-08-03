@@ -17,11 +17,11 @@ public class CalendarioRiesgo extends BaseEntity {
     @Column(nullable = false, unique = true)
     private LocalDate fecha;
 
-    @Column(name = "tipo_dia", nullable = false, length = 20)
+    @Column(name = "tipo_evento", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     private TipoDia tipoDia;
 
-    @Column(length = 150)
+    @Column(name = "nombre", length = 150)
     private String descripcion;
 
     public enum TipoDia {

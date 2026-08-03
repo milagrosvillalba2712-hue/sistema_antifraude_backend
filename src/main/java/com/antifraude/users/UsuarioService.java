@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -34,7 +35,7 @@ public class UsuarioService {
         this.empresaRepository = empresaRepository;
     }
 
-    public Usuario crearUsuario(Usuario usuario, String rolCodigo, Long empresaId) {
+    public Usuario crearUsuario(Usuario usuario, String rolCodigo, UUID empresaId) {
         log.info("[USERS] Creando usuario: {}", usuario.getEmail());
         if (usuarioRepository.existsByEmail(usuario.getEmail())) {
             throw new BusinessException("DUPLICATE_EMAIL", "El email ya esta registrado: " + usuario.getEmail());
@@ -53,7 +54,7 @@ public class UsuarioService {
         return usuarios;
     }
 
-    public Usuario buscarPorId(Long id) {
+    public Usuario buscarPorId(UUID id) {
         log.debug("[USERS] Buscando usuario por ID: {}", id);
         return usuarioRepository.findById(id)
                 .orElseThrow(() -> {
@@ -71,7 +72,7 @@ public class UsuarioService {
                 });
     }
 
-    public Usuario actualizar(Long id, Usuario actualizado, String rolCodigo, Long empresaId) {
+    public Usuario actualizar(UUID id, Usuario actualizado, String rolCodigo, UUID empresaId) {
         log.info("[USERS] Actualizando usuario ID: {}", id);
         Usuario usuario = buscarPorId(id);
         usuario.setNombre(actualizado.getNombre());
@@ -95,7 +96,7 @@ public class UsuarioService {
         return asignacion != null ? asignacion.getRol().getCodigo() : "SIN_ROL";
     }
 
-    public void desactivar(Long id) {
+    public void desactivar(UUID id) {
         log.info("[USERS] Desactivando usuario ID: {}", id);
         Usuario usuario = buscarPorId(id);
         usuario.setActivo(false);
@@ -103,7 +104,7 @@ public class UsuarioService {
         log.info("[USERS] Usuario desactivado exitosamente - ID: {} - Email: {}", id, usuario.getEmail());
     }
 
-    private void asignarRolPrincipal(Usuario usuario, String rolCodigo, Long empresaId) {
+    private void asignarRolPrincipal(Usuario usuario, String rolCodigo, UUID empresaId) {
         RolSistema rol = rolSistemaRepository.findByCodigo(rolCodigo)
                 .orElseThrow(() -> new BusinessException("ROLE_NOT_FOUND", "Rol no encontrado: " + rolCodigo));
         Empresa empresa = empresaId != null

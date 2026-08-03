@@ -1,6 +1,7 @@
 package com.antifraude.dto;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 public record AlertaResponse(
         Long id,
@@ -23,7 +24,7 @@ public record AlertaResponse(
         String prioridad,
         String estado,
         String observacion,
-        Long asignadoA,
+        UUID asignadoA,
         String asignadoNombre,
         LocalDateTime fechaGeneracion,
         LocalDateTime fechaResolucion) {

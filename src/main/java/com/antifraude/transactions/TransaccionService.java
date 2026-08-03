@@ -9,8 +9,14 @@ import com.antifraude.drools.RiskContextBuilder;
 import com.antifraude.drools.RiskResult;
 import com.antifraude.exception.BusinessException;
 import com.antifraude.exception.ResourceNotFoundException;
+import com.antifraude.licensing.Empresa;
+import com.antifraude.licensing.EmpresaRepository;
 import com.antifraude.rules.ReglaRiesgo;
 import com.antifraude.rules.ReglaRiesgoRepository;
+import com.antifraude.security.crypto.AesGcmCryptoService;
+import com.antifraude.security.crypto.HmacHashService;
+import com.antifraude.security.tenant.TenantContext;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -36,12 +42,18 @@ public class TransaccionService {
     private final ProductoRepository productoRepository;
     private final PersonaRepository personaRepository;
     private final ReglaRiesgoRepository reglaRiesgoRepository;
+    private final EmpresaRepository empresaRepository;
+    private final JdbcTemplate jdbcTemplate;
+    private final AesGcmCryptoService aesGcmCryptoService;
+    private final HmacHashService hmacHashService;
 
     public TransaccionService(TransaccionRepository transaccionRepository, DroolsService droolsService,
                               RiskContextBuilder riskContextBuilder,
                               PaisRepository paisRepository, MonedaRepository monedaRepository,
                               CanalRepository canalRepository, ProductoRepository productoRepository,
-                              PersonaRepository personaRepository, ReglaRiesgoRepository reglaRiesgoRepository) {
+                              PersonaRepository personaRepository, ReglaRiesgoRepository reglaRiesgoRepository,
+                              EmpresaRepository empresaRepository, JdbcTemplate jdbcTemplate,
+                              AesGcmCryptoService aesGcmCryptoService, HmacHashService hmacHashService) {
         this.transaccionRepository = transaccionRepository;
         this.droolsService = droolsService;
         this.riskContextBuilder = riskContextBuilder;
@@ -51,6 +63,10 @@ public class TransaccionService {
         this.productoRepository = productoRepository;
         this.personaRepository = personaRepository;
         this.reglaRiesgoRepository = reglaRiesgoRepository;
+        this.empresaRepository = empresaRepository;
+        this.jdbcTemplate = jdbcTemplate;
+        this.aesGcmCryptoService = aesGcmCryptoService;
+        this.hmacHashService = hmacHashService;
     }
 
     public Transaccion crearDesdeRequest(TransaccionRequest request) {
@@ -64,9 +80,11 @@ public class TransaccionService {
         }
 
         Moneda moneda = resolveMoneda(request.moneda());
-        Canal canal = resolveCanal(request.canal());
+        Long tipoTransaccionId = resolveTipoTransaccionId(request.tipoTransaccion());
+        Long canalTransaccionId = resolveCanalTransaccionId(request.canal());
         Pais paisOrigen = resolvePais(request.paisOrigen());
         Pais paisDestino = resolvePais(request.paisDestino());
+        Empresa empresa = resolveEmpresa();
         Producto producto = request.productoId() != null
                 ? productoRepository.findById(request.productoId()).orElse(null) : null;
         Persona remitente = request.personaRemitenteId() != null
@@ -76,14 +94,25 @@ public class TransaccionService {
 
         Transaccion transaccion = Transaccion.builder()
                 .transactionUuid(uuid)
+                .empresa(empresa)
+                .codigo("TX-" + uuid.toString().substring(0, 12).toUpperCase())
+                .tipoTransaccionId(tipoTransaccionId)
+                .canalTransaccionId(canalTransaccionId)
+                .infraestructuraPago(defaultInfraestructura(request.canal()))
+                .subtipoTransaccion(request.tipoTransaccion())
                 .identificadorDocumento(request.identificadorDocumento())
                 .cuentaOrigen(request.cuentaOrigen())
                 .cuentaDestino(request.cuentaDestino())
+                .documentoRemitenteEnc(aesGcmCryptoService.encryptToBytes(request.identificadorDocumento()))
+                .documentoRemitenteHash(hmacHashService.hmacBytes(request.identificadorDocumento()))
+                .cuentaOrigenEnc(aesGcmCryptoService.encryptToBytes(request.cuentaOrigen()))
+                .cuentaOrigenHash(hmacHashService.hmacBytes(request.cuentaOrigen()))
+                .cuentaDestinoEnc(aesGcmCryptoService.encryptToBytes(request.cuentaDestino()))
+                .cuentaDestinoHash(hmacHashService.hmacBytes(request.cuentaDestino()))
                 .monto(request.monto())
                 .moneda(request.moneda())
                 .monedaRef(moneda)
                 .canal(request.canal())
-                .canalRef(canal)
                 .tipoTransaccion(request.tipoTransaccion())
                 .ipOrigen(request.ipOrigen())
                 .paisOrigen(request.paisOrigen())
@@ -92,9 +121,13 @@ public class TransaccionService {
                 .personaRemitente(remitente)
                 .personaBeneficiario(beneficiario)
                 .producto(producto)
-                .fechaTransaccion(request.fechaTransaccion())
+                .fechaTransaccion(request.fechaTransaccion() != null ? request.fechaTransaccion() : LocalDateTime.now())
                 .estado("PENDIENTE")
                 .estadoEvaluacion(Transaccion.EstadoEvaluacion.PENDIENTE)
+                .datosEspecificos("{}")
+                .riesgoParaguayJson("{}")
+                .screeningResultJson("{}")
+                .reglasDisparadasJson("[]")
                 .build();
         Transaccion guardada = transaccionRepository.save(transaccion);
         log.info("[TX] Transaccion creada - ID: {} - UUID: {}", guardada.getId(), uuid);
@@ -115,17 +148,17 @@ public class TransaccionService {
         String estado;
         Transaccion.EstadoEvaluacion estadoEvaluacion;
         if (result.scoreTotal().compareTo(new BigDecimal("70")) >= 0) {
-            estado = "SOSPECHOSA";
+            estado = "OBSERVADA";
             estadoEvaluacion = Transaccion.EstadoEvaluacion.SOSPECHOSA;
             log.warn("[TX] Transaccion SOSPECHOSA - ID: {} - Score: {} - UUID: {}",
                     transaccion.getId(), result.scoreTotal(), transaccion.getTransactionUuid());
         } else if (result.scoreTotal().compareTo(new BigDecimal("40")) >= 0) {
-            estado = "REVISION";
+            estado = "OBSERVADA";
             estadoEvaluacion = Transaccion.EstadoEvaluacion.REVISION_MANUAL;
             log.info("[TX] Transaccion en REVISION - ID: {} - Score: {} - UUID: {}",
                     transaccion.getId(), result.scoreTotal(), transaccion.getTransactionUuid());
         } else {
-            estado = "APROBADA";
+            estado = "COMPLETADA";
             estadoEvaluacion = Transaccion.EstadoEvaluacion.APROBADA;
             log.info("[TX] Transaccion APROBADA - ID: {} - Score: {} - UUID: {}",
                     transaccion.getId(), result.scoreTotal(), transaccion.getTransactionUuid());
@@ -147,7 +180,7 @@ public class TransaccionService {
 
     public Transaccion buscarPorId(Long id) {
         log.debug("[TX] Buscando transaccion por ID: {}", id);
-        return transaccionRepository.findById(id)
+        return transaccionRepository.findFirstByIdOrderByFechaTransaccionDesc(id)
                 .orElseThrow(() -> {
                     log.warn("[TX] Transaccion no encontrada con ID: {}", id);
                     return new ResourceNotFoundException("Transaccion", "id", id);
@@ -178,5 +211,53 @@ public class TransaccionService {
         if (nombre == null || nombre.isBlank()) return null;
         return paisRepository.findByNombre(nombre)
                 .orElseGet(() -> paisRepository.findByCodigoIso(nombre).orElse(null));
+    }
+
+    private Empresa resolveEmpresa() {
+        UUID empresaId = TenantContext.getEmpresaId();
+        if (empresaId != null) {
+            return empresaRepository.findById(empresaId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Empresa", "id", empresaId));
+        }
+        return empresaRepository.findByCodigo("BANCO_REGULA")
+                .or(() -> empresaRepository.findAll().stream().findFirst())
+                .orElseThrow(() -> new BusinessException("EMPRESA_REQUERIDA", "No existe empresa para registrar la transaccion"));
+    }
+
+    private Long resolveTipoTransaccionId(String codigo) {
+        String value = codigo == null || codigo.isBlank() ? "PY_SPI_ALIAS_TRANSFER" : codigo;
+        List<Long> ids = jdbcTemplate.queryForList(
+                "select id from tipo_transaccion where codigo = ? limit 1",
+                Long.class,
+                value);
+        if (!ids.isEmpty()) return ids.get(0);
+        return jdbcTemplate.queryForObject("select id from tipo_transaccion where codigo = 'PY_SPI_ALIAS_TRANSFER'", Long.class);
+    }
+
+    private Long resolveCanalTransaccionId(String codigo) {
+        String value = defaultInfraestructura(codigo);
+        List<Long> ids = jdbcTemplate.queryForList(
+                "select id from canal_transaccion where codigo = ? limit 1",
+                Long.class,
+                value);
+        if (!ids.isEmpty()) return ids.get(0);
+        return jdbcTemplate.queryForObject("select id from canal_transaccion where codigo = 'SPI'", Long.class);
+    }
+
+    private String defaultInfraestructura(String canal) {
+        if (canal == null || canal.isBlank()) return "SPI";
+        String normalized = canal.trim().toUpperCase();
+        return switch (normalized) {
+            case "PY_SPI_ALIAS_TRANSFER", "SPI_ALIAS", "TRANSFERENCIA_SPI" -> "SPI";
+            case "PY_LBTR_HIGH_VALUE", "LBTR" -> "LBTR";
+            case "PY_PAYROLL_ACH", "ACH" -> "ACH";
+            case "PY_CASH_IN_BRANCH", "PY_ATM_WITHDRAWAL", "ATM", "CAJA" -> "CAJA";
+            case "PY_EMPE_WALLET_P2P", "EMPE" -> "EMPE";
+            case "PY_QR_EMV_PAYMENT", "QR" -> "QR";
+            case "PY_REMITTANCE_RECEIVE", "REMESA" -> "REMESA";
+            case "PY_FX_EXCHANGE", "CAMBIO" -> "CAMBIO";
+            case "PY_TRADE_FINANCE_PAYMENT", "COMEX" -> "COMEX";
+            default -> normalized;
+        };
     }
 }

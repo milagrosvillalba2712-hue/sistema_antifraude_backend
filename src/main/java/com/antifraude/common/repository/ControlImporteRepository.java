@@ -10,6 +10,6 @@ import java.util.List;
 
 @Repository
 public interface ControlImporteRepository extends JpaRepository<ControlImporte, Long> {
-    @Query("SELECT ci FROM ControlImporte ci WHERE ci.producto.codigo = :productoCodigo AND ci.activo = true")
+    @Query("SELECT ci FROM ControlImporte ci WHERE ci.activo = true")
     List<ControlImporte> findByProductoCodigo(@Param("productoCodigo") String productoCodigo);
 }

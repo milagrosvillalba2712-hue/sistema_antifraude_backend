@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/casos")
@@ -60,7 +61,7 @@ public class CasoController {
     }
 
     @PatchMapping("/{id}/asignar")
-    public ResponseEntity<Caso> asignarAnalista(@PathVariable Long id, @RequestParam Long analistaId) {
+    public ResponseEntity<Caso> asignarAnalista(@PathVariable Long id, @RequestParam UUID analistaId) {
         log.info("[CASES] PATCH /api/casos/{}/asignar?analistaId={}", id, analistaId);
         return ResponseEntity.ok(casoService.asignarAnalista(id, analistaId));
     }

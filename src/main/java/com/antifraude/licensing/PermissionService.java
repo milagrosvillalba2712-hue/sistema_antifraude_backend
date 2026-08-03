@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class PermissionService {
@@ -26,12 +27,12 @@ public class PermissionService {
                 .findFirstByUsuarioIdAndActivoTrueOrderByIdAsc(usuario.getId())
                 .orElse(null);
         String roleCode = assignment != null ? assignment.getRol().getCodigo() : "SIN_ROL";
-        Long empresaId = assignment != null && assignment.getEmpresa() != null ? assignment.getEmpresa().getId() : null;
+        UUID empresaId = assignment != null && assignment.getEmpresa() != null ? assignment.getEmpresa().getId() : null;
         Long rolId = assignment != null ? assignment.getRol().getId() : null;
 
         Set<String> permisos = new LinkedHashSet<>(rolPermisoRepository.findPermisosByRolCodigo(roleCode));
         return new SessionAccess(empresaId, rolId, roleCode, List.copyOf(permisos));
     }
 
-    public record SessionAccess(Long empresaId, Long rolId, String rol, List<String> permisos) {}
+    public record SessionAccess(UUID empresaId, Long rolId, String rol, List<String> permisos) {}
 }

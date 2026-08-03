@@ -20,6 +20,9 @@ public class EvidenciaAlerta {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "empresa_id", nullable = false)
+    private java.util.UUID empresaId;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "alerta_id", nullable = false)
     private Alerta alerta;
@@ -59,4 +62,14 @@ public class EvidenciaAlerta {
     @Column(name = "fecha_carga", updatable = false)
     @Builder.Default
     private LocalDateTime fechaCarga = LocalDateTime.now();
+
+    @PrePersist
+    void prePersist() {
+        if (empresaId == null && alerta != null && alerta.getEmpresaId() != null) {
+            empresaId = alerta.getEmpresaId();
+        }
+        if (fechaCarga == null) {
+            fechaCarga = LocalDateTime.now();
+        }
+    }
 }

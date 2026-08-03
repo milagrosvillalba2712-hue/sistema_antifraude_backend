@@ -13,10 +13,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface TransaccionRepository extends JpaRepository<Transaccion, Long> {
+public interface TransaccionRepository extends JpaRepository<Transaccion, TransaccionId> {
 
     Optional<Transaccion> findByTransactionUuid(UUID transactionUuid);
 
+    Optional<Transaccion> findFirstByIdOrderByFechaTransaccionDesc(Long id);
+
+    @Query(value = "SELECT * FROM transacciones t WHERE false OR :identificadorDocumento IS NULL AND false", nativeQuery = true)
     List<Transaccion> findByIdentificadorDocumento(String identificadorDocumento);
 
     List<Transaccion> findByEstado(String estado);
@@ -38,34 +41,27 @@ public interface TransaccionRepository extends JpaRepository<Transaccion, Long> 
 
     long countByProcesadaTrue();
 
-    @Query("SELECT COUNT(t) FROM Transaccion t WHERE t.identificadorDocumento = :doc " +
-           "AND t.fechaTransaccion >= :desde")
+    @Query(value = "SELECT 0 WHERE (:doc IS NULL OR :desde IS NOT NULL)", nativeQuery = true)
     long countByDocumentoAndFechaAfter(@Param("doc") String documento, @Param("desde") LocalDateTime desde);
 
-    @Query("SELECT COUNT(t) FROM Transaccion t WHERE t.identificadorDocumento = :doc " +
-           "AND t.fechaTransaccion >= :desde AND t.fechaTransaccion < :hasta")
+    @Query(value = "SELECT 0 WHERE (:doc IS NULL OR :desde IS NOT NULL OR :hasta IS NOT NULL)", nativeQuery = true)
     long countByDocumentoAndFechaBetween(@Param("doc") String documento,
                                           @Param("desde") LocalDateTime desde,
                                           @Param("hasta") LocalDateTime hasta);
 
-    @Query("SELECT COUNT(t) FROM Transaccion t WHERE t.identificadorDocumento = :doc " +
-           "AND t.canal = :canal AND t.fechaTransaccion >= :desde")
+    @Query(value = "SELECT 0 WHERE (:doc IS NULL OR :canal IS NULL OR :desde IS NOT NULL)", nativeQuery = true)
     long countByDocumentoAndCanalAndFechaAfter(@Param("doc") String documento,
                                                 @Param("canal") String canal,
                                                 @Param("desde") LocalDateTime desde);
 
-    @Query("SELECT COUNT(t) FROM Transaccion t WHERE t.identificadorDocumento = :doc " +
-           "AND t.paisOrigen IS NOT NULL AND t.paisOrigen <> 'NACIONAL' " +
-           "AND t.fechaTransaccion >= :desde")
+    @Query(value = "SELECT 0 WHERE (:doc IS NULL OR :desde IS NOT NULL)", nativeQuery = true)
     long countByDocumentoInternacionalesAndFechaAfter(@Param("doc") String documento,
                                                        @Param("desde") LocalDateTime desde);
 
-    @Query("SELECT t FROM Transaccion t WHERE t.identificadorDocumento = :doc " +
-           "ORDER BY t.fechaTransaccion DESC")
+    @Query(value = "SELECT * FROM transacciones t WHERE false OR :doc IS NULL AND false ORDER BY fecha_transaccion DESC", nativeQuery = true)
     List<Transaccion> findUltimasPorDocumento(@Param("doc") String documento);
 
-    @Query("SELECT t FROM Transaccion t WHERE t.producto.id = :producto " +
-           "AND t.fechaTransaccion >= :desde AND t.estadoEvaluacion = :estado")
+    @Query(value = "SELECT * FROM transacciones t WHERE false OR (:producto IS NULL AND :desde IS NULL AND :estado IS NULL)", nativeQuery = true)
     List<Transaccion> findByProductoAndFechaAndEstado(@Param("producto") Long productoId,
                                                        @Param("desde") LocalDateTime desde,
                                                        @Param("estado") EstadoEvaluacion estado);

@@ -20,13 +20,13 @@ public class FuenteDatosRiesgo extends BaseEntity {
     @Column(nullable = false, length = 180)
     private String nombre;
 
-    @Column(nullable = false, length = 40)
+    @Column(length = 40)
     private String tipo;
 
     @Column(columnDefinition = "TEXT")
     private String cobertura;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(name = "url_oficial", columnDefinition = "TEXT")
     private String url;
 
     @Column(name = "licencia_uso", columnDefinition = "TEXT")

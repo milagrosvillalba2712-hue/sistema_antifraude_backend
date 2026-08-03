@@ -2,6 +2,8 @@ package com.antifraude.alerts;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -21,7 +23,8 @@ public class TransaccionDetalleSnapshot {
     @JoinColumn(name = "alerta_id", nullable = false, unique = true)
     private Alerta alerta;
 
-    @Column(name = "detalle_json", columnDefinition = "TEXT")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "detalle_json", columnDefinition = "jsonb")
     private String detalleJson;
 
     @Column(name = "fecha_registro")

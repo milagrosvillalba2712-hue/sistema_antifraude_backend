@@ -6,7 +6,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 import com.antifraude.alerts.AlertaService;
 
-@SpringBootTest
+@SpringBootTest(properties = {"app.seed.enabled=false", "app.scheduler.enabled=false"})
 class AntifraudeApplicationTests {
 
     @Autowired

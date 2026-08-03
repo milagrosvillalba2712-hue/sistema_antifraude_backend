@@ -8,6 +8,7 @@ import com.antifraude.transactions.TransaccionRepository;
 import com.antifraude.users.Usuario;
 import com.antifraude.users.UsuarioRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,7 @@ import java.util.UUID;
 
 @Component
 @Order(4)
+@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true", matchIfMissing = true)
 public class SaasSeedRunner implements CommandLineRunner {
 
     private final EmpresaRepository empresaRepository;
@@ -112,10 +114,9 @@ public class SaasSeedRunner implements CommandLineRunner {
             pagoRepository.save(Pago.builder()
                     .empresa(empresa)
                     .suscripcion(suscripcion)
-                    .referencia("PAY-DEMO-001")
+                    .codigo("PAY-DEMO-001")
                     .monto(new BigDecimal("12000.00"))
-                    .moneda("USD")
-                    .fechaPago(LocalDate.now())
+                    .fechaPago(LocalDateTime.now())
                     .estado(Pago.EstadoPago.PAGADO)
                     .build());
         }
@@ -214,7 +215,6 @@ public class SaasSeedRunner implements CommandLineRunner {
                     .fechaInicio(LocalDateTime.now())
                     .esProgramado(false)
                     .motivo("Seed para pruebas de asignacion")
-                    .activo(true)
                     .build());
         }
     }

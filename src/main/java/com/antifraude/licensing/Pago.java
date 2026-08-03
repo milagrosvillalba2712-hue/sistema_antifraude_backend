@@ -1,11 +1,12 @@
 package com.antifraude.licensing;
 
 import com.antifraude.common.entity.AuditableEntity;
+import com.antifraude.common.entity.Moneda;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "pago")
@@ -28,17 +29,24 @@ public class Pago extends AuditableEntity {
     @JoinColumn(name = "suscripcion_id")
     private Suscripcion suscripcion;
 
-    @Column(name = "referencia", length = 80)
-    private String referencia;
+    @Column(name = "codigo", nullable = false, unique = true, length = 80)
+    private String codigo;
 
     @Column(nullable = false, precision = 18, scale = 2)
     private BigDecimal monto;
 
-    @Column(length = 10)
-    private String moneda;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "moneda_id")
+    private Moneda monedaRef;
 
     @Column(name = "fecha_pago")
-    private LocalDate fechaPago;
+    private LocalDateTime fechaPago;
+
+    @Column(name = "metodo_pago", length = 60)
+    private String metodoPago;
+
+    @Column(name = "comprobante_referencia", length = 120)
+    private String comprobanteReferencia;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -47,5 +55,17 @@ public class Pago extends AuditableEntity {
 
     public enum EstadoPago {
         PENDIENTE, PAGADO, VENCIDO, ANULADO
+    }
+
+    public String getReferencia() {
+        return codigo;
+    }
+
+    public void setReferencia(String referencia) {
+        this.codigo = referencia;
+    }
+
+    public String getMoneda() {
+        return monedaRef != null ? monedaRef.getCodigoIso() : null;
     }
 }

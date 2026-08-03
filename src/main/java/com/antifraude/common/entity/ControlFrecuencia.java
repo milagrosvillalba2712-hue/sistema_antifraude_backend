@@ -12,20 +12,23 @@ import lombok.NoArgsConstructor;
 @Table(name = "control_frecuencia")
 public class ControlFrecuencia extends BaseEntity {
 
+    @Transient
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "producto_id")
     private Producto producto;
 
-    @Column(name = "cantidad_operaciones", nullable = false)
+    @Column(name = "cantidad_maxima", nullable = false)
     private Integer cantidadOperaciones;
 
-    @Column(name = "ventana_tiempo", nullable = false)
+    @Column(name = "ventana_minutos", nullable = false)
     private Integer ventanaTiempo;
 
+    @Transient
     @Column(name = "unidad_tiempo", nullable = false, length = 10)
     @Enumerated(EnumType.STRING)
     private UnidadTiempo unidadTiempo;
 
+    @Transient
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "nivel_riesgo_id", nullable = false)
     private NivelRiesgo nivelRiesgo;

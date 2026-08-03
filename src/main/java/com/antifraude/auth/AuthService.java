@@ -71,7 +71,7 @@ public class AuthService {
         usuarioRepository.save(usuario);
 
         PermissionService.SessionAccess access = permissionService.buildAccess(usuario);
-        String token = jwtTokenProvider.generateToken(usuario.getEmail(), access.rol(),
+        String token = jwtTokenProvider.generateToken(usuario.getEmail(), usuario.getId(), access.rol(),
                 access.empresaId(), access.rolId(), access.permisos());
         log.info("[AUTH] Token generado para {} - Rol: {} - IP: {}", usuario.getEmail(), access.rol(), ip);
 

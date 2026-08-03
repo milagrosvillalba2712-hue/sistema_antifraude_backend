@@ -2,8 +2,11 @@ package com.antifraude.audit;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "auditoria_sistema")
@@ -18,10 +21,10 @@ public class Auditoria {
     private Long id;
 
     @Column(name = "usuario_id")
-    private Long usuarioId;
+    private UUID usuarioId;
 
     @Column(name = "empresa_id")
-    private Long empresaId;
+    private UUID empresaId;
 
     @Column(nullable = false, length = 100)
     private String accion;
@@ -39,12 +42,14 @@ public class Auditoria {
     private String entidadAfectada;
 
     @Column(name = "entidad_id")
-    private Long entidadId;
+    private String entidadId;
 
-    @Column(name = "valor_anterior_json", columnDefinition = "TEXT")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "valor_anterior_json", columnDefinition = "jsonb")
     private String valorAnteriorJson;
 
-    @Column(name = "valor_nuevo_json", columnDefinition = "TEXT")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "valor_nuevo_json", columnDefinition = "jsonb")
     private String valorNuevoJson;
 
     @Column(name = "fecha_evento", updatable = false)

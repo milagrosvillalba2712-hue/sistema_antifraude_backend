@@ -8,6 +8,7 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -33,7 +34,7 @@ public class Caso extends BaseEntity {
     @Enumerated(EnumType.STRING)
     private EstadoCaso estado;
 
-    @Column(nullable = false, length = 20)
+    @Column(name = "severidad", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     private PrioridadCaso prioridad;
 
@@ -41,7 +42,7 @@ public class Caso extends BaseEntity {
     private Integer score;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "usuario_analista_id")
+    @JoinColumn(name = "responsable_id")
     private Usuario usuarioAnalista;
 
     @Column(name = "fecha_apertura", nullable = false)
@@ -50,10 +51,12 @@ public class Caso extends BaseEntity {
     @Column(name = "fecha_cierre")
     private LocalDateTime fechaCierre;
 
+    @Transient
     @Column(length = 30)
     @Enumerated(EnumType.STRING)
     private ResultadoInvestigacion resultado;
 
+    @Transient
     @Column(length = 1000)
     private String observaciones;
 
@@ -67,5 +70,10 @@ public class Caso extends BaseEntity {
 
     public enum ResultadoInvestigacion {
         FALSO_POSITIVO, OPERACION_JUSTIFICADA, RIESGO_CONFIRMADO, ROS_GENERADO, ESCALADO
+    }
+
+    @Transient
+    public UUID getEmpresaId() {
+        return empresa != null ? empresa.getId() : null;
     }
 }

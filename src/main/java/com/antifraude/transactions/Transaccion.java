@@ -1,22 +1,24 @@
 package com.antifraude.transactions;
 
-import com.antifraude.common.entity.*;
+import com.antifraude.common.entity.Moneda;
+import com.antifraude.common.entity.NivelRiesgo;
+import com.antifraude.common.entity.Pais;
+import com.antifraude.common.entity.Persona;
+import com.antifraude.common.entity.Producto;
+import com.antifraude.common.entity.Canal;
 import com.antifraude.licensing.Empresa;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "transacciones", indexes = {
-        @Index(name = "idx_transacciones_documento", columnList = "identificador_documento"),
-        @Index(name = "idx_transacciones_fecha", columnList = "fecha_transaccion"),
-        @Index(name = "idx_transacciones_score", columnList = "score_riesgo"),
-        @Index(name = "idx_transacciones_uuid", columnList = "transaction_uuid"),
-        @Index(name = "idx_transacciones_estado_eval", columnList = "estado_evaluacion")
-})
+@IdClass(TransaccionId.class)
+@Table(name = "transacciones")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -27,58 +29,77 @@ public class Transaccion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "transaction_uuid", nullable = false, unique = true)
+    @Id
+    @Column(name = "fecha_transaccion", nullable = false)
+    private LocalDateTime fechaTransaccion;
+
+    @Column(name = "transaction_uuid", nullable = false)
     private UUID transactionUuid;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "empresa_id")
+    @JoinColumn(name = "empresa_id", nullable = false)
     private Empresa empresa;
 
-    @Column(name = "codigo", length = 30, unique = true)
+    @Column(nullable = false, length = 60)
     private String codigo;
 
-    @Column(name = "identificador_documento", length = 30)
-    private String identificadorDocumento;
+    @Column(name = "fecha_procesamiento")
+    private LocalDateTime fechaProcesamiento;
 
-    @Column(name = "cuenta_origen", nullable = false, columnDefinition = "TEXT")
-    private String cuentaOrigen;
+    @Column(name = "fecha_liquidacion")
+    private LocalDateTime fechaLiquidacion;
 
-    @Column(name = "cuenta_destino", nullable = false, columnDefinition = "TEXT")
-    private String cuentaDestino;
+    @Column(length = 30)
+    private String estado;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estado_evaluacion", length = 30)
+    @Builder.Default
+    private EstadoEvaluacion estadoEvaluacion = EstadoEvaluacion.PENDIENTE;
+
+    @Builder.Default
+    private Boolean procesada = false;
+
+    @Column(name = "tipo_transaccion_id", nullable = false)
+    private Long tipoTransaccionId;
+
+    @Column(name = "canal_transaccion_id", nullable = false)
+    private Long canalTransaccionId;
+
+    @Column(name = "infraestructura_pago", nullable = false, length = 30)
+    private String infraestructuraPago;
+
+    @Column(name = "modulo_sipap", length = 30)
+    private String moduloSipap;
+
+    @Column(name = "subtipo_transaccion", length = 60)
+    private String subtipoTransaccion;
 
     @Column(nullable = false, precision = 18, scale = 2)
     private BigDecimal monto;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "moneda_id")
+    @JoinColumn(name = "moneda_id", nullable = false)
     private Moneda monedaRef;
 
-    @Column(name = "moneda_codigo", length = 10)
-    private String moneda;
+    @Column(name = "monto_destino", precision = 18, scale = 2)
+    private BigDecimal montoDestino;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "canal_id")
-    private Canal canalRef;
+    @JoinColumn(name = "moneda_destino_id")
+    private Moneda monedaDestinoRef;
 
-    @Column(name = "canal_codigo", length = 30)
-    private String canal;
+    @Column(name = "tipo_cambio", precision = 18, scale = 8)
+    private BigDecimal tipoCambio;
 
-    @Column(name = "tipo_transaccion", length = 50)
-    private String tipoTransaccion;
+    @Column(precision = 18, scale = 2)
+    private BigDecimal comision;
 
-    @Column(name = "ip_origen", length = 100)
-    private String ipOrigen;
+    @Column(precision = 18, scale = 2)
+    private BigDecimal impuesto;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "pais_origen_id")
-    private Pais paisOrigenRef;
-
-    @Column(name = "pais_origen", length = 100)
-    private String paisOrigen;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "pais_destino_id")
-    private Pais paisDestinoRef;
+    @Column(name = "monto_total_debitado", precision = 18, scale = 2)
+    private BigDecimal montoTotalDebitado;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "persona_remitente_id")
@@ -88,35 +109,170 @@ public class Transaccion {
     @JoinColumn(name = "persona_beneficiario_id")
     private Persona personaBeneficiario;
 
+    @Column(name = "nombre_remitente", length = 180)
+    private String nombreRemitente;
+
+    @Column(name = "nombre_beneficiario", length = 180)
+    private String nombreBeneficiario;
+
+    @Column(name = "documento_remitente_enc")
+    private byte[] documentoRemitenteEnc;
+
+    @Column(name = "documento_remitente_hash")
+    private byte[] documentoRemitenteHash;
+
+    @Column(name = "documento_beneficiario_enc")
+    private byte[] documentoBeneficiarioEnc;
+
+    @Column(name = "documento_beneficiario_hash")
+    private byte[] documentoBeneficiarioHash;
+
+    @Column(name = "cuenta_origen_enc")
+    private byte[] cuentaOrigenEnc;
+
+    @Column(name = "cuenta_origen_hash")
+    private byte[] cuentaOrigenHash;
+
+    @Column(name = "cuenta_destino_enc")
+    private byte[] cuentaDestinoEnc;
+
+    @Column(name = "cuenta_destino_hash")
+    private byte[] cuentaDestinoHash;
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "producto_id")
-    private Producto producto;
+    @JoinColumn(name = "pais_origen_id")
+    private Pais paisOrigenRef;
 
-    @Column(name = "fecha_transaccion", nullable = false)
-    private LocalDateTime fechaTransaccion;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pais_destino_id")
+    private Pais paisDestinoRef;
 
-    @Column(name = "score_riesgo", precision = 5, scale = 2)
+    @Column(name = "end_to_end_id", length = 80)
+    private String endToEndId;
+
+    @Column(name = "spi_reference", length = 80)
+    private String spiReference;
+
+    @Column(name = "numero_comprobante", length = 80)
+    private String numeroComprobante;
+
+    @Column(name = "requiere_declaracion_fondos")
+    private Boolean requiereDeclaracionFondos;
+
+    @Column(name = "depositante_tercero")
+    private Boolean depositanteTercero;
+
+    @Column(name = "terminal_id", length = 80)
+    private String terminalId;
+
+    @Column(name = "sucursal_codigo", length = 60)
+    private String sucursalCodigo;
+
+    @Column(name = "mcc", length = 4)
+    private String mcc;
+
+    @Column(name = "nombre_comercio", length = 180)
+    private String nombreComercio;
+
+    @Column(name = "pan_last4", length = 4)
+    private String panLast4;
+
+    @Column(name = "remesadora_id", length = 80)
+    private String remesadoraId;
+
+    @Column(name = "swift_bic_origen", length = 11)
+    private String swiftBicOrigen;
+
+    @Column(name = "swift_bic_destino", length = 11)
+    private String swiftBicDestino;
+
+    @Column(name = "score_riesgo", precision = 8, scale = 2)
     private BigDecimal scoreRiesgo;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "nivel_riesgo_id")
     private NivelRiesgo nivelRiesgo;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "estado_evaluacion", length = 30)
-    @Builder.Default
-    private EstadoEvaluacion estadoEvaluacion = EstadoEvaluacion.PENDIENTE;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "datos_especificos", columnDefinition = "jsonb")
+    private String datosEspecificos;
 
-    @Column(length = 30)
-    private String estado;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "riesgo_paraguay_json", columnDefinition = "jsonb")
+    private String riesgoParaguayJson;
 
-    @Builder.Default
-    private Boolean procesada = false;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "screening_result_json", columnDefinition = "jsonb")
+    private String screeningResultJson;
 
-    @Column(name = "fecha_procesamiento")
-    private LocalDateTime fechaProcesamiento;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "reglas_disparadas_json", columnDefinition = "jsonb")
+    private String reglasDisparadasJson;
+
+    @Transient
+    private String identificadorDocumento;
+
+    @Transient
+    private String cuentaOrigen;
+
+    @Transient
+    private String cuentaDestino;
+
+    @Transient
+    private String moneda;
+
+    @Transient
+    private String canal;
+
+    @Transient
+    private Canal canalRef;
+
+    @Transient
+    private String tipoTransaccion;
+
+    @Transient
+    private String ipOrigen;
+
+    @Transient
+    private String paisOrigen;
+
+    @Transient
+    private Producto producto;
 
     public enum EstadoEvaluacion {
-        PENDIENTE, EN_PROCESO, APROBADA, RECHAZADA, REVISION_MANUAL, SOSPECHOSA
+        PENDIENTE, EN_PROCESO, EVALUADA, APROBADA, RECHAZADA, REVISION_MANUAL, SOSPECHOSA
+    }
+
+    public String getIdentificadorDocumento() {
+        if (identificadorDocumento != null) return identificadorDocumento;
+        return null;
+    }
+
+    public String getCuentaOrigen() {
+        return cuentaOrigen != null ? cuentaOrigen : masked(cuentaOrigenHash, "Cuenta Protegida");
+    }
+
+    public String getCuentaDestino() {
+        return cuentaDestino != null ? cuentaDestino : masked(cuentaDestinoHash, "Cuenta Protegida");
+    }
+
+    public String getMoneda() {
+        return moneda != null ? moneda : (monedaRef != null ? monedaRef.getCodigoIso() : null);
+    }
+
+    public String getCanal() {
+        return canal != null ? canal : infraestructuraPago;
+    }
+
+    public String getTipoTransaccion() {
+        return tipoTransaccion != null ? tipoTransaccion : subtipoTransaccion;
+    }
+
+    public String getPaisOrigen() {
+        return paisOrigen != null ? paisOrigen : (paisOrigenRef != null ? paisOrigenRef.getCodigoIso() : null);
+    }
+
+    private String masked(byte[] hash, String label) {
+        return hash == null ? null : label;
     }
 }

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/alertas")
@@ -34,7 +35,7 @@ public class AlertaController {
                                                                 @RequestParam(required = false) String severidad,
                                                                 @RequestParam(required = false) String estado,
                                                                 @RequestParam(required = false) Long escenarioId,
-                                                                @RequestParam(required = false) Long analistaId,
+                                                                @RequestParam(required = false) UUID analistaId,
                                                                 @RequestParam(required = false) String rangoFecha,
                                                                 @RequestParam(required = false) String desde,
                                                                 @RequestParam(required = false) String hasta,

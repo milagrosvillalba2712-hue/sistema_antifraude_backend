@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 @Entity
-@Table(name = "canal")
+@Table(name = "canal_transaccion")
 public class Canal extends BaseEntity {
 
     @Column(nullable = false, unique = true, length = 20)

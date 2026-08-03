@@ -96,6 +96,40 @@ public class ConditionEvaluator {
             facts.put("remitentenombre", t.getPersonaRemitenteNombre());
             facts.put("beneficiario", t.getPersonaBeneficiarioNombre());
             facts.put("beneficiarionombre", t.getPersonaBeneficiarioNombre());
+            facts.put("tipotransaccion", t.getTipoTransaccion());
+            facts.put("infraestructura", t.getInfraestructuraPago());
+            facts.put("infraestructurapago", t.getInfraestructuraPago());
+            facts.put("modulosipap", t.getModuloSipap());
+            facts.put("subtipotransaccion", t.getSubtipoTransaccion());
+            facts.put("endtoendid", t.getEndToEndId());
+            facts.put("spireference", t.getSpiReference());
+            facts.put("aliasemisortipo", t.getAliasEmisorTipo());
+            facts.put("aliasreceptortipo", t.getAliasReceptorTipo());
+            facts.put("declaracionfondos", t.isRequiereDeclaracionFondos());
+            facts.put("depositantetercero", t.isDepositanteTercero());
+            facts.put("empeoperador", t.getEmpeOperador());
+            facts.put("tipocheque", t.getTipoCheque());
+            facts.put("estadoclearing", t.getEstadoClearing());
+            facts.put("procesadoratarjeta", t.getProcesadoraTarjeta());
+            facts.put("mcc", t.getMcc());
+            facts.put("canaltarjeta", t.getCanalTarjeta());
+            facts.put("panlast4", t.getPanLast4());
+            facts.put("qrestandar", t.getQrStandard());
+            facts.put("qrstandard", t.getQrStandard());
+            facts.put("qrhubreference", t.getQrHubReference());
+            facts.put("remittancepayoutmethod", t.getRemittancePayoutMethod());
+            facts.put("paiscorredorremesa", t.getPaisCorredorRemesa());
+            facts.put("swiftbicorigen", t.getSwiftBicOrigen());
+            facts.put("swiftbicdestino", t.getSwiftBicDestino());
+            facts.put("esspi", matchesAny(t, "SPI", "PY_SPI"));
+            facts.put("eslbtr", matchesAny(t, "LBTR"));
+            facts.put("esempe", matchesAny(t, "EMPE", "WALLET"));
+            facts.put("esqr", matchesAny(t, "QR"));
+            facts.put("estarjeta", matchesAny(t, "CARD", "TARJETA"));
+            facts.put("escheque", matchesAny(t, "CHEQUE"));
+            facts.put("esefectivo", matchesAny(t, "CASH", "EFECTIVO"));
+            facts.put("esremesa", matchesAny(t, "REMITTANCE", "REMESA"));
+            facts.put("esfx", matchesAny(t, "FX", "CAMBIO"));
         }
         facts.put("pep", !context.getRegistrosPEP().isEmpty());
         facts.put("observado", !context.getRegistrosObservados().isEmpty());
@@ -213,5 +247,24 @@ public class ConditionEvaluator {
 
     private String normalize(String value) {
         return value == null ? "" : value.replace("_", "").replace("-", "").replace(".", "").toLowerCase();
+    }
+
+    private boolean matchesAny(TransaccionFact fact, String... needles) {
+        String source = String.join(" ",
+                safe(fact.getTipoTransaccion()),
+                safe(fact.getCanalCodigo()),
+                safe(fact.getInfraestructuraPago()),
+                safe(fact.getModuloSipap()),
+                safe(fact.getSubtipoTransaccion())).toUpperCase();
+        for (String needle : needles) {
+            if (source.contains(needle.toUpperCase())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value;
     }
 }

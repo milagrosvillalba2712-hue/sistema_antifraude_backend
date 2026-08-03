@@ -9,7 +9,7 @@ spring:
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
@@ -18,12 +18,18 @@ spring:
   flyway:
     enabled: false
 
+  sql:
+    init:
+      mode: never
+
 app:
   jwt:
     secret: ${JWT_SECRET:jwt_secret_key_default_change_in_production}
     expiration-ms: 86400000
   aes:
     secret: ${AES_SECRET:aes_secret_key_default_change_in_production}
+  hmac:
+    secret: ${HMAC_SECRET:hmac_secret_key_default_change_in_production}
   external-api:
     base-url: http://localhost:3001
     api-key: ${EXTERNAL_API_KEY:mock_api_key}

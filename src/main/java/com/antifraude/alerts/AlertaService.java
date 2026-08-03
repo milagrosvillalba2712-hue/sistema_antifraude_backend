@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -99,13 +100,14 @@ public class AlertaService {
         Alerta alerta = Alerta.builder()
                 .transaccion(transaccion)
                 .empresa(transaccion.getEmpresa())
-                .regla(regla)
                 .codigo("ALT-" + java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase())
-                .prioridad(prioridad)
+                .severidad(prioridad)
+                .score(transaccion.getScoreRiesgo() != null ? transaccion.getScoreRiesgo() : java.math.BigDecimal.ZERO)
                 .estado("NUEVA")
-                .observacion(regla != null
+                .descripcion(regla != null
                         ? "Generada por regla: " + regla.getNombre()
                         : "Generada por score de riesgo alto sin regla guiada critica asociada")
+                .reglasDisparadasJson(regla != null ? "[\"" + regla.getCodigo() + "\"]" : "[]")
                 .build();
         Alerta creada = alertaRepository.save(alerta);
         log.info("[ALERTS] Alerta creada - ID: {} - Prioridad: {}", creada.getId(), prioridad);
@@ -121,7 +123,7 @@ public class AlertaService {
 
     @Transactional(readOnly = true)
     public PageResponse<AlertaResponse> buscarPaginado(String search, String severidad, String estado,
-                                                       Long escenarioId, Long analistaId, String rangoFecha,
+                                                       Long escenarioId, UUID analistaId, String rangoFecha,
                                                        String desde, String hasta, String sort,
                                                        int page, int size) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), Math.max(1, Math.min(size, 100)), sortFor(sort));
@@ -155,9 +157,15 @@ public class AlertaService {
         List<FilterOptionResponse> escenarios = escenarioRepository.findAll().stream()
                 .map(e -> new FilterOptionResponse(String.valueOf(e.getId()), e.getNombre()))
                 .toList();
-        List<FilterOptionResponse> analistas = listarAnalistasDisponibles().stream()
-                .map(a -> new FilterOptionResponse(String.valueOf(a.usuarioId()), a.nombre()))
-                .toList();
+        List<FilterOptionResponse> analistas;
+        try {
+            analistas = listarAnalistasDisponibles().stream()
+                    .map(a -> new FilterOptionResponse(String.valueOf(a.usuarioId()), a.nombre()))
+                    .toList();
+        } catch (RuntimeException ex) {
+            log.warn("[ALERTS] No se pudieron cargar analistas para filtros. Revise migracion UUID de usuarios: {}", ex.getMessage());
+            analistas = List.of();
+        }
         return new AlertaFiltrosResponse(
                 List.of(option("CRITICA", "Crítica"), option("ALTA", "Alta"), option("MEDIA", "Media"), option("BAJA", "Baja")),
                 List.of(option("NUEVA", "Nueva"), option("ASIGNADA", "Asignada"), option("EN_REVISION", "En Revisión"),
@@ -200,7 +208,7 @@ public class AlertaService {
         return actualizada;
     }
 
-    public Alerta reasignarAlerta(Long alertaId, Long nuevoAnalistaId, String motivo, String observacion,
+    public Alerta reasignarAlerta(Long alertaId, UUID nuevoAnalistaId, String motivo, String observacion,
                                     Usuario origen, HttpServletRequest request) {
         log.info("[ALERTS] Reasignando alerta ID: {} de {} a nuevo analista ID: {}",
                 alertaId, origen.getEmail(), nuevoAnalistaId);
@@ -568,10 +576,10 @@ public class AlertaService {
                 a.getId(),
                 a.getCodigo(),
                 a.getTransaccion() != null ? a.getTransaccion().getId() : null,
-                a.getRegla() != null ? a.getRegla().getId() : null,
-                a.getRegla() != null ? a.getRegla().getNombre() : null,
-                a.getRegla() != null && a.getRegla().getEscenario() != null ? a.getRegla().getEscenario().getId() : null,
-                a.getRegla() != null && a.getRegla().getEscenario() != null ? a.getRegla().getEscenario().getNombre() : "Sin escenario",
+                null,
+                null,
+                null,
+                "Sin escenario",
                 a.getTransaccion() != null ? a.getTransaccion().getIdentificadorDocumento() : null,
                 clienteNombre(a.getTransaccion()),
                 a.getTransaccion() != null ? a.getTransaccion().getMonto() : null,
@@ -581,7 +589,7 @@ public class AlertaService {
                 a.getTransaccion() != null ? a.getTransaccion().getFechaTransaccion() : null,
                 a.getTransaccion() != null && a.getTransaccion().getNivelRiesgo() != null
                         ? a.getTransaccion().getNivelRiesgo().getCodigo() : null,
-                a.getTransaccion() != null ? a.getTransaccion().getScoreRiesgo() : null,
+                a.getScore() != null ? a.getScore() : (a.getTransaccion() != null ? a.getTransaccion().getScoreRiesgo() : null),
                 severityFor(a),
                 a.getPrioridad(), a.getEstado(), a.getObservacion(),
                 a.getAsignadoA() != null ? a.getAsignadoA().getId() : null,
@@ -777,7 +785,7 @@ public class AlertaService {
         List<TimelineEventResponse> acciones = new ArrayList<>(obtenerTimeline(alertaId).stream()
                 .map(e -> new TimelineEventResponse(null, e.tipo(), e.descripcion(), e.fecha(), e.usuario()))
                 .toList());
-        acciones.addAll(auditoriaRepository.findByEntidadAfectadaAndEntidadIdOrderByFechaEventoDesc("alertas", alertaId).stream()
+        acciones.addAll(auditoriaRepository.findByEntidadAfectadaAndEntidadIdOrderByFechaEventoDesc("alertas", String.valueOf(alertaId)).stream()
                 .map(this::toTimelineEvent)
                 .toList());
         acciones.sort((a, b) -> b.fecha().compareTo(a.fecha()));
@@ -861,33 +869,28 @@ public class AlertaService {
     }
 
     private Specification<Alerta> alertaSpecification(String search, String severidad, String estado,
-                                                      Long escenarioId, Long analistaId, String rangoFecha,
+                                                      Long escenarioId, UUID analistaId, String rangoFecha,
                                                       String desde, String hasta) {
         return (root, query, cb) -> {
             if (query != null && query.getResultType() != Long.class && query.getResultType() != long.class) {
                 root.fetch("transaccion", JoinType.LEFT);
-                root.fetch("regla", JoinType.LEFT);
                 root.fetch("asignadoA", JoinType.LEFT);
                 query.distinct(true);
             }
             List<Predicate> predicates = new ArrayList<>();
-            var regla = root.join("regla", JoinType.LEFT);
-            var escenario = regla.join("escenario", JoinType.LEFT);
             var tx = root.join("transaccion", JoinType.LEFT);
             var asignado = root.join("asignadoA", JoinType.LEFT);
             if (search != null && !search.isBlank()) {
                 String like = "%" + search.toLowerCase() + "%";
                 predicates.add(cb.or(
                         cb.like(cb.lower(root.get("codigo")), like),
-                        cb.like(cb.lower(regla.get("nombre")), like),
-                        cb.like(cb.lower(tx.get("identificadorDocumento")), like),
+                        cb.like(cb.lower(root.get("descripcion")), like),
                         cb.like(cb.lower(asignado.get("nombre")), like)));
             }
             if (severidad != null && !severidad.isBlank()) {
-                predicates.add(cb.equal(cb.upper(regla.get("severidad")), severidad.toUpperCase()));
+                predicates.add(cb.equal(cb.upper(root.get("severidad")), severidad.toUpperCase()));
             }
             if (estado != null && !estado.isBlank()) predicates.add(cb.equal(root.get("estado"), estado));
-            if (escenarioId != null) predicates.add(cb.equal(escenario.get("id"), escenarioId));
             if (analistaId != null) predicates.add(cb.equal(asignado.get("id"), analistaId));
             LocalDateTime[] rango = resolveDateRange(rangoFecha, desde, hasta);
             if (rango[0] != null) predicates.add(cb.greaterThanOrEqualTo(root.get("fechaGeneracion"), rango[0]));
@@ -899,9 +902,9 @@ public class AlertaService {
     private Sort sortFor(String sort) {
         return switch (sort == null ? "recientes" : sort) {
             case "antiguas" -> Sort.by(Sort.Direction.ASC, "fechaGeneracion");
-            case "score_desc" -> Sort.by(Sort.Direction.DESC, "transaccion.scoreRiesgo");
-            case "score_asc" -> Sort.by(Sort.Direction.ASC, "transaccion.scoreRiesgo");
-            case "severidad_desc" -> Sort.by(Sort.Direction.DESC, "prioridad").and(Sort.by(Sort.Direction.DESC, "fechaGeneracion"));
+            case "score_desc" -> Sort.by(Sort.Direction.DESC, "score");
+            case "score_asc" -> Sort.by(Sort.Direction.ASC, "score");
+            case "severidad_desc" -> Sort.by(Sort.Direction.DESC, "severidad").and(Sort.by(Sort.Direction.DESC, "fechaGeneracion"));
             default -> Sort.by(Sort.Direction.DESC, "fechaGeneracion");
         };
     }
@@ -931,8 +934,8 @@ public class AlertaService {
     }
 
     private String severityFor(Alerta alerta) {
-        if (alerta.getRegla() != null && alerta.getRegla().getSeveridad() != null) {
-            return alerta.getRegla().getSeveridad();
+        if (alerta.getSeveridad() != null) {
+            return alerta.getSeveridad();
         }
         return switch (alerta.getPrioridad() == null ? "" : alerta.getPrioridad()) {
             case "CRITICA" -> "CRITICA";

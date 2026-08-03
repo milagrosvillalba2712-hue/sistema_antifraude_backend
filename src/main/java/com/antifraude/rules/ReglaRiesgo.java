@@ -5,6 +5,8 @@ import com.antifraude.licensing.Empresa;
 import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -46,10 +48,12 @@ public class ReglaRiesgo {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String condicion;
 
-    @Column(name = "condiciones_json", columnDefinition = "TEXT")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "condiciones_json", columnDefinition = "jsonb")
     private String condicionesJson;
 
-    @Column(name = "acciones_json", columnDefinition = "TEXT")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "acciones_json", columnDefinition = "jsonb")
     private String accionesJson;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -60,7 +64,8 @@ public class ReglaRiesgo {
     @Builder.Default
     private BigDecimal scoreBase = BigDecimal.ZERO;
 
-    @Column(name = "parametros", columnDefinition = "TEXT")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "parametros", columnDefinition = "jsonb")
     private String parametros;
 
     @Column(length = 20)

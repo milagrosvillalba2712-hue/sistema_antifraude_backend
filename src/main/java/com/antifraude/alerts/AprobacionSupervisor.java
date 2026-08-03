@@ -20,6 +20,7 @@ public class AprobacionSupervisor {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Transient
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "caso_id")
     private Caso caso;
@@ -36,7 +37,7 @@ public class AprobacionSupervisor {
     @JoinColumn(name = "supervisor_id")
     private Usuario supervisor;
 
-    @Column(nullable = false, length = 40)
+    @Column(name = "decision", nullable = false, length = 40)
     private String estado;
 
     @Column(columnDefinition = "TEXT")
@@ -48,10 +49,10 @@ public class AprobacionSupervisor {
     @Column(columnDefinition = "TEXT")
     private String faltantes;
 
-    @Column(name = "fecha_solicitud", nullable = false)
+    @Column(name = "fecha_hora_creacion", nullable = false, insertable = false, updatable = false)
     @Builder.Default
     private LocalDateTime fechaSolicitud = LocalDateTime.now();
 
-    @Column(name = "fecha_aprobacion")
+    @Column(name = "fecha_decision")
     private LocalDateTime fechaAprobacion;
 }

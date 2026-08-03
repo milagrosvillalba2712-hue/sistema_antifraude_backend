@@ -23,9 +23,9 @@ public class ComentarioCaso extends BaseEntity {
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
-    @Column(nullable = false, length = 1000)
+    @Column(name = "comentario", nullable = false, length = 1000)
     private String texto;
 
-    @Column(name = "fecha_hora", nullable = false)
+    @Column(name = "fecha_comentario", nullable = false)
     private LocalDateTime fechaHora;
 }

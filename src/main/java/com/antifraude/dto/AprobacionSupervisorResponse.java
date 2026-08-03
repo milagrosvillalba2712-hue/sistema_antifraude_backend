@@ -1,12 +1,13 @@
 package com.antifraude.dto;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 public record AprobacionSupervisorResponse(
         Long id,
         Long alertaId,
         Long resolucionId,
-        Long supervisorId,
+        UUID supervisorId,
         String supervisorNombre,
         String estado,
         String observacion,

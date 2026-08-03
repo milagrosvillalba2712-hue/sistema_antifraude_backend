@@ -2,6 +2,7 @@ package com.antifraude.dto;
 
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
+import java.util.UUID;
 
 public record ReglaRiesgoResponse(
         Long id,
@@ -20,7 +21,7 @@ public record ReglaRiesgoResponse(
         String condicionesJson,
         String accionesJson,
         Boolean activa,
-        Long creadaPor,
+        UUID creadaPor,
         LocalDateTime fechaCreacion,
         LocalDateTime fechaModificacion) {
 }

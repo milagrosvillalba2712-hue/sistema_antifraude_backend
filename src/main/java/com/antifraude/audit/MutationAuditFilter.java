@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 @Component
 public class MutationAuditFilter extends OncePerRequestFilter {
@@ -58,7 +59,7 @@ public class MutationAuditFilter extends OncePerRequestFilter {
         Optional<Usuario> usuario = email != null ? usuarioRepository.findByEmail(email) : Optional.empty();
         String body = new String(request.getContentAsByteArray(), StandardCharsets.UTF_8);
         String payload = body.isBlank() ? null : body;
-        Long usuarioId = usuario.map(Usuario::getId).orElse(null);
+        UUID usuarioId = usuario.map(Usuario::getId).orElse(null);
         auditoriaService.registrar(usuarioId, null, "HTTP_MUTACION",
                 request.getMethod() + " " + request.getRequestURI() + " respondio " + response.getStatus(),
                 request.getRemoteAddr(), request.getHeader("User-Agent"),

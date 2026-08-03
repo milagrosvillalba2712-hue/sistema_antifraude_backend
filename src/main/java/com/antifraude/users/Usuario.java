@@ -4,7 +4,8 @@ import com.antifraude.common.entity.AuditableEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "usuarios")
@@ -18,8 +19,8 @@ import java.time.LocalDateTime;
 public class Usuario extends AuditableEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false, length = 150)
     private String nombre;
@@ -39,16 +40,19 @@ public class Usuario extends AuditableEntity {
     private Integer intentosFallidos = 0;
 
     @Column(name = "bloqueado_hasta")
-    private LocalDateTime bloqueadoHasta;
+    private OffsetDateTime bloqueadoHasta;
+
+    @Transient
+    private UUID empresaId;
 
     public boolean isBlocked() {
-        return bloqueadoHasta != null && LocalDateTime.now().isBefore(bloqueadoHasta);
+        return bloqueadoHasta != null && OffsetDateTime.now().isBefore(bloqueadoHasta);
     }
 
     public void incrementFailedAttempts() {
         this.intentosFallidos++;
         if (this.intentosFallidos >= 5) {
-            this.bloqueadoHasta = LocalDateTime.now().plusMinutes(15);
+            this.bloqueadoHasta = OffsetDateTime.now().plusMinutes(15);
         }
     }
 

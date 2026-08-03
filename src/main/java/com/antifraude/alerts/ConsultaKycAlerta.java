@@ -2,6 +2,8 @@ package com.antifraude.alerts;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -22,13 +24,14 @@ public class ConsultaKycAlerta {
     @JoinColumn(name = "alerta_id", nullable = false)
     private Alerta alerta;
 
-    @Column(name = "servicio", length = 120)
+    @Column(name = "proveedor", length = 120)
     private String servicio;
 
     @Column(name = "estado", length = 40)
     private String estado;
 
-    @Column(columnDefinition = "TEXT")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "respuesta_json", columnDefinition = "jsonb")
     private String respuesta;
 
     @Column(name = "fecha_consulta")
