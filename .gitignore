@@ -1,6 +1,8 @@
 # Build artifacts
 target/
 .tools/
+certificates/*.p12
+certificates/*.key
 *.class
 *.jar
 *.war

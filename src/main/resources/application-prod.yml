@@ -16,4 +16,16 @@ app:
     secret: ${AES_SECRET}
   hmac:
     secret: ${HMAC_SECRET}
-
+  external:
+    tls:
+      trust-store: ${EXTERNAL_TRUSTSTORE}
+      trust-store-password: ${EXTERNAL_TRUSTSTORE_PASSWORD}
+    identificaciones:
+      url: ${IDENTIFICACIONES_API_URL}
+      api-key: ${IDENTIFICACIONES_API_KEY}
+    sanciones:
+      url: ${SANCIONES_API_URL}
+      api-key: ${SANCIONES_API_KEY}
+    pep:
+      url: ${PEP_API_URL}
+      api-key: ${PEP_API_KEY}

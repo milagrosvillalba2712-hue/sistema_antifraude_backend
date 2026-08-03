@@ -36,10 +36,50 @@ app:
     secret: ${AES_SECRET:aes_secret_key_default_change_in_production}
   hmac:
     secret: ${HMAC_SECRET:hmac_secret_key_default_change_in_production}
-  external-api:
-    base-url: http://localhost:3001
-    api-key: ${EXTERNAL_API_KEY:mock_api_key}
-    timeout: 5000
+  external:
+    tls:
+      trust-store: ${EXTERNAL_TRUSTSTORE:}
+      trust-store-password: ${EXTERNAL_TRUSTSTORE_PASSWORD:}
+    identificaciones:
+      url: ${IDENTIFICACIONES_API_URL:http://localhost:8443}
+      api-key: ${IDENTIFICACIONES_API_KEY:academic-development-key}
+    sanciones:
+      url: ${SANCIONES_API_URL:http://localhost:8443}
+      api-key: ${SANCIONES_API_KEY:academic-development-key}
+    pep:
+      url: ${PEP_API_URL:http://localhost:8443}
+      api-key: ${PEP_API_KEY:academic-development-key}
+
+resilience4j:
+  retry:
+    instances:
+      identificaciones: &externalRetry
+        max-attempts: 3
+        wait-duration: 250ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        randomization-factor: 0.5
+        ignore-exceptions:
+          - com.antifraude.external.NonRetryableExternalException
+      sanciones: *externalRetry
+      pep: *externalRetry
+  circuitbreaker:
+    instances:
+      identificaciones: &externalCircuit
+        sliding-window-size: 5
+        minimum-number-of-calls: 3
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 2s
+        permitted-number-of-calls-in-half-open-state: 1
+      sanciones: *externalCircuit
+      pep: *externalCircuit
+  bulkhead:
+    instances:
+      identificaciones: &externalBulkhead
+        max-concurrent-calls: 10
+        max-wait-duration: 0
+      sanciones: *externalBulkhead
+      pep: *externalBulkhead
 
 springdoc:
   api-docs:

@@ -5,6 +5,7 @@ import db.productmigration.V2__Canonical_ecosystem;
 import db.productmigration.V3__Canonical_hardening;
 import db.productmigration.V4__Canonical_jpa_alignment;
 import db.productmigration.V5__Local_installation_and_licensing;
+import db.productmigration.V6__External_api_audit;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.Container;
@@ -52,9 +53,10 @@ class DatabaseLifecycleTest {
                     new V2__Canonical_ecosystem(),
                     new V3__Canonical_hardening(),
                     new V4__Canonical_jpa_alignment(),
-                    new V5__Local_installation_and_licensing());
+                    new V5__Local_installation_and_licensing(),
+                    new V6__External_api_audit());
 
-            assertThat(historyCount(postgres)).isEqualTo(5);
+            assertThat(historyCount(postgres)).isEqualTo(6);
             assertThat(tableExists(postgres, "licencia_local")).isTrue();
         }
     }
@@ -68,7 +70,8 @@ class DatabaseLifecycleTest {
                     new V2__Canonical_ecosystem(),
                     new V3__Canonical_hardening(),
                     new V4__Canonical_jpa_alignment(),
-                    new V5__Local_installation_and_licensing());
+                    new V5__Local_installation_and_licensing(),
+                    new V6__External_api_audit());
 
             execute(postgres, "insert into empresa(id,codigo,nombre,ruc,estado) values " +
                     "('00000000-0000-0000-0000-000000000099','BACKUP_TEST','Backup test','80000099-9','ACTIVA')");
@@ -83,7 +86,7 @@ class DatabaseLifecycleTest {
             assertThat(tableExists(postgres, "empresa")).isTrue();
             assertThat(queryInt(postgres, "select count(*) from empresa where codigo='BACKUP_TEST'"))
                     .isEqualTo(1);
-            assertThat(historyCount(postgres)).isEqualTo(5);
+            assertThat(historyCount(postgres)).isEqualTo(6);
         }
     }
 

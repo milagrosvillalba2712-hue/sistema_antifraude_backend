@@ -8,7 +8,7 @@ import java.util.List;
 @Repository
 public interface ConsultaExternaRepository extends JpaRepository<ConsultaExterna, Long> {
 
-    List<ConsultaExterna> findByIdentificadorDocumento(String identificadorDocumento);
+    List<ConsultaExterna> findByDocumentoHash(String documentoHash);
 
     List<ConsultaExterna> findByTipoConsulta(String tipoConsulta);
 }
