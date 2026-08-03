@@ -179,8 +179,10 @@ class AntifraudeApplicationTests {
     void circuitBreakerAbreTrasFallosRepetidos() {
         var circuit = circuitBreakers.circuitBreaker("sanciones");
         circuit.reset();
-        assertThatThrownBy(() -> sancionesClient.consultar("always-unavailable"))
-                .isInstanceOf(ExternalProviderException.class);
+        for (int i = 0; i < 3; i++) {
+            assertThatThrownBy(() -> sancionesClient.consultar("always-unavailable"))
+                    .isInstanceOf(ExternalProviderException.class);
+        }
         assertThat(circuit.getState()).isEqualTo(io.github.resilience4j.circuitbreaker.CircuitBreaker.State.OPEN);
         assertThatThrownBy(() -> sancionesClient.consultar("always-unavailable"))
                 .isInstanceOf(CallNotPermittedException.class);
