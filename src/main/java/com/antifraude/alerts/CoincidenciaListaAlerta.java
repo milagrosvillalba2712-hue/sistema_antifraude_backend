@@ -27,7 +27,6 @@ public class CoincidenciaListaAlerta {
     @JoinColumn(name = "alerta_id")
     private Alerta alerta;
 
-    @Transient
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumns({
             @JoinColumn(name = "transaccion_id", referencedColumnName = "id"),
@@ -35,7 +34,6 @@ public class CoincidenciaListaAlerta {
     })
     private Transaccion transaccion;
 
-    @Transient
     @Column(name = "fecha_transaccion", insertable = false, updatable = false)
     private LocalDateTime fechaTransaccion;
 
@@ -43,19 +41,15 @@ public class CoincidenciaListaAlerta {
     @JoinColumn(name = "sujeto_riesgo_id")
     private SujetoRiesgo sujetoRiesgo;
 
-    @Transient
     @Column(name = "fuente_codigo", length = 40)
     private String fuenteCodigo;
 
-    @Transient
     @Column(name = "parte_transaccion", nullable = false, length = 40)
     private String parteTransaccion;
 
-    @Transient
     @Column(name = "campo_evaluado", nullable = false, length = 60)
     private String campoEvaluado;
 
-    @Transient
     @Column(name = "valor_evaluado", nullable = false, columnDefinition = "TEXT")
     private String valorEvaluado;
 
@@ -63,12 +57,10 @@ public class CoincidenciaListaAlerta {
     @Builder.Default
     private BigDecimal scoreMatch = BigDecimal.valueOf(100);
 
-    @Transient
     @Column(nullable = false, length = 20)
     @Builder.Default
     private String severidad = "Alta";
 
-    @Transient
     @Column(columnDefinition = "TEXT")
     private String descripcion;
 

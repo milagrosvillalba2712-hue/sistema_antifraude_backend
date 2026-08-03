@@ -51,12 +51,10 @@ public class Caso extends BaseEntity {
     @Column(name = "fecha_cierre")
     private LocalDateTime fechaCierre;
 
-    @Transient
     @Column(length = 30)
     @Enumerated(EnumType.STRING)
     private ResultadoInvestigacion resultado;
 
-    @Transient
     @Column(length = 1000)
     private String observaciones;
 

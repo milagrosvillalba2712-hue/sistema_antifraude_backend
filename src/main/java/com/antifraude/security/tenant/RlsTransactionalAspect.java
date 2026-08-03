@@ -17,7 +17,9 @@ public class RlsTransactionalAspect {
         this.rlsContextService = rlsContextService;
     }
 
-    @Before("@annotation(org.springframework.transaction.annotation.Transactional) || @within(org.springframework.transaction.annotation.Transactional)")
+    @Before("(@annotation(org.springframework.transaction.annotation.Transactional) || " +
+            "@within(org.springframework.transaction.annotation.Transactional)) && " +
+            "!within(com.antifraude.security.tenant.RlsContextService)")
     public void applyRlsContext() {
         rlsContextService.applyCurrentContext();
     }

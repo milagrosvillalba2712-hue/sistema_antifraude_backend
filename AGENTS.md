@@ -8,7 +8,7 @@ Spring Boot 3.2.0 + Java 17 backend for a fraud prevention system. Drools embedd
 docker compose up -d          # starts PostgreSQL 16
 mvn clean compile
 mvn spring-boot:run           # :8080, all vars default to localhost/postgrespostgres
-mvn test                      # single context-load test
+mvn test                      # 18 checks including PostgreSQL 16 lifecycle tests
 mvn test -Dtest=AntifraudeApplicationTests
 ```
 
@@ -47,8 +47,8 @@ com.antifraude
 - **Services**: `@Service @Transactional`, constructor injection
 - **Controllers**: `@RestController @RequestMapping("/api/...")` — paths are Spanish (`/api/alertas`, `/api/reglas`, `/api/casos`, `/api/transacciones`, `/api/reportes`) except English: `/api/assignment`, `/api/profile`, `/api/availability`, `/api/auth`, `/api/admin/users`, `/api/dashboard`
 - **Security**: `hasRole("ADMINISTRADOR")` — DB stores role name (e.g. `ADMINISTRADOR`), Spring Security prepends `ROLE_`
-- **Schema**: Hibernate `ddl-auto: update` manages schema; `db/migration/` SQL is documentation-only (Flyway disabled)
-- **Dual seed**: `DataInitializer` (Java) + `V2__seed.sql` both create same admin/analista (idempotent via `existsByEmail`); `V3__seed_catalog.sql` seeds comprehensive catalog/test data but is NOT auto-executed
+- **Schema**: Flyway is the only schema owner; canonical Java migrations live in `db.productmigration` and Hibernate runs with `ddl-auto: validate`.
+- **Seeds**: no Java startup seed/schema runner exists. Legacy SQL is historical input only; demo data must use an explicit demo-only Flyway location/profile.
 - **Env vars** (all with defaults): `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `AES_SECRET`, `EXTERNAL_API_KEY`
 - **Scheduling**: `@EnableScheduling` on main class — `AssignmentScheduler` (5min auto-assign, 1min rebalance) + `DisponibilidadScheduler` (1min availability)
 
@@ -99,5 +99,5 @@ Transaccion → RiskContextBuilder.build(tx) → RiskContext → KieSession.fire
 - **`common/entity/`** has 30+ entities (Pais, Moneda, Canal, etc.) migrated during refactoring
 - **`AES_SECRET`** configured in env but not used in code
 - **`ExternalApiClient`** points to mock server `localhost:3001`
-- **No `.env.example`** — `.env` is gitignored; defaults work for local dev
-- **Test seed data** in `V3__seed_catalog.sql` is for reference only; relies on Hibernate-created tables and won't auto-execute
+- **No `.env.example`** — `.env` is gitignored; production credentials must be supplied externally
+- **Demo seeds** only run with the `demo` profile from `db/demo`; normal/productive startup never loads them

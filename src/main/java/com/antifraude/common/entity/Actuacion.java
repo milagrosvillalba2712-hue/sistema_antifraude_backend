@@ -30,7 +30,6 @@ public class Actuacion extends BaseEntity {
     @Column(nullable = false, length = 1000)
     private String descripcion;
 
-    @Transient
     @Column(length = 500)
     private String resultado;
 

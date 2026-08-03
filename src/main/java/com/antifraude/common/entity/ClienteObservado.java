@@ -22,16 +22,13 @@ public class ClienteObservado extends BaseEntity {
     @Enumerated(EnumType.STRING)
     private MotivoObservacion motivo;
 
-    @Transient
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "nivel_riesgo_id", nullable = false)
     private NivelRiesgo nivelRiesgo;
 
-    @Transient
     @Column(name = "fecha_inicio", nullable = false)
     private LocalDate fechaInicio;
 
-    @Transient
     @Column(name = "fecha_fin")
     private LocalDate fechaFin;
 

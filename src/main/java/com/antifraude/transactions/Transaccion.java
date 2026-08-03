@@ -26,7 +26,12 @@ import java.util.UUID;
 public class Transaccion {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "transacciones_id_seq_generator")
+    @SequenceGenerator(
+            name = "transacciones_id_seq_generator",
+            sequenceName = "transacciones_id_seq",
+            allocationSize = 1
+    )
     private Long id;
 
     @Id

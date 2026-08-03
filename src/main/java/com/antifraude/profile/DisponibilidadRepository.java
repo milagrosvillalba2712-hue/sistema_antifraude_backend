@@ -18,12 +18,15 @@ public interface DisponibilidadRepository extends JpaRepository<DisponibilidadUs
     @Query("SELECT d FROM DisponibilidadUsuario d WHERE d.usuario.id = :usuarioId ORDER BY d.ultimaActualizacion DESC")
     List<DisponibilidadUsuario> findByUsuarioIdOrderByFechaInicioDesc(@Param("usuarioId") UUID usuarioId);
 
-    @Query("SELECT d FROM DisponibilidadUsuario d WHERE d.usuario.id = :usuarioId AND d.estado <> 'CANCELADA'")
+    @Query("SELECT d FROM DisponibilidadUsuario d WHERE d.usuario.id = :usuarioId " +
+            "AND d.estado <> 'CANCELADA' AND (d.fechaInicio IS NULL OR d.fechaInicio <= :ahora) " +
+            "AND (d.fechaFin IS NULL OR d.fechaFin >= :ahora)")
     List<DisponibilidadUsuario> findActivasAhora(@Param("usuarioId") UUID usuarioId, @Param("ahora") LocalDateTime ahora);
 
     @Query("SELECT count(d) > 0 FROM DisponibilidadUsuario d WHERE d.usuario.id = :usuarioId AND d.estado IN :tipoEstados AND d.estado <> 'CANCELADA'")
     boolean existsByUsuarioIdAndActivoTrueAndTipoEstadoIn(@Param("usuarioId") UUID usuarioId, @Param("tipoEstados") List<String> tipoEstados);
 
-    @Query("SELECT d FROM DisponibilidadUsuario d WHERE false = true")
+    @Query("SELECT d FROM DisponibilidadUsuario d WHERE d.esProgramado = true " +
+            "AND d.fechaInicio BETWEEN :desde AND :ahora ORDER BY d.fechaInicio DESC")
     List<DisponibilidadUsuario> findProgramadasRecientes(@Param("ahora") LocalDateTime ahora, @Param("desde") LocalDateTime desde);
 }

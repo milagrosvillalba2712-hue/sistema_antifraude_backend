@@ -18,15 +18,13 @@ public class ConsultaExterna {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Transient
     @Column(name = "identificador_documento", length = 30)
     private String identificadorDocumento;
 
-    @Transient
     @Column(name = "tipo_consulta", length = 50)
     private String tipoConsulta;
 
-    @Transient
+    @Column(name = "resultado")
     private Boolean resultado;
 
     @ManyToOne(fetch = FetchType.LAZY)

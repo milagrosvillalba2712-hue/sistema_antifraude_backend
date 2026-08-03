@@ -36,7 +36,6 @@ public class Contrato extends AuditableEntity {
     @Column(name = "documento_referencia", length = 500)
     private String urlDocumento;
 
-    @Transient
     @Column(columnDefinition = "TEXT")
     private String observaciones;
 

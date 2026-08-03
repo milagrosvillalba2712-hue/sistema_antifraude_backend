@@ -2,7 +2,6 @@ package com.antifraude.security.tenant;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
@@ -15,7 +14,6 @@ public class RlsContextService {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    @Transactional
     public void applyCurrentContext() {
         apply(TenantContext.getEmpresaId(), TenantContext.getUsuarioId());
     }

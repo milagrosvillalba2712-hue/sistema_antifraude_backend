@@ -20,7 +20,6 @@ public class AprobacionSupervisor {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Transient
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "caso_id")
     private Caso caso;

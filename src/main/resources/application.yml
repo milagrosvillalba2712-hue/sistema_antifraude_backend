@@ -16,13 +16,19 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
   flyway:
-    enabled: false
+    enabled: true
+    locations: classpath:db/productmigration
+    baseline-on-migrate: false
 
   sql:
     init:
       mode: never
 
 app:
+  seed:
+    enabled: ${SEED_ENABLED:false}
+  scheduler:
+    enabled: ${SCHEDULER_ENABLED:false}
   jwt:
     secret: ${JWT_SECRET:jwt_secret_key_default_change_in_production}
     expiration-ms: 86400000

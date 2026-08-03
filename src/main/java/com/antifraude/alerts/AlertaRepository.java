@@ -16,7 +16,7 @@ public interface AlertaRepository extends JpaRepository<Alerta, Long>, JpaSpecif
 
     List<Alerta> findByEstado(String estado);
 
-    List<Alerta> findByPrioridad(String prioridad);
+    List<Alerta> findBySeveridad(String severidad);
 
     List<Alerta> findByTransaccionId(Long transaccionId);
 
@@ -29,6 +29,6 @@ public interface AlertaRepository extends JpaRepository<Alerta, Long>, JpaSpecif
     @Query("SELECT a.estado, COUNT(a) FROM Alerta a GROUP BY a.estado")
     List<Object[]> countByEstadoGrouped();
 
-    @Query("SELECT a.prioridad, COUNT(a) FROM Alerta a GROUP BY a.prioridad")
+    @Query("SELECT a.severidad, COUNT(a) FROM Alerta a GROUP BY a.severidad")
     List<Object[]> countByPrioridadGrouped();
 }

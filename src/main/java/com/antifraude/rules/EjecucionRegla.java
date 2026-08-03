@@ -25,7 +25,6 @@ public class EjecucionRegla {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "regla_id", nullable = false)
-    @Transient
     private ReglaRiesgo regla;
 
     @Column(name = "regla_codigo", nullable = false, length = 80)
@@ -49,16 +48,16 @@ public class EjecucionRegla {
     @Builder.Default
     private BigDecimal scoreGenerado = BigDecimal.ZERO;
 
-    @Transient
+    @Column(name = "score_regla", precision = 8, scale = 2)
     private BigDecimal scoreRegla;
 
-    @Transient
+    @Column(name = "condicion_evaluada", columnDefinition = "TEXT")
     private String condicionEvaluada;
 
     @Transient
     private String resultadoEvaluacion;
 
-    @Transient
+    @Column(name = "tiempo_ejecucion_ms")
     private Long tiempoEjecucionMs;
 
     @Column(name = "fecha_hora_creacion", updatable = false)

@@ -47,13 +47,13 @@ public class DisponibilidadUsuario {
     @Transient
     private String tipoEstado;
 
-    @Transient
+    @Column(name = "fecha_inicio")
     private LocalDateTime fechaInicio;
 
-    @Transient
+    @Column(name = "fecha_fin")
     private LocalDateTime fechaFin;
 
-    @Transient
+    @Column(name = "es_programado", nullable = false)
     @Builder.Default
     private Boolean esProgramado = false;
 
