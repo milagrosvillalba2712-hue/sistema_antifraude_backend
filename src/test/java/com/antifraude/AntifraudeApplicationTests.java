@@ -71,7 +71,7 @@ class AntifraudeApplicationTests {
     }
 
     @Test
-    void baselineCanonicaTieneSeisVersionesUnicas() {
+    void baselineCanonicaTieneOchoVersionesUnicas() {
         Integer total = jdbcTemplate.queryForObject("select count(*) from flyway_schema_history where success", Integer.class);
         Integer duplicadas = jdbcTemplate.queryForObject("""
                 select count(*) from (
@@ -79,7 +79,7 @@ class AntifraudeApplicationTests {
                     where version is not null group by version having count(*) > 1
                 ) d
                 """, Integer.class);
-        assertThat(total).isEqualTo(6);
+        assertThat(total).isEqualTo(8);
         assertThat(duplicadas).isZero();
     }
 
@@ -161,6 +161,11 @@ class AntifraudeApplicationTests {
 
         circuitBreakers.circuitBreaker("sanciones").reset();
         before = EXTERNAL.getRequestCount();
+        assertThat(sancionesClient.consultar("rate-limit").match()).isFalse();
+        assertThat(EXTERNAL.getRequestCount() - before).isEqualTo(3);
+
+        circuitBreakers.circuitBreaker("sanciones").reset();
+        before = EXTERNAL.getRequestCount();
         assertThatThrownBy(() -> sancionesClient.consultar("unauthorized"))
                 .isInstanceOf(NonRetryableExternalException.class);
         assertThat(EXTERNAL.getRequestCount() - before).isEqualTo(1);
@@ -193,6 +198,7 @@ class AntifraudeApplicationTests {
         try {
             MockWebServer server = new MockWebServer();
             java.util.concurrent.atomic.AtomicInteger retryCalls = new java.util.concurrent.atomic.AtomicInteger();
+            java.util.concurrent.atomic.AtomicInteger rateLimitCalls = new java.util.concurrent.atomic.AtomicInteger();
             server.setDispatcher(new Dispatcher() {
                 @Override public MockResponse dispatch(RecordedRequest request) {
                     String path = request.getPath();
@@ -201,6 +207,8 @@ class AntifraudeApplicationTests {
                     if (path != null && path.endsWith("/always-unavailable")) return new MockResponse().setResponseCode(503);
                     if (path != null && path.endsWith("/retry") && retryCalls.incrementAndGet() < 3)
                         return new MockResponse().setResponseCode(503);
+                    if (path != null && path.endsWith("/rate-limit") && rateLimitCalls.incrementAndGet() < 3)
+                        return new MockResponse().setResponseCode(429);
                     if (path != null && path.endsWith("/timeout"))
                         return json(200, false).setHeadersDelay(2, java.util.concurrent.TimeUnit.SECONDS);
                     return json(200, false);

@@ -6,6 +6,8 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/productmigration
+    user: ${FLYWAY_DB_USER}
+    password: ${FLYWAY_DB_PASSWORD}
 
 app:
   seed:

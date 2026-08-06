@@ -22,7 +22,7 @@ class ProviderHttpClient {
                 return new ProviderResult<>(provider, body, correlation, 200,
                         elapsed(logicalStart), attempt, match.test(body));
             } catch (RestClientResponseException exception) {
-                if (exception.getStatusCode().is4xxClientError()) {
+                if (exception.getStatusCode().is4xxClientError() && exception.getStatusCode().value() != 429) {
                     throw new NonRetryableExternalException(provider, correlation, exception.getStatusCode().value(),
                             elapsed(logicalStart), "HTTP_NO_TRANSITORIO", exception, attempt);
                 }

@@ -11,6 +11,7 @@ certificates/*.key
 .env
 .env.*
 !.env.example
+!.env.canonical.example
 
 # IDE files
 .vscode/
@@ -25,6 +26,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local database recovery artifacts
+backups/
 
 # Session files
 session-*.md

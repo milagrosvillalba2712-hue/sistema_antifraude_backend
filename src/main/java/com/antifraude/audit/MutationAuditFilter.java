@@ -2,6 +2,7 @@ package com.antifraude.audit;
 
 import com.antifraude.users.Usuario;
 import com.antifraude.users.UsuarioRepository;
+import com.antifraude.security.JwtTokenProvider;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,7 +14,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -25,10 +25,13 @@ public class MutationAuditFilter extends OncePerRequestFilter {
 
     private final AuditoriaService auditoriaService;
     private final UsuarioRepository usuarioRepository;
+    private final JwtTokenProvider jwtTokenProvider;
 
-    public MutationAuditFilter(AuditoriaService auditoriaService, UsuarioRepository usuarioRepository) {
+    public MutationAuditFilter(AuditoriaService auditoriaService, UsuarioRepository usuarioRepository,
+                               JwtTokenProvider jwtTokenProvider) {
         this.auditoriaService = auditoriaService;
         this.usuarioRepository = usuarioRepository;
+        this.jwtTokenProvider = jwtTokenProvider;
     }
 
     @Override
@@ -57,12 +60,15 @@ public class MutationAuditFilter extends OncePerRequestFilter {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String email = authentication != null ? authentication.getName() : null;
         Optional<Usuario> usuario = email != null ? usuarioRepository.findByEmail(email) : Optional.empty();
-        String body = new String(request.getContentAsByteArray(), StandardCharsets.UTF_8);
-        String payload = body.isBlank() ? null : body;
         UUID usuarioId = usuario.map(Usuario::getId).orElse(null);
-        auditoriaService.registrar(usuarioId, null, "HTTP_MUTACION",
+        String authorization = request.getHeader("Authorization");
+        UUID empresaId = null;
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            empresaId = jwtTokenProvider.getUuidClaim(authorization.substring(7), "empresaId").orElse(null);
+        }
+        auditoriaService.registrar(usuarioId, empresaId, "HTTP_MUTACION",
                 request.getMethod() + " " + request.getRequestURI() + " respondio " + response.getStatus(),
                 request.getRemoteAddr(), request.getHeader("User-Agent"),
-                request.getRequestURI(), null, null, payload);
+                request.getRequestURI(), null, null, null);
     }
 }

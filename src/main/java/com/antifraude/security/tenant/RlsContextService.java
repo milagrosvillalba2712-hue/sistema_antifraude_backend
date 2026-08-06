@@ -20,10 +20,12 @@ public class RlsContextService {
 
     public void apply(UUID empresaId, UUID usuarioId) {
         if (empresaId != null) {
-            jdbcTemplate.update("select set_config('app.current_empresa_id', ?, true)", empresaId.toString());
+            jdbcTemplate.queryForObject("select set_config('app.current_empresa_id', ?, true)", String.class,
+                    empresaId.toString());
         }
         if (usuarioId != null) {
-            jdbcTemplate.update("select set_config('app.current_usuario_id', ?, true)", usuarioId.toString());
+            jdbcTemplate.queryForObject("select set_config('app.current_usuario_id', ?, true)", String.class,
+                    usuarioId.toString());
         }
     }
 }

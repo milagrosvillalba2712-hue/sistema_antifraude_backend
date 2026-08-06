@@ -6,6 +6,8 @@ import db.productmigration.V3__Canonical_hardening;
 import db.productmigration.V4__Canonical_jpa_alignment;
 import db.productmigration.V5__Local_installation_and_licensing;
 import db.productmigration.V6__External_api_audit;
+import db.productmigration.V7__Remove_external_response_payload;
+import db.productmigration.V8__Preauthenticated_user_tenant_lookup;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.Container;
@@ -33,6 +35,18 @@ class DatabaseLifecycleTest {
                     .isEqualTo(1);
             assertThat(queryInt(postgres, "select count(*) from moneda where codigo_iso='PYG'"))
                     .isEqualTo(1);
+            assertThat(queryInt(postgres, "select count(*) from usuarios where email like '%@demo.regula.local'"))
+                    .isEqualTo(2);
+            assertThat(queryInt(postgres, "select count(*) from transacciones where codigo like 'TX-DEMO-%'"))
+                    .isEqualTo(7);
+            assertThat(queryInt(postgres, "select count(*) from alertas_antifraude where codigo like 'ALT-TX-DEMO-%'"))
+                    .isEqualTo(6);
+            assertThat(queryInt(postgres, "select count(*) from caso where codigo like 'CAS-ALT-TX-DEMO-%'"))
+                    .isEqualTo(6);
+            assertThat(queryInt(postgres, "select count(*) from reportes_ros where codigo='ROS-DEMO-001'"))
+                    .isEqualTo(1);
+            assertThat(queryInt(postgres, "select count(*) from licencia_local"))
+                    .isZero();
         }
     }
 
@@ -54,10 +68,14 @@ class DatabaseLifecycleTest {
                     new V3__Canonical_hardening(),
                     new V4__Canonical_jpa_alignment(),
                     new V5__Local_installation_and_licensing(),
-                    new V6__External_api_audit());
+                    new V6__External_api_audit(),
+                    new V7__Remove_external_response_payload(),
+                    new V8__Preauthenticated_user_tenant_lookup());
 
-            assertThat(historyCount(postgres)).isEqualTo(6);
+            assertThat(historyCount(postgres)).isEqualTo(8);
             assertThat(tableExists(postgres, "licencia_local")).isTrue();
+            assertThat(queryInt(postgres, "select count(*) from information_schema.columns where table_name='consultas_externas' and column_name='respuesta_json'"))
+                    .isZero();
         }
     }
 
@@ -71,7 +89,9 @@ class DatabaseLifecycleTest {
                     new V3__Canonical_hardening(),
                     new V4__Canonical_jpa_alignment(),
                     new V5__Local_installation_and_licensing(),
-                    new V6__External_api_audit());
+                    new V6__External_api_audit(),
+                    new V7__Remove_external_response_payload(),
+                    new V8__Preauthenticated_user_tenant_lookup());
 
             execute(postgres, "insert into empresa(id,codigo,nombre,ruc,estado) values " +
                     "('00000000-0000-0000-0000-000000000099','BACKUP_TEST','Backup test','80000099-9','ACTIVA')");
@@ -86,7 +106,7 @@ class DatabaseLifecycleTest {
             assertThat(tableExists(postgres, "empresa")).isTrue();
             assertThat(queryInt(postgres, "select count(*) from empresa where codigo='BACKUP_TEST'"))
                     .isEqualTo(1);
-            assertThat(historyCount(postgres)).isEqualTo(6);
+            assertThat(historyCount(postgres)).isEqualTo(8);
         }
     }
 
