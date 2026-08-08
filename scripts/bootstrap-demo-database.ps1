@@ -35,4 +35,9 @@ try {
     }
     Write-Output "DEMO_DATABASE=$demoDatabase"
     Write-Output 'DEMO_BOOTSTRAP=PASS'
+
+    # Fase 3 (matriz #9/#10): aprovisiona 12-24 meses de particiones de
+    # transacciones con rol de mantenimiento, sin pg_cron ni @Scheduled.
+    & (Join-Path $PSScriptRoot 'provision-transaction-partitions.ps1') -DatabaseName $demoDatabase -MesesAdelante 24
+    if ($LASTEXITCODE -ne 0) { throw 'Fallo el aprovisionamiento de particiones.' }
 } finally { Pop-Location }
