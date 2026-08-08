@@ -64,8 +64,9 @@ public class RiskContextBuilder {
         context.setHistorialTransacciones(
                 historial.stream().map(this::toTransaccionFact).toList());
 
-        log.debug("[CTX] Cargando listas regulatorias");
-        cargarListas(context);
+        // Una lista configurada no es una coincidencia. Solo el screening de la
+        // transacción puede incorporar elementos coincidentes al contexto.
+        log.debug("[CTX] Ejecutando screening de listas regulatorias");
         cargarScreeningListas(context, transaccion);
 
         log.debug("[CTX] Cargando registros PEP y observados para documento: {}", documento);

@@ -31,6 +31,12 @@ public class DroolsConfig {
             String path = resource.getURI().toString();
             int idx = path.indexOf("rules/");
             String relativePath = idx >= 0 ? path.substring(idx) : "rules/" + resource.getFilename();
+            // fraud-rules.drl es el conjunto legacy de respaldo y duplica monto,
+            // internacionalidad y horario ya cubiertos por rules/domain.
+            if ("rules/fraud-rules.drl".equals(relativePath)) {
+                log.info("[DROOLS] Omitiendo reglas fallback legacy duplicadas: {}", relativePath);
+                continue;
+            }
             log.info("[DROOLS] Cargando regla: {}", relativePath);
             kieFileSystem.write(ResourceFactory.newClassPathResource(relativePath, "UTF-8"));
         }

@@ -2,6 +2,7 @@ package com.antifraude.cases;
 
 import com.antifraude.common.entity.Caso;
 import com.antifraude.common.entity.Caso.EstadoCaso;
+import com.antifraude.dto.CasoResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -24,45 +25,54 @@ public class CasoController {
     }
 
     @PostMapping
-    public ResponseEntity<Caso> crear(@RequestBody Caso caso) {
+    public ResponseEntity<CasoResponse> crear(@RequestBody Caso caso) {
         log.info("[CASES] POST /api/casos - Codigo: {} - Titulo: {}", caso.getCodigo(), caso.getTitulo());
         Caso creada = casoService.crear(caso);
-        return ResponseEntity.status(HttpStatus.CREATED).body(creada);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(creada));
     }
 
     @GetMapping
-    public ResponseEntity<List<Caso>> listar() {
+    public ResponseEntity<List<CasoResponse>> listar() {
         log.info("[CASES] GET /api/casos");
-        return ResponseEntity.ok(casoService.listarTodos());
+        return ResponseEntity.ok(casoService.listarTodos().stream().map(this::toResponse).toList());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Caso> buscar(@PathVariable Long id) {
+    public ResponseEntity<CasoResponse> buscar(@PathVariable Long id) {
         log.info("[CASES] GET /api/casos/{}", id);
-        return ResponseEntity.ok(casoService.buscarPorId(id));
+        return ResponseEntity.ok(toResponse(casoService.buscarPorId(id)));
     }
 
     @GetMapping("/estado/{estado}")
-    public ResponseEntity<List<Caso>> buscarPorEstado(@PathVariable EstadoCaso estado) {
+    public ResponseEntity<List<CasoResponse>> buscarPorEstado(@PathVariable EstadoCaso estado) {
         log.info("[CASES] GET /api/casos/estado/{}", estado);
-        return ResponseEntity.ok(casoService.buscarPorEstado(estado));
+        return ResponseEntity.ok(casoService.buscarPorEstado(estado).stream().map(this::toResponse).toList());
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Caso> actualizar(@PathVariable Long id, @RequestBody Caso caso) {
+    public ResponseEntity<CasoResponse> actualizar(@PathVariable Long id, @RequestBody Caso caso) {
         log.info("[CASES] PUT /api/casos/{}", id);
-        return ResponseEntity.ok(casoService.actualizar(id, caso));
+        return ResponseEntity.ok(toResponse(casoService.actualizar(id, caso)));
     }
 
     @PatchMapping("/{id}/estado")
-    public ResponseEntity<Caso> cambiarEstado(@PathVariable Long id, @RequestParam EstadoCaso estado) {
+    public ResponseEntity<CasoResponse> cambiarEstado(@PathVariable Long id, @RequestParam EstadoCaso estado) {
         log.info("[CASES] PATCH /api/casos/{}/estado?={}", id, estado);
-        return ResponseEntity.ok(casoService.cambiarEstado(id, estado));
+        return ResponseEntity.ok(toResponse(casoService.cambiarEstado(id, estado)));
     }
 
     @PatchMapping("/{id}/asignar")
-    public ResponseEntity<Caso> asignarAnalista(@PathVariable Long id, @RequestParam UUID analistaId) {
+    public ResponseEntity<CasoResponse> asignarAnalista(@PathVariable Long id, @RequestParam UUID analistaId) {
         log.info("[CASES] PATCH /api/casos/{}/asignar?analistaId={}", id, analistaId);
-        return ResponseEntity.ok(casoService.asignarAnalista(id, analistaId));
+        return ResponseEntity.ok(toResponse(casoService.asignarAnalista(id, analistaId)));
+    }
+
+    private CasoResponse toResponse(Caso caso) {
+        var analista = caso.getUsuarioAnalista();
+        return new CasoResponse(caso.getId(), caso.getCodigo(), caso.getTitulo(), caso.getDescripcion(),
+                caso.getEstado(), caso.getPrioridad(), caso.getScore(),
+                analista != null ? analista.getId() : null,
+                analista != null ? analista.getNombre() : null,
+                caso.getFechaApertura(), caso.getFechaCierre(), caso.getResultado(), caso.getObservaciones());
     }
 }

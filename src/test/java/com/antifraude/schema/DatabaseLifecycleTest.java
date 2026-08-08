@@ -29,24 +29,34 @@ class DatabaseLifecycleTest {
                     .load()
                     .migrate();
 
-            assertThat(queryInt(postgres, "select count(*) from empresa where codigo='REGULA_DEMO'"))
+            assertThat(queryInt(postgres, "select count(*) from empresa where codigo='FINANCIERA_SANTA_CLARA'"))
                     .isEqualTo(1);
             assertThat(queryInt(postgres, "select count(*) from pais where codigo_iso='PY'"))
                     .isEqualTo(1);
             assertThat(queryInt(postgres, "select count(*) from moneda where codigo_iso='PYG'"))
                     .isEqualTo(1);
-            assertThat(queryInt(postgres, "select count(*) from usuarios where email like '%@demo.regula.local'"))
-                    .isEqualTo(2);
-            assertThat(queryInt(postgres, "select count(*) from transacciones where codigo like 'TX-DEMO-%'"))
+            assertThat(queryInt(postgres, "select count(*) from usuarios where email like '%@demo.regula.local' or email like '%@cliente.local'"))
+                    .isZero();
+            assertThat(queryInt(postgres, "select count(*) from usuarios where email like '%@santaclara.local'"))
+                    .isEqualTo(29);
+            assertThat(queryInt(postgres, "select count(*) from usuario_empresa"))
+                    .isEqualTo(32);
+            assertThat(queryInt(postgres, "select count(*) from transacciones where codigo like 'TX-CONTROL-%'"))
                     .isEqualTo(7);
-            assertThat(queryInt(postgres, "select count(*) from alertas_antifraude where codigo like 'ALT-TX-DEMO-%'"))
+            assertThat(queryInt(postgres, "select count(*) from alertas_antifraude where codigo like 'ALT-TX-CONTROL-%'"))
                     .isEqualTo(6);
-            assertThat(queryInt(postgres, "select count(*) from caso where codigo like 'CAS-ALT-TX-DEMO-%'"))
+            assertThat(queryInt(postgres, "select count(*) from caso where codigo like 'CAS-ALT-TX-CONTROL-%'"))
                     .isEqualTo(6);
-            assertThat(queryInt(postgres, "select count(*) from reportes_ros where codigo='ROS-DEMO-001'"))
+            assertThat(queryInt(postgres, "select count(*) from reportes_ros where codigo='ROS-CONTROL-001'"))
                     .isEqualTo(1);
             assertThat(queryInt(postgres, "select count(*) from licencia_local"))
-                    .isZero();
+                    .isEqualTo(1);
+            assertThat(queryInt(postgres, "select count(*) from transacciones"))
+                    .isEqualTo(87);
+            assertThat(queryInt(postgres, "select count(*) from plan_licencia"))
+                    .isEqualTo(3);
+            assertThat(queryInt(postgres, "select count(*) from consultas_externas"))
+                    .isEqualTo(12);
         }
     }
 
