@@ -1,10 +1,12 @@
 package com.antifraude.alerts;
 
+import com.antifraude.security.tenant.TenantContext;
 import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "resolucion_alerta")
@@ -18,6 +20,9 @@ public class ResolucionAlerta {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "empresa_id", nullable = false, updatable = false, columnDefinition = "uuid")
+    private UUID empresaId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "alerta_id", nullable = false)
@@ -64,6 +69,18 @@ public class ResolucionAlerta {
     @Column(name = "fecha_resolucion", nullable = false)
     @Builder.Default
     private LocalDateTime fechaResolucion = LocalDateTime.now();
+
+    @PrePersist
+    protected void rellenarTenant() {
+        if (empresaId == null) {
+            empresaId = TenantContext.getEmpresaId();
+        }
+        if (empresaId == null) {
+            throw new IllegalStateException("No se pudo determinar empresa_id al persistir "
+                    + getClass().getSimpleName()
+                    + ": falta TenantContext en el hilo actual.");
+        }
+    }
 
     public enum Resultado {
         FRAUDE_CONFIRMADO, FALSO_POSITIVO, OPERACION_JUSTIFICADA, ESCALAR, ROS_REQUERIDO

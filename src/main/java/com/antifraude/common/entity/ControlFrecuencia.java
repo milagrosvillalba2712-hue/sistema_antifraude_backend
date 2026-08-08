@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "control_frecuencia")
-public class ControlFrecuencia extends BaseEntity {
+public class ControlFrecuencia extends TenantAwareEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "producto_id")

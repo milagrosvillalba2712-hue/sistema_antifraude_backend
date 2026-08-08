@@ -1,11 +1,13 @@
 package com.antifraude.alerts;
 
 import com.antifraude.common.entity.Caso;
+import com.antifraude.security.tenant.TenantContext;
 import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "aprobacion_supervisor")
@@ -19,6 +21,9 @@ public class AprobacionSupervisor {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "empresa_id", nullable = false, updatable = false, columnDefinition = "uuid")
+    private UUID empresaId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "caso_id")
@@ -54,4 +59,23 @@ public class AprobacionSupervisor {
 
     @Column(name = "fecha_decision")
     private LocalDateTime fechaAprobacion;
+
+    @PrePersist
+    protected void rellenarTenant() {
+        if (empresaId == null && alerta != null && alerta.getEmpresaId() != null) {
+            empresaId = alerta.getEmpresaId();
+        } else if (empresaId == null && caso != null && caso.getEmpresaId() != null) {
+            empresaId = caso.getEmpresaId();
+        } else if (empresaId == null && resolucionAlerta != null && resolucionAlerta.getEmpresaId() != null) {
+            empresaId = resolucionAlerta.getEmpresaId();
+        }
+        if (empresaId == null) {
+            empresaId = TenantContext.getEmpresaId();
+        }
+        if (empresaId == null) {
+            throw new IllegalStateException("No se pudo determinar empresa_id al persistir "
+                    + getClass().getSimpleName()
+                    + ": falta TenantContext en el hilo actual.");
+        }
+    }
 }

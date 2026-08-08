@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "evidencia")
-public class Evidencia extends BaseEntity {
+public class Evidencia extends TenantAwareEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "caso_id", nullable = false)

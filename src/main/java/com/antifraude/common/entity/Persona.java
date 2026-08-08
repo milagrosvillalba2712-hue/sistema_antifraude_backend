@@ -12,7 +12,7 @@ import java.time.LocalDate;
 @EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "persona")
-public class Persona extends BaseEntity {
+public class Persona extends TenantAwareEntity {
 
     @Column(name = "tipo_persona", nullable = false, length = 10)
     @Enumerated(EnumType.STRING)

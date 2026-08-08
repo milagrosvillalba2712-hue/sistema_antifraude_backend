@@ -12,7 +12,7 @@ import java.time.LocalDate;
 @EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "calendario_riesgo")
-public class CalendarioRiesgo extends BaseEntity {
+public class CalendarioRiesgo extends TenantAwareEntity {
 
     @Column(nullable = false, unique = true)
     private LocalDate fecha;

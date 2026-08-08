@@ -14,7 +14,7 @@ import java.time.LocalTime;
 @EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "perfil_cliente")
-public class PerfilCliente extends BaseEntity {
+public class PerfilCliente extends TenantAwareEntity {
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "persona_id", nullable = false, unique = true)

@@ -1,10 +1,12 @@
 package com.antifraude.profile;
 
+import com.antifraude.security.tenant.TenantContext;
 import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "perfil_usuario")
@@ -17,6 +19,9 @@ public class PerfilUsuario {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "empresa_id", nullable = false, updatable = false, columnDefinition = "uuid")
+    private UUID empresaId;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id", nullable = false, unique = true)
@@ -41,4 +46,19 @@ public class PerfilUsuario {
     @Column(name = "fecha_creacion", updatable = false)
     @Builder.Default
     private LocalDateTime fechaCreacion = LocalDateTime.now();
+
+    @PrePersist
+    protected void rellenarTenant() {
+        if (empresaId == null && usuario != null) {
+            empresaId = usuario.getEmpresaId();
+        }
+        if (empresaId == null) {
+            empresaId = TenantContext.getEmpresaId();
+        }
+        if (empresaId == null) {
+            throw new IllegalStateException("No se pudo determinar empresa_id al persistir "
+                    + getClass().getSimpleName()
+                    + ": falta TenantContext en el hilo actual.");
+        }
+    }
 }
