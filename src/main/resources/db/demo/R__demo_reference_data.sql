@@ -72,6 +72,28 @@ FROM (VALUES
 ) v(documento,nombre)
 ON CONFLICT (empresa_id,documento_hash) DO NOTHING;
 
+-- Las 7 personas de referencia existen antes de R__demo_realistic_population?
+-- No: este archivo corre en orden alfabético después de ese; por eso sus
+-- documentos se crean aquí para mantener 1:1 con el manifiesto de verificación.
+INSERT INTO documento (empresa_id,persona_id,tipo_documento_id,pais_emisor_id,numero_documento_enc,numero_documento_hash,es_principal,estado,activo)
+SELECT p.empresa_id,p.id,(SELECT id FROM tipo_documento WHERE codigo='CI_PY'),
+       (SELECT id FROM pais WHERE codigo_iso='PY'),NULL,
+       hmac('REF-'||p.documento_hash,'regula-demo-hmac-key','sha256'),true,'VIGENTE',true
+FROM persona p
+WHERE p.empresa_id='00000000-0000-0000-0000-000000000001'
+  AND p.nombre_razon_social IN ('Persona Legítima Demo','Persona Fraude Demo','Persona Sancionada Demo',
+      'Persona PEP Demo','Persona Combinada Demo','Persona Falso Positivo Demo','Persona ROS Demo')
+  AND NOT EXISTS (SELECT 1 FROM documento d WHERE d.empresa_id=p.empresa_id AND d.persona_id=p.id);
+
+-- Perfil de cliente 1:1, igual patrón que R__demo_realistic_population.
+INSERT INTO perfil_cliente(empresa_id,persona_id,nivel_riesgo_id,segmento,actividad_economica,ingreso_mensual_estimado,volumen_mensual_esperado,cantidad_operaciones_mensual,perfil_json)
+SELECT p.empresa_id,p.id,nr.id,CASE WHEN p.id%3=0 THEN 'EMPRESARIAL' ELSE 'PERSONAL' END,'Actividad economica ficticia',5000000+(p.id%10)*1000000,12000000+(p.id%20)*2000000,10+(p.id%30),jsonb_build_object('demo',true)
+FROM persona p JOIN nivel_riesgo nr ON nr.codigo=CASE WHEN p.id%10=0 THEN 'ALTO' WHEN p.id%3=0 THEN 'MEDIO' ELSE 'BAJO' END
+WHERE p.empresa_id='00000000-0000-0000-0000-000000000001'
+  AND p.nombre_razon_social IN ('Persona Legítima Demo','Persona Fraude Demo','Persona Sancionada Demo',
+      'Persona PEP Demo','Persona Combinada Demo','Persona Falso Positivo Demo','Persona ROS Demo')
+  AND NOT EXISTS (SELECT 1 FROM perfil_cliente x WHERE x.empresa_id=p.empresa_id AND x.persona_id=p.id);
+
 INSERT INTO cliente_pep (empresa_id,persona_id,tipo_pep,cargo,institucion,fecha_inicio,estado,detalle_json)
 SELECT p.empresa_id,p.id,'NACIONAL','Cargo sintético','Institución sintética',DATE '2025-01-01','ACTIVO','{"demo":true}'
 FROM persona p WHERE p.nombre_razon_social IN ('Persona PEP Demo','Persona Combinada Demo')
@@ -147,3 +169,39 @@ INSERT INTO auditoria_sistema (empresa_id,usuario_id,accion,descripcion,entidad_
 SELECT '00000000-0000-0000-0000-000000000001',u.id,'SEED_DEMO','Carga reproducible de escenarios sintéticos','demo','REGULA_DEMO','{"demo":true}','127.0.0.1','RegulaDemoSeed/1'
 FROM usuarios u WHERE u.email='admin@demo.regula.local'
   AND NOT EXISTS (SELECT 1 FROM auditoria_sistema x WHERE x.accion='SEED_DEMO' AND x.entidad_id='REGULA_DEMO');
+
+-- Enriquecimiento de las alertas/casos/resoluciones creados arriba. Debe vivir en
+-- este archivo (no en R__demo_realistic_population, que corre alfabéticamente
+-- antes) para que las alertas ya existan cuando se insertan los hallazgos.
+INSERT INTO hallazgo_alerta(empresa_id,alerta_id,transaccion_id,fecha_transaccion,regla_riesgo_id,tipo_hallazgo,descripcion,score,severidad,detalle_json)
+SELECT a.empresa_id,a.id,a.transaccion_id,a.fecha_transaccion,r.id,'REGLA_DISPARADA','Hallazgo sintetico '||a.codigo,a.score,a.severidad,jsonb_build_object('demo',true) FROM alertas_antifraude a LEFT JOIN reglas_riesgo r ON r.empresa_id=a.empresa_id AND r.codigo='REG-PY-05' WHERE NOT EXISTS(SELECT 1 FROM hallazgo_alerta h WHERE h.alerta_id=a.id);
+INSERT INTO coincidencia_lista_alerta(empresa_id,alerta_id,sujeto_riesgo_id,lista_regulatoria_id,tipo_coincidencia,porcentaje_coincidencia,detalle_json)
+SELECT a.empresa_id,a.id,s.id,s.lista_regulatoria_id,'NOMBRE_APROXIMADO',82+(a.id%15),jsonb_build_object('demo',true,'algoritmo','fuzzy-sintetico')
+FROM alertas_antifraude a JOIN sujeto_riesgo s ON s.codigo='SR-DEMO-'||((a.id%40)+1)
+WHERE NOT EXISTS(SELECT 1 FROM coincidencia_lista_alerta c WHERE c.alerta_id=a.id AND c.sujeto_riesgo_id=s.id);
+INSERT INTO cliente_snapshot_alerta(empresa_id,alerta_id,persona_id,snapshot_json)
+SELECT a.empresa_id,a.id,t.persona_remitente_id,jsonb_build_object('demo',true,'nombre',t.nombre_remitente,'perfil','sintetico') FROM alertas_antifraude a JOIN transacciones t ON t.id=a.transaccion_id AND t.fecha_transaccion=a.fecha_transaccion ON CONFLICT DO NOTHING;
+INSERT INTO consulta_kyc_alerta(empresa_id,alerta_id,proveedor,estado,mensaje,respuesta_json)
+SELECT a.empresa_id,a.id,'Mock Externo Regula','COMPLETADA','Consulta sintetica sanitizada','{}' FROM alertas_antifraude a
+WHERE NOT EXISTS(SELECT 1 FROM consulta_kyc_alerta k WHERE k.alerta_id=a.id AND k.proveedor='Mock Externo Regula');
+INSERT INTO historial_asignacion(empresa_id,alerta_id,usuario_nuevo_id,tipo,motivo,observacion)
+SELECT a.empresa_id,a.id,a.analista_asignado_id,'ASIGNACION','Distribucion inicial demo','Asignacion sintetica' FROM alertas_antifraude a WHERE a.analista_asignado_id IS NOT NULL
+AND NOT EXISTS(SELECT 1 FROM historial_asignacion h WHERE h.alerta_id=a.id AND h.tipo='ASIGNACION' AND h.motivo='Distribucion inicial demo');
+INSERT INTO actuacion(empresa_id,caso_id,usuario_id,tipo_actuacion,descripcion)
+SELECT c.empresa_id,c.id,c.responsable_id,'REVISION_INICIAL','Revision de transaccion, perfil y reglas' FROM caso c
+WHERE NOT EXISTS(SELECT 1 FROM actuacion a WHERE a.caso_id=c.id AND a.tipo_actuacion='REVISION_INICIAL');
+INSERT INTO comentario_caso(empresa_id,caso_id,usuario_id,comentario,visibilidad)
+SELECT c.empresa_id,c.id,c.responsable_id,'Validar origen de fondos y consistencia del perfil sintetico.','INTERNA' FROM caso c
+WHERE NOT EXISTS(SELECT 1 FROM comentario_caso x WHERE x.caso_id=c.id AND x.comentario='Validar origen de fondos y consistencia del perfil sintetico.');
+INSERT INTO evidencia_alerta(empresa_id,alerta_id,evidencia_id)
+SELECT e.empresa_id,ca.alerta_id,e.id FROM evidencia e JOIN caso_alerta ca ON ca.caso_id=e.caso_id ON CONFLICT DO NOTHING;
+INSERT INTO historial_estado_caso(empresa_id,caso_id,estado_anterior,estado_nuevo,motivo,usuario_id)
+SELECT c.empresa_id,c.id,NULL,c.estado,'Estado inicial del caso demo',c.responsable_id FROM caso c
+WHERE NOT EXISTS(SELECT 1 FROM historial_estado_caso h WHERE h.caso_id=c.id AND h.motivo='Estado inicial del caso demo');
+INSERT INTO aprobacion_supervisor(empresa_id,alerta_id,resolucion_alerta_id,supervisor_id,decision,observacion)
+SELECT r.empresa_id,r.alerta_id,r.id,u.id,CASE WHEN r.id%2=0 THEN 'APROBADA' ELSE 'PENDIENTE' END,'Revision sintetica de supervisor' FROM resolucion_alerta r JOIN usuarios u ON u.email='supervisor@demo.regula.local'
+WHERE NOT EXISTS(SELECT 1 FROM aprobacion_supervisor a WHERE a.resolucion_alerta_id=r.id AND a.supervisor_id=u.id);
+INSERT INTO decision_caso(empresa_id,caso_id,resolucion_alerta_id,decision,descripcion,ejecutada)
+SELECT c.empresa_id,c.id,r.id,CASE WHEN r.resultado='FALSO_POSITIVO' THEN 'LIBERAR_MOVIMIENTO' ELSE 'RETENER_Y_REPORTAR' END,'Decision sintetica',false FROM caso c JOIN caso_alerta ca ON ca.caso_id=c.id JOIN resolucion_alerta r ON r.alerta_id=ca.alerta_id WHERE NOT EXISTS(SELECT 1 FROM decision_caso d WHERE d.caso_id=c.id AND d.resolucion_alerta_id=r.id);
+INSERT INTO estadistica_carga_analista(empresa_id,usuario_id,periodo,alertas_asignadas,alertas_cerradas,alertas_pendientes,tiempo_promedio_minutos)
+SELECT d.empresa_id,d.usuario_id,DATE '2026-08-01',d.carga_actual,d.carga_actual/2,d.carga_actual-d.carga_actual/2,95.5 FROM disponibilidad_usuario d ON CONFLICT(empresa_id,usuario_id,periodo) DO UPDATE SET alertas_asignadas=EXCLUDED.alertas_asignadas;

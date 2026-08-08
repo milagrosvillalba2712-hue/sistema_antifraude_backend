@@ -293,40 +293,6 @@ SELECT t.empresa_id,t.id,t.fecha_transaccion,CASE WHEN t.score_riesgo>=70 THEN '
 INSERT INTO transaccion_detalle_snapshot(empresa_id,transaccion_id,fecha_transaccion,snapshot_json,fuente)
 SELECT t.empresa_id,t.id,t.fecha_transaccion,jsonb_build_object('codigo',t.codigo,'monto',t.monto,'demo',true),'CORE_TRANSACCIONAL_DEMO' FROM transacciones t WHERE t.codigo LIKE 'TX-PY-%' ON CONFLICT DO NOTHING;
 
--- Enriquecimiento de las alertas/casos ya creados por el seed base.
-INSERT INTO hallazgo_alerta(empresa_id,alerta_id,transaccion_id,fecha_transaccion,regla_riesgo_id,tipo_hallazgo,descripcion,score,severidad,detalle_json)
-SELECT a.empresa_id,a.id,a.transaccion_id,a.fecha_transaccion,r.id,'REGLA_DISPARADA','Hallazgo sintetico '||a.codigo,a.score,a.severidad,jsonb_build_object('demo',true) FROM alertas_antifraude a LEFT JOIN reglas_riesgo r ON r.empresa_id=a.empresa_id AND r.codigo='REG-PY-05' WHERE NOT EXISTS(SELECT 1 FROM hallazgo_alerta h WHERE h.alerta_id=a.id);
-INSERT INTO coincidencia_lista_alerta(empresa_id,alerta_id,sujeto_riesgo_id,lista_regulatoria_id,tipo_coincidencia,porcentaje_coincidencia,detalle_json)
-SELECT a.empresa_id,a.id,s.id,s.lista_regulatoria_id,'NOMBRE_APROXIMADO',82+(a.id%15),jsonb_build_object('demo',true,'algoritmo','fuzzy-sintetico')
-FROM alertas_antifraude a JOIN sujeto_riesgo s ON s.codigo='SR-DEMO-'||((a.id%40)+1)
-WHERE NOT EXISTS(SELECT 1 FROM coincidencia_lista_alerta c WHERE c.alerta_id=a.id AND c.sujeto_riesgo_id=s.id);
-INSERT INTO cliente_snapshot_alerta(empresa_id,alerta_id,persona_id,snapshot_json)
-SELECT a.empresa_id,a.id,t.persona_remitente_id,jsonb_build_object('demo',true,'nombre',t.nombre_remitente,'perfil','sintetico') FROM alertas_antifraude a JOIN transacciones t ON t.id=a.transaccion_id AND t.fecha_transaccion=a.fecha_transaccion ON CONFLICT DO NOTHING;
-INSERT INTO consulta_kyc_alerta(empresa_id,alerta_id,proveedor,estado,mensaje,respuesta_json)
-SELECT a.empresa_id,a.id,'Mock Externo Regula','COMPLETADA','Consulta sintetica sanitizada','{}' FROM alertas_antifraude a
-WHERE NOT EXISTS(SELECT 1 FROM consulta_kyc_alerta k WHERE k.alerta_id=a.id AND k.proveedor='Mock Externo Regula');
-INSERT INTO historial_asignacion(empresa_id,alerta_id,usuario_nuevo_id,tipo,motivo,observacion)
-SELECT a.empresa_id,a.id,a.analista_asignado_id,'ASIGNACION','Distribucion inicial demo','Asignacion sintetica' FROM alertas_antifraude a WHERE a.analista_asignado_id IS NOT NULL
-AND NOT EXISTS(SELECT 1 FROM historial_asignacion h WHERE h.alerta_id=a.id AND h.tipo='ASIGNACION' AND h.motivo='Distribucion inicial demo');
-INSERT INTO actuacion(empresa_id,caso_id,usuario_id,tipo_actuacion,descripcion)
-SELECT c.empresa_id,c.id,c.responsable_id,'REVISION_INICIAL','Revision de transaccion, perfil y reglas' FROM caso c
-WHERE NOT EXISTS(SELECT 1 FROM actuacion a WHERE a.caso_id=c.id AND a.tipo_actuacion='REVISION_INICIAL');
-INSERT INTO comentario_caso(empresa_id,caso_id,usuario_id,comentario,visibilidad)
-SELECT c.empresa_id,c.id,c.responsable_id,'Validar origen de fondos y consistencia del perfil sintetico.','INTERNA' FROM caso c
-WHERE NOT EXISTS(SELECT 1 FROM comentario_caso x WHERE x.caso_id=c.id AND x.comentario='Validar origen de fondos y consistencia del perfil sintetico.');
-INSERT INTO evidencia_alerta(empresa_id,alerta_id,evidencia_id)
-SELECT e.empresa_id,ca.alerta_id,e.id FROM evidencia e JOIN caso_alerta ca ON ca.caso_id=e.caso_id ON CONFLICT DO NOTHING;
-INSERT INTO historial_estado_caso(empresa_id,caso_id,estado_anterior,estado_nuevo,motivo,usuario_id)
-SELECT c.empresa_id,c.id,NULL,c.estado,'Estado inicial del caso demo',c.responsable_id FROM caso c
-WHERE NOT EXISTS(SELECT 1 FROM historial_estado_caso h WHERE h.caso_id=c.id AND h.motivo='Estado inicial del caso demo');
-INSERT INTO aprobacion_supervisor(empresa_id,alerta_id,resolucion_alerta_id,supervisor_id,decision,observacion)
-SELECT r.empresa_id,r.alerta_id,r.id,u.id,CASE WHEN r.id%2=0 THEN 'APROBADA' ELSE 'PENDIENTE' END,'Revision sintetica de supervisor' FROM resolucion_alerta r JOIN usuarios u ON u.email='supervisor@demo.regula.local'
-WHERE NOT EXISTS(SELECT 1 FROM aprobacion_supervisor a WHERE a.resolucion_alerta_id=r.id AND a.supervisor_id=u.id);
-INSERT INTO decision_caso(empresa_id,caso_id,resolucion_alerta_id,decision,descripcion,ejecutada)
-SELECT c.empresa_id,c.id,r.id,CASE WHEN r.resultado='FALSO_POSITIVO' THEN 'LIBERAR_MOVIMIENTO' ELSE 'RETENER_Y_REPORTAR' END,'Decision sintetica',false FROM caso c JOIN caso_alerta ca ON ca.caso_id=c.id JOIN resolucion_alerta r ON r.alerta_id=ca.alerta_id WHERE NOT EXISTS(SELECT 1 FROM decision_caso d WHERE d.caso_id=c.id AND d.resolucion_alerta_id=r.id);
-INSERT INTO estadistica_carga_analista(empresa_id,usuario_id,periodo,alertas_asignadas,alertas_cerradas,alertas_pendientes,tiempo_promedio_minutos)
-SELECT d.empresa_id,d.usuario_id,DATE '2026-08-01',d.carga_actual,d.carga_actual/2,d.carga_actual-d.carga_actual/2,95.5 FROM disponibilidad_usuario d ON CONFLICT(empresa_id,usuario_id,periodo) DO UPDATE SET alertas_asignadas=EXCLUDED.alertas_asignadas;
-
 INSERT INTO servicio_externo(codigo,nombre,tipo_servicio,url_base,estado,configuracion_json) VALUES
 ('IDENTIFICACIONES_MOCK','Identificaciones Mock','IDENTIDAD','https://localhost:8443','ACTIVO','{"demo":true}'),
 ('SANCIONES_MOCK','Sanciones Mock','SANCIONES','https://localhost:8443','ACTIVO','{"demo":true}'),
