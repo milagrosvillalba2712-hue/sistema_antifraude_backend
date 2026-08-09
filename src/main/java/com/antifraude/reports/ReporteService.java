@@ -2,6 +2,8 @@ package com.antifraude.reports;
 
 import com.antifraude.alerts.Alerta;
 import com.antifraude.alerts.AlertaRepository;
+import com.antifraude.common.entity.Caso;
+import com.antifraude.common.repository.CasoAlertaRepository;
 import com.antifraude.exception.BusinessException;
 import com.antifraude.exception.ResourceNotFoundException;
 import com.antifraude.users.Usuario;
@@ -24,10 +26,14 @@ public class ReporteService {
 
     private final ReporteRosRepository reporteRosRepository;
     private final AlertaRepository alertaRepository;
+    private final CasoAlertaRepository casoAlertaRepository;
 
-    public ReporteService(ReporteRosRepository reporteRosRepository, AlertaRepository alertaRepository) {
+    public ReporteService(ReporteRosRepository reporteRosRepository,
+                          AlertaRepository alertaRepository,
+                          CasoAlertaRepository casoAlertaRepository) {
         this.reporteRosRepository = reporteRosRepository;
         this.alertaRepository = alertaRepository;
+        this.casoAlertaRepository = casoAlertaRepository;
     }
 
     @Transactional
@@ -54,10 +60,24 @@ public class ReporteService {
         }
 
         String nombreArchivo = "ROS_" + alertaId + "_" + LocalDateTime.now().toString().replace(":", "-") + ".csv";
+        Caso caso = casoAlertaRepository.findByAlertaId(alertaId).stream()
+                .findFirst()
+                .map(casoAlerta -> casoAlerta.getCaso())
+                .orElseThrow(() -> new BusinessException("CASE_REQUIRED",
+                        "La alerta debe estar asociada a un caso antes de generar un reporte ROS"));
+        String codigo = "ROS-" + alerta.getId() + "-" + System.currentTimeMillis();
         ReporteRos reporte = ReporteRos.builder()
                 .alerta(alerta)
+                .caso(caso)
+                .empresa(alerta.getEmpresa())
                 .generadoPor(usuario)
                 .nombreArchivo(nombreArchivo)
+                .codigo(codigo)
+                .estado("GENERADO")
+                .descripcionSospecha("Reporte ROS generado desde alerta " + alerta.getCodigo())
+                .soporteReferencia(nombreArchivo)
+                .reporteJson("{\"alertaId\":" + alerta.getId() + ",\"casoId\":" + caso.getId()
+                        + ",\"generadoPor\":\"" + usuario.getEmail() + "\"}")
                 .build();
         reporteRosRepository.save(reporte);
         log.info("[REPORTS] Reporte ROS generado - Archivo: {} - Tamanio: {} bytes", nombreArchivo, baos.size());

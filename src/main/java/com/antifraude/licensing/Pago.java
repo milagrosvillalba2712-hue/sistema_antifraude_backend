@@ -54,7 +54,7 @@ public class Pago extends AuditableEntity {
     private EstadoPago estado = EstadoPago.PENDIENTE;
 
     public enum EstadoPago {
-        PENDIENTE, PAGADO, VENCIDO, ANULADO
+        PENDIENTE, PAGADO, CONFIRMADO, VENCIDO, ANULADO
     }
 
     public String getReferencia() {

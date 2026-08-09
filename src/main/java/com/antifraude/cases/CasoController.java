@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,18 +33,21 @@ public class CasoController {
     }
 
     @GetMapping
+    @Transactional(readOnly = true)
     public ResponseEntity<List<CasoResponse>> listar() {
         log.info("[CASES] GET /api/casos");
         return ResponseEntity.ok(casoService.listarTodos().stream().map(this::toResponse).toList());
     }
 
     @GetMapping("/{id}")
+    @Transactional(readOnly = true)
     public ResponseEntity<CasoResponse> buscar(@PathVariable Long id) {
         log.info("[CASES] GET /api/casos/{}", id);
         return ResponseEntity.ok(toResponse(casoService.buscarPorId(id)));
     }
 
     @GetMapping("/estado/{estado}")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<CasoResponse>> buscarPorEstado(@PathVariable EstadoCaso estado) {
         log.info("[CASES] GET /api/casos/estado/{}", estado);
         return ResponseEntity.ok(casoService.buscarPorEstado(estado).stream().map(this::toResponse).toList());
