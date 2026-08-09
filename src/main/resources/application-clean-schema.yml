@@ -1,0 +1,16 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: none
+  flyway:
+    enabled: false
+
+app:
+  schema:
+    mode: clean-paraguay
+  clean-schema:
+    apply: ${CLEAN_SCHEMA_APPLY:false}
+  seed:
+    enabled: ${SEED_ENABLED:false}
+  scheduler:
+    enabled: ${SCHEDULER_ENABLED:false}

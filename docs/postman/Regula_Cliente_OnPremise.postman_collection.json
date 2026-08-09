@@ -1,0 +1,22 @@
+{
+  "info": {"name":"Regula - Cliente on-premise","schema":"https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+  "variable": [
+    {"key":"baseUrl","value":"http://localhost:8080"},
+    {"key":"token","value":""}
+  ],
+  "item": [
+    {
+      "name":"Login administrador","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"email\":\"administrador@santaclara.local\",\"password\":\"Regula2026!\"}"},"url":"{{baseUrl}}/api/auth/login"},
+      "event":[{"listen":"test","script":{"exec":["pm.test('Login 200',()=>pm.response.to.have.status(200));","const body=pm.response.json();","pm.collectionVariables.set('token',body.token);","pm.expect(body.rol).to.eql('ADMINISTRADOR');"]}}]
+    },
+    {
+      "name":"01 Transacción aprobada","request":{"method":"POST","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{token}}","type":"string"}]},"header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"transactionUuid\":\"{{$guid}}\",\"identificadorDocumento\":\"CONTROL-1001\",\"cuentaOrigen\":\"CTA-ORIGEN-001\",\"cuentaDestino\":\"CTA-DESTINO-001\",\"monto\":5000,\"moneda\":\"PYG\",\"canal\":\"SPI\",\"tipoTransaccion\":\"PY_SPI_TRANSFER\",\"ipOrigen\":\"10.20.0.15\",\"paisOrigen\":\"PY\",\"paisDestino\":\"PY\",\"fechaTransaccion\":\"2026-08-06T14:00:00\"}"},"url":"{{baseUrl}}/api/transacciones"},"event":[{"listen":"test","script":{"exec":["pm.test('Creada',()=>pm.response.to.have.status(201));","const b=pm.response.json();","pm.expect(b.estadoEvaluacion).to.eql('APROBADA');","pm.expect(Number(b.scoreRiesgo)).to.be.below(40);"]}}]
+    },
+    {
+      "name":"02 Transacción revisión manual","request":{"method":"POST","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{token}}","type":"string"}]},"header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"transactionUuid\":\"{{$guid}}\",\"identificadorDocumento\":\"CONTROL-1002\",\"cuentaOrigen\":\"CTA-ORIGEN-002\",\"cuentaDestino\":\"CTA-DESTINO-002\",\"monto\":99999,\"moneda\":\"PYG\",\"canal\":\"SPI\",\"tipoTransaccion\":\"PY_SPI_TRANSFER\",\"ipOrigen\":\"10.20.0.16\",\"paisOrigen\":\"PY\",\"paisDestino\":\"PY\",\"fechaTransaccion\":\"2026-08-06T14:00:00\"}"},"url":"{{baseUrl}}/api/transacciones"},"event":[{"listen":"test","script":{"exec":["pm.test('Creada',()=>pm.response.to.have.status(201));","const b=pm.response.json();","pm.expect(b.estadoEvaluacion).to.eql('REVISION_MANUAL');","pm.expect(Number(b.scoreRiesgo)).to.be.within(40,69.999);"]}}]
+    },
+    {
+      "name":"03 Transacción sospechosa","request":{"method":"POST","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{token}}","type":"string"}]},"header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"transactionUuid\":\"{{$guid}}\",\"identificadorDocumento\":\"CONTROL-1003\",\"cuentaOrigen\":\"CTA-ORIGEN-003\",\"cuentaDestino\":\"CTA-DESTINO-003\",\"monto\":100000,\"moneda\":\"PYG\",\"canal\":\"SPI\",\"tipoTransaccion\":\"PY_SPI_TRANSFER\",\"ipOrigen\":\"10.20.0.17\",\"paisOrigen\":\"US\",\"paisDestino\":\"PY\",\"fechaTransaccion\":\"2026-08-06T23:30:00\"}"},"url":"{{baseUrl}}/api/transacciones"},"event":[{"listen":"test","script":{"exec":["pm.test('Creada',()=>pm.response.to.have.status(201));","const b=pm.response.json();","pm.expect(b.estadoEvaluacion).to.eql('SOSPECHOSA');","pm.expect(Number(b.scoreRiesgo)).to.be.at.least(70);"]}}]
+    }
+  ]
+}

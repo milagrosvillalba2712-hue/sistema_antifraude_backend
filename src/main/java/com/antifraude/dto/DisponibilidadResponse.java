@@ -1,13 +1,14 @@
 package com.antifraude.dto;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 
 public record DisponibilidadResponse(
         Long id,
-        Long usuarioId,
+        UUID usuarioId,
         String tipoEstado,
-        LocalDateTime fechaInicio,
-        LocalDateTime fechaFin,
+        OffsetDateTime fechaInicio,
+        OffsetDateTime fechaFin,
         Boolean esProgramado,
         String motivo,
         Boolean activo) {

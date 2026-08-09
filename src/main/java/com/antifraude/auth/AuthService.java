@@ -6,6 +6,7 @@ import com.antifraude.dto.LoginResponse;
 import com.antifraude.exception.AuthenticationErrorException;
 import com.antifraude.licensing.PermissionService;
 import com.antifraude.security.JwtTokenProvider;
+import com.antifraude.security.tenant.TenantContext;
 import com.antifraude.users.Usuario;
 import com.antifraude.users.UsuarioRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -71,14 +72,16 @@ public class AuthService {
         usuarioRepository.save(usuario);
 
         PermissionService.SessionAccess access = permissionService.buildAccess(usuario);
-        String token = jwtTokenProvider.generateToken(usuario.getEmail(), access.rol(),
+        TenantContext.setUsuarioId(usuario.getId());
+        TenantContext.setEmpresaId(access.empresaId());
+        String token = jwtTokenProvider.generateToken(usuario.getEmail(), usuario.getId(), access.rol(),
                 access.empresaId(), access.rolId(), access.permisos());
         log.info("[AUTH] Token generado para {} - Rol: {} - IP: {}", usuario.getEmail(), access.rol(), ip);
 
         auditoriaService.registrar(usuario.getId(), "LOGIN", "Inicio de sesion exitoso",
                 ip, "usuarios", usuario.getId());
 
-        return new LoginResponse(token, "Bearer", usuario.getEmail(), access.rol(),
+        return new LoginResponse(token, "Bearer", usuario.getId(), usuario.getEmail(), access.rol(),
                 access.empresaId(), access.rolId(), access.permisos());
     }
 

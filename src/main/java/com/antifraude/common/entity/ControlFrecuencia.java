@@ -10,16 +10,16 @@ import lombok.NoArgsConstructor;
 @EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "control_frecuencia")
-public class ControlFrecuencia extends BaseEntity {
+public class ControlFrecuencia extends TenantAwareEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "producto_id")
     private Producto producto;
 
-    @Column(name = "cantidad_operaciones", nullable = false)
+    @Column(name = "cantidad_maxima", nullable = false)
     private Integer cantidadOperaciones;
 
-    @Column(name = "ventana_tiempo", nullable = false)
+    @Column(name = "ventana_minutos", nullable = false)
     private Integer ventanaTiempo;
 
     @Column(name = "unidad_tiempo", nullable = false, length = 10)

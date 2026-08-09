@@ -5,7 +5,7 @@ import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "decision_caso")
@@ -20,25 +20,33 @@ public class DecisionCaso {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "empresa_id", nullable = false)
+    private java.util.UUID empresaId;
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "caso_id")
+    @JoinColumn(name = "caso_id", nullable = false)
     private Caso caso;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "alerta_id")
+    @Transient
     private Alerta alerta;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "usuario_id")
+    @Column(name = "resolucion_alerta_id")
+    private Long resolucionAlertaId;
+
+    @Transient
     private Usuario usuario;
 
     @Column(nullable = false, length = 80)
     private String decision;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "descripcion", nullable = false, columnDefinition = "TEXT")
     private String justificacion;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean ejecutada = false;
 
     @Column(name = "fecha_decision")
     @Builder.Default
-    private LocalDateTime fechaDecision = LocalDateTime.now();
+    private OffsetDateTime fechaDecision = OffsetDateTime.now();
 }

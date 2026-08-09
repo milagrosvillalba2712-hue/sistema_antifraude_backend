@@ -1,0 +1,10 @@
+spring:
+  flyway:
+    locations:
+      - classpath:db/productmigration
+      - classpath:db/demo
+
+app:
+  seed:
+    enabled: true
+

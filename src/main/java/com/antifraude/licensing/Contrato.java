@@ -27,13 +27,13 @@ public class Contrato extends AuditableEntity {
     @JoinColumn(name = "suscripcion_id")
     private Suscripcion suscripcion;
 
-    @Column(nullable = false, unique = true, length = 50)
+    @Column(name = "numero_contrato", nullable = false, unique = true, length = 50)
     private String numero;
 
     @Column(name = "fecha_firma")
     private LocalDate fechaFirma;
 
-    @Column(name = "url_documento", length = 500)
+    @Column(name = "documento_referencia", length = 500)
     private String urlDocumento;
 
     @Column(columnDefinition = "TEXT")

@@ -1,0 +1,33 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  flyway:
+    enabled: true
+    locations: classpath:db/productmigration
+    user: ${FLYWAY_DB_USER}
+    password: ${FLYWAY_DB_PASSWORD}
+
+app:
+  seed:
+    enabled: false
+  jwt:
+    secret: ${JWT_SECRET}
+  aes:
+    secret: ${AES_SECRET}
+  hmac:
+    secret: ${HMAC_SECRET}
+  external:
+    tls:
+      trust-store: ${EXTERNAL_TRUSTSTORE}
+      trust-store-password: ${EXTERNAL_TRUSTSTORE_PASSWORD}
+    identificaciones:
+      url: ${IDENTIFICACIONES_API_URL}
+      api-key: ${IDENTIFICACIONES_API_KEY}
+    sanciones:
+      url: ${SANCIONES_API_URL}
+      api-key: ${SANCIONES_API_KEY}
+    pep:
+      url: ${PEP_API_URL}
+      api-key: ${PEP_API_KEY}

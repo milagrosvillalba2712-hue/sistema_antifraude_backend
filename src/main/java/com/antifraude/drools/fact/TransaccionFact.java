@@ -1,7 +1,7 @@
 package com.antifraude.drools.fact;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * Fact de transaccion para Drools — POJO plano sin dependencias JPA.
@@ -23,7 +23,7 @@ public class TransaccionFact {
     private String paisOrigenNombre;
     private String paisDestinoCodigo;
     private String paisDestinoNombre;
-    private LocalDateTime fechaTransaccion;
+    private OffsetDateTime fechaTransaccion;
     private boolean esInternacional;
     private boolean esHorarioInhabil;
     private boolean coincideFeriado;
@@ -33,6 +33,28 @@ public class TransaccionFact {
     private String personaRemitenteNombre;
     private Long personaBeneficiarioId;
     private String personaBeneficiarioNombre;
+    private String infraestructuraPago;
+    private String moduloSipap;
+    private String subtipoTransaccion;
+    private String endToEndId;
+    private String spiReference;
+    private String aliasEmisorTipo;
+    private String aliasReceptorTipo;
+    private boolean requiereDeclaracionFondos;
+    private boolean depositanteTercero;
+    private String empeOperador;
+    private String tipoCheque;
+    private String estadoClearing;
+    private String procesadoraTarjeta;
+    private String mcc;
+    private String canalTarjeta;
+    private String panLast4;
+    private String qrStandard;
+    private String qrHubReference;
+    private String remittancePayoutMethod;
+    private String paisCorredorRemesa;
+    private String swiftBicOrigen;
+    private String swiftBicDestino;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -64,8 +86,8 @@ public class TransaccionFact {
     public void setPaisDestinoCodigo(String paisDestinoCodigo) { this.paisDestinoCodigo = paisDestinoCodigo; }
     public String getPaisDestinoNombre() { return paisDestinoNombre; }
     public void setPaisDestinoNombre(String paisDestinoNombre) { this.paisDestinoNombre = paisDestinoNombre; }
-    public LocalDateTime getFechaTransaccion() { return fechaTransaccion; }
-    public void setFechaTransaccion(LocalDateTime fechaTransaccion) { this.fechaTransaccion = fechaTransaccion; }
+    public OffsetDateTime getFechaTransaccion() { return fechaTransaccion; }
+    public void setFechaTransaccion(OffsetDateTime fechaTransaccion) { this.fechaTransaccion = fechaTransaccion; }
     public boolean isEsInternacional() { return esInternacional; }
     public void setEsInternacional(boolean esInternacional) { this.esInternacional = esInternacional; }
     public boolean isEsHorarioInhabil() { return esHorarioInhabil; }
@@ -84,4 +106,48 @@ public class TransaccionFact {
     public void setPersonaBeneficiarioId(Long personaBeneficiarioId) { this.personaBeneficiarioId = personaBeneficiarioId; }
     public String getPersonaBeneficiarioNombre() { return personaBeneficiarioNombre; }
     public void setPersonaBeneficiarioNombre(String personaBeneficiarioNombre) { this.personaBeneficiarioNombre = personaBeneficiarioNombre; }
+    public String getInfraestructuraPago() { return infraestructuraPago; }
+    public void setInfraestructuraPago(String infraestructuraPago) { this.infraestructuraPago = infraestructuraPago; }
+    public String getModuloSipap() { return moduloSipap; }
+    public void setModuloSipap(String moduloSipap) { this.moduloSipap = moduloSipap; }
+    public String getSubtipoTransaccion() { return subtipoTransaccion; }
+    public void setSubtipoTransaccion(String subtipoTransaccion) { this.subtipoTransaccion = subtipoTransaccion; }
+    public String getEndToEndId() { return endToEndId; }
+    public void setEndToEndId(String endToEndId) { this.endToEndId = endToEndId; }
+    public String getSpiReference() { return spiReference; }
+    public void setSpiReference(String spiReference) { this.spiReference = spiReference; }
+    public String getAliasEmisorTipo() { return aliasEmisorTipo; }
+    public void setAliasEmisorTipo(String aliasEmisorTipo) { this.aliasEmisorTipo = aliasEmisorTipo; }
+    public String getAliasReceptorTipo() { return aliasReceptorTipo; }
+    public void setAliasReceptorTipo(String aliasReceptorTipo) { this.aliasReceptorTipo = aliasReceptorTipo; }
+    public boolean isRequiereDeclaracionFondos() { return requiereDeclaracionFondos; }
+    public void setRequiereDeclaracionFondos(boolean requiereDeclaracionFondos) { this.requiereDeclaracionFondos = requiereDeclaracionFondos; }
+    public boolean isDepositanteTercero() { return depositanteTercero; }
+    public void setDepositanteTercero(boolean depositanteTercero) { this.depositanteTercero = depositanteTercero; }
+    public String getEmpeOperador() { return empeOperador; }
+    public void setEmpeOperador(String empeOperador) { this.empeOperador = empeOperador; }
+    public String getTipoCheque() { return tipoCheque; }
+    public void setTipoCheque(String tipoCheque) { this.tipoCheque = tipoCheque; }
+    public String getEstadoClearing() { return estadoClearing; }
+    public void setEstadoClearing(String estadoClearing) { this.estadoClearing = estadoClearing; }
+    public String getProcesadoraTarjeta() { return procesadoraTarjeta; }
+    public void setProcesadoraTarjeta(String procesadoraTarjeta) { this.procesadoraTarjeta = procesadoraTarjeta; }
+    public String getMcc() { return mcc; }
+    public void setMcc(String mcc) { this.mcc = mcc; }
+    public String getCanalTarjeta() { return canalTarjeta; }
+    public void setCanalTarjeta(String canalTarjeta) { this.canalTarjeta = canalTarjeta; }
+    public String getPanLast4() { return panLast4; }
+    public void setPanLast4(String panLast4) { this.panLast4 = panLast4; }
+    public String getQrStandard() { return qrStandard; }
+    public void setQrStandard(String qrStandard) { this.qrStandard = qrStandard; }
+    public String getQrHubReference() { return qrHubReference; }
+    public void setQrHubReference(String qrHubReference) { this.qrHubReference = qrHubReference; }
+    public String getRemittancePayoutMethod() { return remittancePayoutMethod; }
+    public void setRemittancePayoutMethod(String remittancePayoutMethod) { this.remittancePayoutMethod = remittancePayoutMethod; }
+    public String getPaisCorredorRemesa() { return paisCorredorRemesa; }
+    public void setPaisCorredorRemesa(String paisCorredorRemesa) { this.paisCorredorRemesa = paisCorredorRemesa; }
+    public String getSwiftBicOrigen() { return swiftBicOrigen; }
+    public void setSwiftBicOrigen(String swiftBicOrigen) { this.swiftBicOrigen = swiftBicOrigen; }
+    public String getSwiftBicDestino() { return swiftBicDestino; }
+    public void setSwiftBicDestino(String swiftBicDestino) { this.swiftBicDestino = swiftBicDestino; }
 }

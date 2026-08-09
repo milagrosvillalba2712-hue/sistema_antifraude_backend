@@ -103,7 +103,7 @@ public class RuleEngineEntityController {
         applyPayload(row, payload);
         entityManager.persist(row);
         entityManager.flush();
-        registrarAuditoria(authentication, request, "CREAR_REGISTRO", tableName(type), readIdAsLong(row),
+        registrarAuditoria(authentication, request, "CREAR_REGISTRO", tableName(type), readId(row),
                 null, toJson(flatten(row)));
         return ResponseEntity.ok(flatten(row));
     }
@@ -149,7 +149,9 @@ public class RuleEngineEntityController {
                 ServicioExterno.class, TipoDocumento.class, Transaccion.class, Usuario.class,
                 Empresa.class, PlanLicencia.class, Suscripcion.class, Contrato.class, Pago.class,
                 UsoSuscripcion.class, RolSistema.class, PermisoSistema.class, RolPermiso.class, UsuarioEmpresa.class,
-                ResolucionAlerta.class, ConsultaKycAlerta.class, DecisionCaso.class, AprobacionSupervisor.class);
+                ResolucionAlerta.class, ConsultaKycAlerta.class, DecisionCaso.class, AprobacionSupervisor.class,
+                FuenteDatosRiesgo.class, SujetoRiesgo.class, SujetoRiesgoAlias.class, SujetoRiesgoDocumento.class,
+                SujetoRiesgoRelacion.class, CoincidenciaListaAlerta.class);
         return map;
     }
 
@@ -194,7 +196,7 @@ public class RuleEngineEntityController {
                 if (field.isAnnotationPresent(ManyToOne.class) || field.isAnnotationPresent(OneToOne.class)) {
                     Object idValue = payload.get(field.getName() + "Id");
                     if (idValue != null && !String.valueOf(idValue).isBlank()) {
-                        field.set(target, entityManager.getReference(field.getType(), toLong(idValue)));
+                        field.set(target, entityManager.getReference(field.getType(), convertId(idValue, field.getType())));
                     }
                 } else if (payload.containsKey(field.getName())) {
                     field.set(target, convert(payload.get(field.getName()), field.getType()));
@@ -241,12 +243,6 @@ public class RuleEngineEntityController {
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private Long readIdAsLong(Object value) {
-        Object id = readId(value);
-        if (id instanceof Number number) return number.longValue();
-        return id != null ? Long.valueOf(String.valueOf(id)) : null;
     }
 
     private String label(Object value) {
@@ -315,9 +311,22 @@ public class RuleEngineEntityController {
         return value;
     }
 
-    private Long toLong(Object value) {
-        if (value instanceof Number number) return number.longValue();
-        return Long.valueOf(String.valueOf(value));
+    private Object convertId(Object value, Class<?> entityType) {
+        Class<?> idType = idType(entityType);
+        if (idType.equals(UUID.class)) return value instanceof UUID ? value : UUID.fromString(String.valueOf(value));
+        if (idType.equals(Long.class) || idType.equals(long.class)) {
+            if (value instanceof Number number) return number.longValue();
+            return Long.valueOf(String.valueOf(value));
+        }
+        return value;
+    }
+
+    private Class<?> idType(Class<?> entityType) {
+        return fields(entityType).stream()
+                .filter(field -> field.isAnnotationPresent(jakarta.persistence.Id.class))
+                .findFirst()
+                .map(Field::getType)
+                .orElse(Long.class);
     }
 
     private String tableName(Class<?> type) {
@@ -326,8 +335,8 @@ public class RuleEngineEntityController {
     }
 
     private void registrarAuditoria(Authentication authentication, HttpServletRequest request, String accion,
-                                    String entidad, Long entidadId, String anterior, String nuevo) {
-        Long usuarioId = null;
+                                    String entidad, Object entidadId, String anterior, String nuevo) {
+        UUID usuarioId = null;
         if (authentication != null && authentication.getName() != null) {
             usuarioId = usuarioRepository.findByEmail(authentication.getName()).map(Usuario::getId).orElse(null);
         }

@@ -6,14 +6,14 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Data
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "comentario_caso")
-public class ComentarioCaso extends BaseEntity {
+public class ComentarioCaso extends TenantAwareEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "caso_id", nullable = false)
@@ -23,9 +23,9 @@ public class ComentarioCaso extends BaseEntity {
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
-    @Column(nullable = false, length = 1000)
+    @Column(name = "comentario", nullable = false, length = 1000)
     private String texto;
 
-    @Column(name = "fecha_hora", nullable = false)
-    private LocalDateTime fechaHora;
+    @Column(name = "fecha_comentario", nullable = false)
+    private OffsetDateTime fechaHora;
 }

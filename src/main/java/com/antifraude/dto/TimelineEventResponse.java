@@ -1,11 +1,11 @@
 package com.antifraude.dto;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 public record TimelineEventResponse(
         Long id,
         String tipo,
         String descripcion,
-        LocalDateTime fecha,
+        OffsetDateTime fecha,
         String usuario) {
 }

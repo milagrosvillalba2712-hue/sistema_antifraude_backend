@@ -169,24 +169,24 @@ WHERE NOT EXISTS (SELECT 1 FROM producto WHERE codigo = 'PRESTAMO');
 -- ============================================================
 -- 6. tipo_documento
 -- ============================================================
-INSERT INTO tipo_documento (codigo, nombre, activo)
-SELECT 'DNI', 'Documento Nacional de Identidad', true
+INSERT INTO tipo_documento (codigo, nombre, pais_relacion_id, activo)
+SELECT 'DNI', 'Documento Nacional de Identidad', p.id, true FROM pais p WHERE p.codigo_iso = 'AR'
 WHERE NOT EXISTS (SELECT 1 FROM tipo_documento WHERE codigo = 'DNI');
 
-INSERT INTO tipo_documento (codigo, nombre, activo)
-SELECT 'PASAPORTE', 'Pasaporte', true
+INSERT INTO tipo_documento (codigo, nombre, pais_relacion_id, activo)
+SELECT 'PASAPORTE', 'Pasaporte', NULL, true
 WHERE NOT EXISTS (SELECT 1 FROM tipo_documento WHERE codigo = 'PASAPORTE');
 
-INSERT INTO tipo_documento (codigo, nombre, activo)
-SELECT 'CUIT', 'Clave Unica de Identificacion Tributaria', true
+INSERT INTO tipo_documento (codigo, nombre, pais_relacion_id, activo)
+SELECT 'CUIT', 'Clave Unica de Identificacion Tributaria', p.id, true FROM pais p WHERE p.codigo_iso = 'AR'
 WHERE NOT EXISTS (SELECT 1 FROM tipo_documento WHERE codigo = 'CUIT');
 
-INSERT INTO tipo_documento (codigo, nombre, activo)
-SELECT 'CUIL', 'Clave Unica de Identificacion Laboral', true
+INSERT INTO tipo_documento (codigo, nombre, pais_relacion_id, activo)
+SELECT 'CUIL', 'Clave Unica de Identificacion Laboral', p.id, true FROM pais p WHERE p.codigo_iso = 'AR'
 WHERE NOT EXISTS (SELECT 1 FROM tipo_documento WHERE codigo = 'CUIL');
 
-INSERT INTO tipo_documento (codigo, nombre, activo)
-SELECT 'CDI', 'Cedula de Identidad', true
+INSERT INTO tipo_documento (codigo, nombre, pais_relacion_id, activo)
+SELECT 'CDI', 'Cedula de Identidad', p.id, true FROM pais p WHERE p.codigo_iso = 'PY'
 WHERE NOT EXISTS (SELECT 1 FROM tipo_documento WHERE codigo = 'CDI');
 
 -- ============================================================

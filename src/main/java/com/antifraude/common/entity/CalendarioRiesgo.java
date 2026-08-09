@@ -12,19 +12,19 @@ import java.time.LocalDate;
 @EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "calendario_riesgo")
-public class CalendarioRiesgo extends BaseEntity {
+public class CalendarioRiesgo extends TenantAwareEntity {
 
     @Column(nullable = false, unique = true)
     private LocalDate fecha;
 
-    @Column(name = "tipo_dia", nullable = false, length = 20)
+    @Column(name = "tipo_evento", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     private TipoDia tipoDia;
 
-    @Column(length = 150)
+    @Column(name = "nombre", length = 150)
     private String descripcion;
 
     public enum TipoDia {
-        FERIADO, NO_HABIL, EVENTO_ESPECIAL
+        FERIADO, NO_HABIL, EVENTO_ESPECIAL, CIERRE_MES
     }
 }

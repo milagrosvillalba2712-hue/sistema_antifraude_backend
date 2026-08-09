@@ -7,6 +7,7 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalTime;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -17,19 +18,28 @@ import java.time.LocalTime;
 })
 public class HorarioLaboralUsuario extends BaseEntity {
 
+    @Column(name = "empresa_id", nullable = false)
+    private UUID empresaId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
-    @Column(name = "dia_semana", nullable = false, length = 10)
-    @Enumerated(EnumType.STRING)
-    private DiaSemana diaSemana;
+    @Column(name = "dia_semana", nullable = false)
+    private Short diaSemana;
 
-    @Column(name = "hora_desde", nullable = false)
+    @Column(name = "hora_inicio", nullable = false)
     private LocalTime horaDesde;
 
-    @Column(name = "hora_hasta", nullable = false)
+    @Column(name = "hora_fin", nullable = false)
     private LocalTime horaHasta;
+
+    @PrePersist
+    void prePersist() {
+        if (empresaId == null && usuario != null && usuario.getEmpresaId() != null) {
+            empresaId = usuario.getEmpresaId();
+        }
+    }
 
     public enum DiaSemana {
         LUNES, MARTES, MIERCOLES, JUEVES, VIERNES, SABADO, DOMINGO

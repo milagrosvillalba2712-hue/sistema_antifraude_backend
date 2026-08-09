@@ -13,6 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/admin/users")
@@ -40,7 +41,7 @@ public class AdminController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('USUARIOS_VER')")
-    public ResponseEntity<UsuarioResponse> buscar(@PathVariable Long id) {
+    public ResponseEntity<UsuarioResponse> buscar(@PathVariable UUID id) {
         log.info("[ADMIN] GET /api/admin/users/{}", id);
         return ResponseEntity.ok(toResponse(usuarioService.buscarPorId(id)));
     }
@@ -64,7 +65,7 @@ public class AdminController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('USUARIOS_EDITAR')")
-    public ResponseEntity<UsuarioResponse> actualizar(@PathVariable Long id,
+    public ResponseEntity<UsuarioResponse> actualizar(@PathVariable UUID id,
                                                        @Valid @RequestBody UsuarioRequest request,
                                                        HttpServletRequest httpRequest) {
         log.info("[ADMIN] PUT /api/admin/users/{}", id);
@@ -82,7 +83,7 @@ public class AdminController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('USUARIOS_EDITAR')")
-    public ResponseEntity<Void> desactivar(@PathVariable Long id,
+    public ResponseEntity<Void> desactivar(@PathVariable UUID id,
                                             HttpServletRequest httpRequest) {
         log.info("[ADMIN] DELETE /api/admin/users/{}", id);
         Usuario usuario = usuarioService.buscarPorId(id);

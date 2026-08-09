@@ -1,7 +1,7 @@
 package com.antifraude.dto;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 public record SimuladorRequest(
         String productoCodigo,
@@ -11,7 +11,7 @@ public record SimuladorRequest(
         String paisOrigenCodigo,
         String paisDestinoCodigo,
         String documentoCliente,
-        LocalDateTime fechaHora
+        OffsetDateTime fechaHora
 ) {
 }
 

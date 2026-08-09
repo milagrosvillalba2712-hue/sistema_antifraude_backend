@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import com.antifraude.security.tenant.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.NonNull;
@@ -42,6 +43,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (StringUtils.hasText(token)) {
                 if (jwtTokenProvider.validateToken(token)) {
                     String email = jwtTokenProvider.getEmailFromToken(token);
+                    jwtTokenProvider.getUuidClaim(token, "empresaId").ifPresent(TenantContext::setEmpresaId);
+                    jwtTokenProvider.getUuidClaim(token, "usuarioId").ifPresent(TenantContext::setUsuarioId);
                     UserDetails userDetails = userDetailsService.loadUserByUsername(email);
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
@@ -59,7 +62,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     method, path, request.getRemoteAddr(), e.getMessage());
         }
 
-        filterChain.doFilter(request, response);
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            TenantContext.clear();
+        }
     }
 
     private String extractToken(HttpServletRequest request) {

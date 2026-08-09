@@ -27,6 +27,7 @@ public class RiskContextBuilder {
     private final CalendarioRiesgoRepository calendarioRiesgoRepository;
     private final ControlImporteRepository controlImporteRepository;
     private final ControlFrecuenciaRepository controlFrecuenciaRepository;
+    private final ListScreeningService listScreeningService;
 
     public RiskContextBuilder(TransaccionRepository transaccionRepository,
                              ClienteObservadoRepository clienteObservadoRepository,
@@ -36,7 +37,8 @@ public class RiskContextBuilder {
                              HorarioRiesgoRepository horarioRiesgoRepository,
                              CalendarioRiesgoRepository calendarioRiesgoRepository,
                              ControlImporteRepository controlImporteRepository,
-                             ControlFrecuenciaRepository controlFrecuenciaRepository) {
+                             ControlFrecuenciaRepository controlFrecuenciaRepository,
+                             ListScreeningService listScreeningService) {
         this.transaccionRepository = transaccionRepository;
         this.clienteObservadoRepository = clienteObservadoRepository;
         this.clientePEPRepository = clientePEPRepository;
@@ -46,6 +48,7 @@ public class RiskContextBuilder {
         this.calendarioRiesgoRepository = calendarioRiesgoRepository;
         this.controlImporteRepository = controlImporteRepository;
         this.controlFrecuenciaRepository = controlFrecuenciaRepository;
+        this.listScreeningService = listScreeningService;
     }
 
     public RiskContext build(Transaccion transaccion) {
@@ -61,8 +64,10 @@ public class RiskContextBuilder {
         context.setHistorialTransacciones(
                 historial.stream().map(this::toTransaccionFact).toList());
 
-        log.debug("[CTX] Cargando listas regulatorias");
-        cargarListas(context);
+        // Una lista configurada no es una coincidencia. Solo el screening de la
+        // transacción puede incorporar elementos coincidentes al contexto.
+        log.debug("[CTX] Ejecutando screening de listas regulatorias");
+        cargarScreeningListas(context, transaccion);
 
         log.debug("[CTX] Cargando registros PEP y observados para documento: {}", documento);
         cargarPEP(context, documento);
@@ -81,6 +86,55 @@ public class RiskContextBuilder {
                 context.getRegistrosObservados().size());
 
         return context;
+    }
+
+    private void cargarScreeningListas(RiskContext context, Transaccion transaccion) {
+        List<CoincidenciaListaFact> coincidencias = listScreeningService.screen(transaccion);
+        context.setCoincidenciasListas(coincidencias);
+        context.setRemitenteEnLista(coincidencias.stream().anyMatch(c -> "REMITENTE".equalsIgnoreCase(c.getParteTransaccion())));
+        context.setBeneficiarioEnLista(coincidencias.stream().anyMatch(c -> "BENEFICIARIO".equalsIgnoreCase(c.getParteTransaccion())));
+        context.setDocumentoEnLista(coincidencias.stream().anyMatch(c -> "DOCUMENTO".equalsIgnoreCase(c.getCampoEvaluado())));
+        context.setCuentaEnLista(coincidencias.stream().anyMatch(c -> "CUENTA".equalsIgnoreCase(c.getCampoEvaluado())));
+        context.setPaisOrigenAltoRiesgo(coincidencias.stream().anyMatch(c -> "ORIGEN".equalsIgnoreCase(c.getParteTransaccion()) && isHighRiskCountry(c)));
+        context.setPaisDestinoAltoRiesgo(coincidencias.stream().anyMatch(c -> "DESTINO".equalsIgnoreCase(c.getParteTransaccion()) && isHighRiskCountry(c)));
+        context.setPaisOrigenMonitoreado(coincidencias.stream().anyMatch(c -> "ORIGEN".equalsIgnoreCase(c.getParteTransaccion()) && isMonitoredCountry(c)));
+        context.setPaisDestinoMonitoreado(coincidencias.stream().anyMatch(c -> "DESTINO".equalsIgnoreCase(c.getParteTransaccion()) && isMonitoredCountry(c)));
+
+        for (CoincidenciaListaFact c : coincidencias) {
+            ListaFact fact = new ListaFact();
+            fact.setNombreLista(c.getListaCodigo());
+            fact.setTipoLista(c.getCategoria());
+            fact.setFuente(c.getFuenteCodigo());
+            fact.setNombreCompleto(c.getNombreSujeto());
+            fact.setDocumentoIdentidad(c.getValorEvaluado());
+            fact.setScoreConfianza(c.getScoreMatch());
+            if (isCritical(c)) {
+                context.getListasNegras().add(fact);
+            } else if (isLowRisk(c)) {
+                context.getListasBlancas().add(fact);
+            } else {
+                context.getListasGrises().add(fact);
+            }
+        }
+    }
+
+    private boolean isHighRiskCountry(CoincidenciaListaFact c) {
+        return "PAIS_RIESGO".equalsIgnoreCase(c.getCategoria()) && isCritical(c);
+    }
+
+    private boolean isMonitoredCountry(CoincidenciaListaFact c) {
+        return "PAIS_RIESGO".equalsIgnoreCase(c.getCategoria()) && !isCritical(c);
+    }
+
+    private boolean isCritical(CoincidenciaListaFact c) {
+        return c.getSeveridad() != null && (c.getSeveridad().equalsIgnoreCase("CRITICO")
+                || c.getSeveridad().equalsIgnoreCase("CRÍTICO")
+                || c.getSeveridad().equalsIgnoreCase("Critico")
+                || c.getSeveridad().equalsIgnoreCase("Crítico"));
+    }
+
+    private boolean isLowRisk(CoincidenciaListaFact c) {
+        return c.getSeveridad() != null && c.getSeveridad().equalsIgnoreCase("Baja");
     }
 
     private void cargarListas(RiskContext context) {
@@ -147,7 +201,7 @@ public class RiskContextBuilder {
         List<ClienteObservado> observados = clienteObservadoRepository.findAll();
         List<ObservadoFact> facts = new ArrayList<>();
         for (ClienteObservado obs : observados) {
-            if (obs.getPersona() != null && documento.equals(obs.getPersona().getId().toString())) {
+            if (obs.getPersona() != null && documento != null && documento.equals(obs.getPersona().getId().toString())) {
                 ObservadoFact fact = new ObservadoFact();
                 fact.setClienteId(obs.getPersona().getId());
                 fact.setNombreCompleto(obs.getPersona().getNombreCompleto());
@@ -229,10 +283,15 @@ public class RiskContextBuilder {
         fact.setTransactionUuid(t.getTransactionUuid() != null ? t.getTransactionUuid().toString() : null);
         fact.setCodigo(t.getCodigo());
         fact.setIdentificadorDocumento(t.getIdentificadorDocumento());
+        fact.setCuentaOrigen(t.getCuentaOrigen());
+        fact.setCuentaDestino(t.getCuentaDestino());
         fact.setMonto(t.getMonto());
         fact.setMonedaCodigo(t.getMoneda());
         fact.setCanalCodigo(t.getCanal());
         fact.setTipoTransaccion(t.getTipoTransaccion());
+        fact.setInfraestructuraPago(t.getCanal());
+        fact.setModuloSipap(t.getCanal() != null && t.getCanal().toUpperCase().contains("SPI") ? "SPI" : null);
+        fact.setIpOrigen(t.getIpOrigen());
         fact.setPaisOrigenCodigo(t.getPaisOrigen());
         fact.setFechaTransaccion(t.getFechaTransaccion());
         if (t.getPaisOrigenRef() != null) {

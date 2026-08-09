@@ -11,8 +11,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -33,11 +34,11 @@ public class DisponibilidadService {
     }
 
     @Transactional(readOnly = true)
-    public List<DisponibilidadUsuario> listarPorUsuario(Long usuarioId) {
+    public List<DisponibilidadUsuario> listarPorUsuario(UUID usuarioId) {
         return disponibilidadRepository.findByUsuarioIdOrderByFechaInicioDesc(usuarioId);
     }
 
-    public DisponibilidadUsuario crear(Long usuarioId, DisponibilidadRequest request) {
+    public DisponibilidadUsuario crear(UUID usuarioId, DisponibilidadRequest request) {
         log.info("[AVAILABILITY] Creando disponibilidad usuario ID: {} - Tipo: {}", usuarioId, request.tipoEstado());
         Usuario usuario = usuarioService.buscarPorId(usuarioId);
         DisponibilidadUsuario disponibilidad = DisponibilidadUsuario.builder()
@@ -50,7 +51,7 @@ public class DisponibilidadService {
                 .build();
         DisponibilidadUsuario creada = disponibilidadRepository.save(disponibilidad);
 
-        if (!creada.getEsProgramado() && creada.getFechaInicio().isBefore(LocalDateTime.now().plusMinutes(1))) {
+        if (!creada.getEsProgramado() && creada.getFechaInicio().isBefore(OffsetDateTime.now().plusMinutes(1))) {
             perfilService.cambiarEstado(usuarioId, request.tipoEstado(), request.motivo());
         }
 
@@ -58,7 +59,7 @@ public class DisponibilidadService {
         return creada;
     }
 
-    public DisponibilidadUsuario actualizar(Long id, Long usuarioId, DisponibilidadRequest request) {
+    public DisponibilidadUsuario actualizar(Long id, UUID usuarioId, DisponibilidadRequest request) {
         log.info("[AVAILABILITY] Actualizando disponibilidad ID: {}", id);
         DisponibilidadUsuario disponibilidad = disponibilidadRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Disponibilidad", "id", id));
@@ -72,7 +73,7 @@ public class DisponibilidadService {
         return disponibilidadRepository.save(disponibilidad);
     }
 
-    public void cancelar(Long id, Long usuarioId) {
+    public void cancelar(Long id, UUID usuarioId) {
         log.info("[AVAILABILITY] Cancelando disponibilidad ID: {}", id);
         DisponibilidadUsuario disponibilidad = disponibilidadRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Disponibilidad", "id", id));
@@ -83,7 +84,7 @@ public class DisponibilidadService {
         disponibilidadRepository.save(disponibilidad);
     }
 
-    public boolean estaDisponible(Long usuarioId) {
+    public boolean estaDisponible(UUID usuarioId) {
         List<String> estadosNoDisponibles = List.of(
                 "VACACIONES", "ALMUERZO", "EN_REUNION", "FUERA_OFICINA", "NO_DISPONIBLE");
         return !disponibilidadRepository.existsByUsuarioIdAndActivoTrueAndTipoEstadoIn(
@@ -92,26 +93,26 @@ public class DisponibilidadService {
 
     public List<DisponibilidadUsuario> findProgramadasRecientes() {
         return disponibilidadRepository.findProgramadasRecientes(
-                LocalDateTime.now(), LocalDateTime.now().minusMinutes(2));
+                OffsetDateTime.now(), OffsetDateTime.now().minusMinutes(2));
     }
 
     public void procesarProgramacionesPendientes() {
         List<DisponibilidadUsuario> programadas = disponibilidadRepository
-                .findProgramadasRecientes(LocalDateTime.now(), LocalDateTime.now().minusMinutes(2));
+                .findProgramadasRecientes(OffsetDateTime.now(), OffsetDateTime.now().minusMinutes(2));
         for (DisponibilidadUsuario disp : programadas) {
-            Long usuarioId = disp.getUsuario().getId();
+            UUID usuarioId = disp.getUsuario().getId();
             perfilService.cambiarEstado(usuarioId, disp.getTipoEstado(), disp.getMotivo());
             log.info("[AVAILABILITY] Estado programado aplicado: {} -> usuario {}", disp.getTipoEstado(), usuarioId);
         }
 
         List<DisponibilidadUsuario> expiradas = disponibilidadRepository.findAll().stream()
                 .filter(d -> d.getActivo() && d.getEsProgramado()
-                        && d.getFechaFin() != null && d.getFechaFin().isBefore(LocalDateTime.now()))
+                        && d.getFechaFin() != null && d.getFechaFin().isBefore(OffsetDateTime.now()))
                 .toList();
         for (DisponibilidadUsuario disp : expiradas) {
             disp.setActivo(false);
             disponibilidadRepository.save(disp);
-            Long usuarioId = disp.getUsuario().getId();
+            UUID usuarioId = disp.getUsuario().getId();
             perfilService.cambiarEstado(usuarioId, "DISPONIBLE", null);
             log.info("[AVAILABILITY] Estado programado expirado: usuario {} restaurado a DISPONIBLE", usuarioId);
         }

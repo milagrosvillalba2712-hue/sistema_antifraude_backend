@@ -12,7 +12,7 @@ import java.time.LocalDate;
 @EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "cliente_observado")
-public class ClienteObservado extends BaseEntity {
+public class ClienteObservado extends TenantAwareEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "persona_id", nullable = false)

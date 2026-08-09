@@ -1,7 +1,7 @@
 package com.antifraude.dto;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 public record EjecucionReglaResponse(
         Long id,
@@ -15,6 +15,6 @@ public record EjecucionReglaResponse(
         BigDecimal scoreAportado,
         String accionesGeneradas,
         Long tiempoEjecucionMs,
-        LocalDateTime fechaHoraEjecucion
+        OffsetDateTime fechaHoraEjecucion
 ) {
 }

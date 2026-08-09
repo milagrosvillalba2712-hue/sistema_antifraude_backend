@@ -1,15 +1,16 @@
 package com.antifraude.dto;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 
 public record HistorialAsignacionResponse(
         Long id,
         Long alertaId,
-        Long usuarioOrigenId,
+        UUID usuarioOrigenId,
         String usuarioOrigenNombre,
-        Long usuarioDestinoId,
+        UUID usuarioDestinoId,
         String usuarioDestinoNombre,
-        LocalDateTime fecha,
+        OffsetDateTime fecha,
         String motivo,
         String tipo) {
 }

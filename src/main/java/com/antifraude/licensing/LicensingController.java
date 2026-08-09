@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/licensing")
@@ -58,7 +59,7 @@ public class LicensingController {
     }
 
     @GetMapping("/suscripciones")
-    public ResponseEntity<List<Map<String, Object>>> suscripciones(@RequestParam(required = false) Long empresaId) {
+    public ResponseEntity<List<Map<String, Object>>> suscripciones(@RequestParam(required = false) UUID empresaId) {
         List<Suscripcion> rows = empresaId != null
                 ? suscripcionRepository.findByEmpresaId(empresaId)
                 : suscripcionRepository.findAll();
@@ -80,7 +81,7 @@ public class LicensingController {
     }
 
     @GetMapping("/pagos")
-    public ResponseEntity<List<Map<String, Object>>> pagos(@RequestParam(required = false) Long empresaId) {
+    public ResponseEntity<List<Map<String, Object>>> pagos(@RequestParam(required = false) UUID empresaId) {
         List<Pago> rows = empresaId != null ? pagoRepository.findByEmpresaId(empresaId) : pagoRepository.findAll();
         return ResponseEntity.ok(rows.stream().map(p -> mapOf(
                 "id", p.getId(), "empresaId", p.getEmpresa().getId(), "empresa", p.getEmpresa().getNombre(),
@@ -90,7 +91,7 @@ public class LicensingController {
     }
 
     @GetMapping("/uso")
-    public ResponseEntity<List<Map<String, Object>>> uso(@RequestParam(required = false) Long empresaId) {
+    public ResponseEntity<List<Map<String, Object>>> uso(@RequestParam(required = false) UUID empresaId) {
         List<UsoSuscripcion> rows = empresaId != null
                 ? usoSuscripcionRepository.findByEmpresaIdOrderByAnioDescMesDesc(empresaId)
                 : usoSuscripcionRepository.findAll();

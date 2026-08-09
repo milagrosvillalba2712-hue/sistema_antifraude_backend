@@ -17,4 +17,8 @@ public class TipoDocumento extends BaseEntity {
 
     @Column(nullable = false, length = 40)
     private String nombre;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pais_relacion_id")
+    private Pais paisRelacion;
 }

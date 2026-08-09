@@ -25,11 +25,11 @@ public class KycController {
     @PostMapping("/consultar")
     public ResponseEntity<KycResponse> consultar(@Valid @RequestBody KycRequest request,
                                                   Authentication auth, HttpServletRequest httpRequest) {
-        log.info("[KYC] POST /api/kyc/consultar - Documento: {} - Usuario: {} - IP: {}",
-                request.identificadorDocumento(), auth.getName(), httpRequest.getRemoteAddr());
-        KycResponse response = kycService.consultar(request, 0L);
-        log.info("[KYC] Consulta completada - Documento: {} - Resultado: {}",
-                request.identificadorDocumento(), response.resultado());
+        log.info("[KYC] Consulta externa solicitada - Tipo: {} - Usuario: {}",
+                request.tipoConsulta(), auth.getName());
+        KycResponse response = kycService.consultar(request, null);
+        log.info("[KYC] Consulta completada - Tipo: {} - Resultado: {}",
+                request.tipoConsulta(), response.resultado());
         return ResponseEntity.ok(response);
     }
 }

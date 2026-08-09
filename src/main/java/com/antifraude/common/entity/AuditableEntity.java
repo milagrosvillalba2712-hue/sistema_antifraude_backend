@@ -1,15 +1,14 @@
 package com.antifraude.common.entity;
 
+import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Data
 @NoArgsConstructor
@@ -17,19 +16,19 @@ import java.time.LocalDateTime;
 @EntityListeners(AuditingEntityListener.class)
 public abstract class AuditableEntity {
 
-    @CreatedBy
-    @Column(name = "usuario_creacion", updatable = false, length = 100)
-    private String usuarioCreacion;
-
     @CreatedDate
     @Column(name = "fecha_hora_creacion", updatable = false)
-    private LocalDateTime fechaHoraCreacion;
-
-    @LastModifiedBy
-    @Column(name = "usuario_modificacion", length = 100)
-    private String usuarioModificacion;
+    private OffsetDateTime fechaHoraCreacion;
 
     @LastModifiedDate
     @Column(name = "fecha_hora_modificacion")
-    private LocalDateTime fechaHoraModificacion;
+    private OffsetDateTime fechaHoraModificacion;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_creacion_id", updatable = false)
+    private Usuario usuarioCreacion;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_modificacion_id")
+    private Usuario usuarioModificacion;
 }

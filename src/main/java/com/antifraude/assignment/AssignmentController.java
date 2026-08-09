@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/assignment")
@@ -47,8 +48,8 @@ public class AssignmentController {
     }
 
     @PostMapping("/rebalance")
-    public ResponseEntity<?> rebalancear(@RequestBody(required = false) Map<String, Long> body) {
-        Long usuarioId = body != null ? body.get("usuarioId") : null;
+    public ResponseEntity<?> rebalancear(@RequestBody(required = false) Map<String, String> body) {
+        UUID usuarioId = body != null && body.get("usuarioId") != null ? UUID.fromString(body.get("usuarioId")) : null;
         log.info("[ASSIGNMENT] POST /api/assignment/rebalance - Usuario ID: {}", usuarioId);
         if (usuarioId == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "usuarioId es requerido para rebalancear"));

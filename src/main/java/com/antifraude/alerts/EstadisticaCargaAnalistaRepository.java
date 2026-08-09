@@ -8,11 +8,12 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 public interface EstadisticaCargaAnalistaRepository extends JpaRepository<EstadisticaCargaAnalista, Long> {
 
-    Optional<EstadisticaCargaAnalista> findByUsuarioIdAndFecha(Long usuarioId, LocalDate fecha);
+    Optional<EstadisticaCargaAnalista> findByUsuarioIdAndFecha(UUID usuarioId, LocalDate fecha);
 
     List<EstadisticaCargaAnalista> findByFecha(LocalDate fecha);
 

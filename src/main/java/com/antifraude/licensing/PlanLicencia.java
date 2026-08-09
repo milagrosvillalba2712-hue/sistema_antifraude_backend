@@ -3,6 +3,8 @@ package com.antifraude.licensing;
 import com.antifraude.common.entity.AuditableEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 
@@ -40,7 +42,8 @@ public class PlanLicencia extends AuditableEntity {
     @Column(name = "limite_reportes_mensuales")
     private Integer limiteReportesMensuales;
 
-    @Column(name = "modulos_incluidos_json", columnDefinition = "TEXT")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "modulos_incluidos_json", columnDefinition = "jsonb")
     private String modulosIncluidosJson;
 
     @Column(name = "precio_anual", precision = 18, scale = 2)

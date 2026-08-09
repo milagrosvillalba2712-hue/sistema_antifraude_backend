@@ -6,6 +6,7 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalTime;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -14,16 +15,24 @@ import java.time.LocalTime;
 @Table(name = "horario_riesgo")
 public class HorarioRiesgo extends BaseEntity {
 
+    @Column(name = "empresa_id", nullable = false)
+    private UUID empresaId;
+
+    @Column(nullable = false, length = 60)
+    private String codigo;
+
     @Column(nullable = false, length = 80)
     private String nombre;
 
-    @Column(name = "hora_desde", nullable = false)
+    @Column(name = "hora_inicio", nullable = false)
     private LocalTime horaDesde;
 
-    @Column(name = "hora_hasta", nullable = false)
+    @Column(name = "hora_fin", nullable = false)
     private LocalTime horaHasta;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "nivel_riesgo_id", nullable = false)
+    @Column(nullable = false, length = 30)
+    private String severidad = "MEDIA";
+
+    @Transient
     private NivelRiesgo nivelRiesgo;
 }

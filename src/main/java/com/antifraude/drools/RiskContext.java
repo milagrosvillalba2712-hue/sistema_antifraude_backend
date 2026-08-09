@@ -26,6 +26,7 @@ public class RiskContext {
     private List<ListaFact> listasNegras = new ArrayList<>();
     private List<ListaFact> listasGrises = new ArrayList<>();
     private List<ListaFact> listasBlancas = new ArrayList<>();
+    private List<CoincidenciaListaFact> coincidenciasListas = new ArrayList<>();
     private List<PeptFact> registrosPEP = new ArrayList<>();
     private List<ObservadoFact> registrosObservados = new ArrayList<>();
     private List<HorarioRiesgoFact> horariosRiesgo = new ArrayList<>();
@@ -33,5 +34,13 @@ public class RiskContext {
     private List<ControlImporteFact> controlesImporte = new ArrayList<>();
     private List<ControlFrecuenciaFact> controlesFrecuencia = new ArrayList<>();
     private LocalDateTime fechaHoraActual;
+    private boolean remitenteEnLista;
+    private boolean beneficiarioEnLista;
+    private boolean documentoEnLista;
+    private boolean cuentaEnLista;
+    private boolean paisOrigenAltoRiesgo;
+    private boolean paisDestinoAltoRiesgo;
+    private boolean paisOrigenMonitoreado;
+    private boolean paisDestinoMonitoreado;
 
 }

@@ -1,0 +1,25 @@
+{
+  "profile": "demo",
+  "syntheticOnly": true,
+  "expectedExact": {
+    "empresa.REGULA_DEMO": 1,
+    "usuarios.@demo.regula.local": 2,
+    "persona.demo": 7,
+    "transacciones.TX-DEMO": 7,
+    "alertas_antifraude.ALT-TX-DEMO": 6,
+    "caso.CAS-ALT-TX-DEMO": 6,
+    "resolucion_alerta.demo": 6,
+    "reportes_ros.ROS-DEMO-001": 1
+  },
+  "expectedEmptyUntilRuntime": [
+    "instalacion_local",
+    "licencia_local",
+    "consumo_licencia_local",
+    "evento_licencia_local",
+    "consultas_externas"
+  ],
+  "credentials": {
+    "scope": "academic-profile-only",
+    "productionAllowed": false
+  }
+}

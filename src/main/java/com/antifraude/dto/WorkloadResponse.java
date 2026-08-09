@@ -1,7 +1,9 @@
 package com.antifraude.dto;
 
+import java.util.UUID;
+
 public record WorkloadResponse(
-        Long usuarioId,
+        UUID usuarioId,
         String nombre,
         Integer alertasAsignadas,
         Integer alertasPendientes,

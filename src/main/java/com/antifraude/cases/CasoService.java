@@ -9,8 +9,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -27,7 +28,7 @@ public class CasoService {
     public Caso crear(Caso caso) {
         log.info("[CASES] Creando caso: {} - Titulo: {}", caso.getCodigo(), caso.getTitulo());
         caso.setEstado(EstadoCaso.NUEVO);
-        caso.setFechaApertura(LocalDateTime.now());
+        caso.setFechaApertura(OffsetDateTime.now());
         Caso creada = casoRepository.save(caso);
         log.info("[CASES] Caso creado - ID: {} - Codigo: {}", creada.getId(), creada.getCodigo());
         return creada;
@@ -69,14 +70,14 @@ public class CasoService {
         Caso caso = buscarPorId(id);
         caso.setEstado(nuevoEstado);
         if (nuevoEstado == EstadoCaso.CERRADO || nuevoEstado == EstadoCaso.RESUELTO) {
-            caso.setFechaCierre(LocalDateTime.now());
+            caso.setFechaCierre(OffsetDateTime.now());
         }
         Caso guardada = casoRepository.save(caso);
         log.info("[CASES] Caso ID: {} - Estado: {}", id, guardada.getEstado());
         return guardada;
     }
 
-    public Caso asignarAnalista(Long casoId, Long analistaId) {
+    public Caso asignarAnalista(Long casoId, UUID analistaId) {
         log.info("[CASES] Asignando caso ID: {} a analista ID: {}", casoId, analistaId);
         Caso caso = buscarPorId(casoId);
         com.antifraude.users.Usuario analista = new com.antifraude.users.Usuario();

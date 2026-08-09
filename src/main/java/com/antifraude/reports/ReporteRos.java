@@ -6,7 +6,7 @@ import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "reportes_ros")
@@ -37,5 +37,5 @@ public class ReporteRos {
 
     @Column(name = "fecha_generacion", updatable = false)
     @Builder.Default
-    private LocalDateTime fechaGeneracion = LocalDateTime.now();
+    private OffsetDateTime fechaGeneracion = OffsetDateTime.now();
 }

@@ -1,5 +1,8 @@
 # Build artifacts
 target/
+.tools/
+certificates/*.p12
+certificates/*.key
 *.class
 *.jar
 *.war
@@ -8,6 +11,7 @@ target/
 .env
 .env.*
 !.env.example
+!.env.canonical.example
 
 # IDE files
 .vscode/
@@ -22,6 +26,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local database recovery artifacts
+backups/
 
 # Session files
 session-*.md
