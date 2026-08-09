@@ -201,7 +201,7 @@ public class RiskContextBuilder {
         List<ClienteObservado> observados = clienteObservadoRepository.findAll();
         List<ObservadoFact> facts = new ArrayList<>();
         for (ClienteObservado obs : observados) {
-            if (obs.getPersona() != null && documento.equals(obs.getPersona().getId().toString())) {
+            if (obs.getPersona() != null && documento != null && documento.equals(obs.getPersona().getId().toString())) {
                 ObservadoFact fact = new ObservadoFact();
                 fact.setClienteId(obs.getPersona().getId());
                 fact.setNombreCompleto(obs.getPersona().getNombreCompleto());

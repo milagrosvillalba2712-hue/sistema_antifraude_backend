@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Data
@@ -37,7 +37,7 @@ public class HistorialEstadoCaso extends BaseEntity {
     private Usuario usuario;
 
     @Column(name = "fecha_cambio", nullable = false)
-    private LocalDateTime fechaHora;
+    private OffsetDateTime fechaHora;
 
     @PrePersist
     void prePersist() {
@@ -45,7 +45,7 @@ public class HistorialEstadoCaso extends BaseEntity {
             empresaId = caso.getEmpresaId();
         }
         if (fechaHora == null) {
-            fechaHora = LocalDateTime.now();
+            fechaHora = OffsetDateTime.now();
         }
     }
 }

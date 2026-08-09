@@ -7,7 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.antifraude.security.tenant.TenantContext;
 import com.antifraude.security.tenant.RlsContextService;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -71,7 +71,7 @@ public class AuditoriaService {
         return auditoriaRepository.findByUsuarioIdOrderByFechaEventoDesc(usuarioId);
     }
 
-    public List<Auditoria> buscarPorRangoFechas(LocalDateTime inicio, LocalDateTime fin) {
+    public List<Auditoria> buscarPorRangoFechas(OffsetDateTime inicio, OffsetDateTime fin) {
         log.debug("[AUDIT] Buscando eventos entre {} y {}", inicio, fin);
         return auditoriaRepository.findByFechaEventoBetween(inicio, fin);
     }

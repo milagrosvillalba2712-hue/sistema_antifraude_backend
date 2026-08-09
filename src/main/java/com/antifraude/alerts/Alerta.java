@@ -6,9 +6,11 @@ import com.antifraude.users.Usuario;
 import com.antifraude.licensing.Empresa;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -31,7 +33,7 @@ public class Alerta {
     private Transaccion transaccion;
 
     @Column(name = "fecha_transaccion", insertable = false, updatable = false)
-    private LocalDateTime fechaTransaccion;
+    private OffsetDateTime fechaTransaccion;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "empresa_id")
@@ -61,6 +63,7 @@ public class Alerta {
     @Column(columnDefinition = "TEXT")
     private String motivo;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "reglas_disparadas_json", columnDefinition = "jsonb")
     private String reglasDisparadasJson;
 
@@ -70,16 +73,16 @@ public class Alerta {
 
     @Column(name = "fecha_hora_creacion", updatable = false)
     @Builder.Default
-    private LocalDateTime fechaGeneracion = LocalDateTime.now();
+    private OffsetDateTime fechaGeneracion = OffsetDateTime.now();
 
     @Column(name = "fecha_hora_modificacion")
-    private LocalDateTime fechaHoraModificacion;
+    private OffsetDateTime fechaHoraModificacion;
 
     @Column(name = "fecha_cierre")
-    private LocalDateTime fechaResolucion;
+    private OffsetDateTime fechaResolucion;
 
     @Column(name = "fecha_asignacion")
-    private LocalDateTime fechaAsignacion;
+    private OffsetDateTime fechaAsignacion;
 
     @Column(name = "resultado", length = 40)
     private String resultado;

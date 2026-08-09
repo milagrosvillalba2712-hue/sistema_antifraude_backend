@@ -5,7 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,12 +21,12 @@ public interface DisponibilidadRepository extends JpaRepository<DisponibilidadUs
     @Query("SELECT d FROM DisponibilidadUsuario d WHERE d.usuario.id = :usuarioId " +
             "AND d.estado <> 'CANCELADA' AND (d.fechaInicio IS NULL OR d.fechaInicio <= :ahora) " +
             "AND (d.fechaFin IS NULL OR d.fechaFin >= :ahora)")
-    List<DisponibilidadUsuario> findActivasAhora(@Param("usuarioId") UUID usuarioId, @Param("ahora") LocalDateTime ahora);
+    List<DisponibilidadUsuario> findActivasAhora(@Param("usuarioId") UUID usuarioId, @Param("ahora") OffsetDateTime ahora);
 
     @Query("SELECT count(d) > 0 FROM DisponibilidadUsuario d WHERE d.usuario.id = :usuarioId AND d.estado IN :tipoEstados AND d.estado <> 'CANCELADA'")
     boolean existsByUsuarioIdAndActivoTrueAndTipoEstadoIn(@Param("usuarioId") UUID usuarioId, @Param("tipoEstados") List<String> tipoEstados);
 
     @Query("SELECT d FROM DisponibilidadUsuario d WHERE d.esProgramado = true " +
             "AND d.fechaInicio BETWEEN :desde AND :ahora ORDER BY d.fechaInicio DESC")
-    List<DisponibilidadUsuario> findProgramadasRecientes(@Param("ahora") LocalDateTime ahora, @Param("desde") LocalDateTime desde);
+    List<DisponibilidadUsuario> findProgramadasRecientes(@Param("ahora") OffsetDateTime ahora, @Param("desde") OffsetDateTime desde);
 }

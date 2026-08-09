@@ -9,7 +9,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "reglas_riesgo")
@@ -87,13 +87,13 @@ public class ReglaRiesgo {
 
     @Column(name = "fecha_creacion", updatable = false)
     @Builder.Default
-    private LocalDateTime fechaCreacion = LocalDateTime.now();
+    private OffsetDateTime fechaCreacion = OffsetDateTime.now();
 
     @Column(name = "fecha_modificacion")
-    private LocalDateTime fechaModificacion;
+    private OffsetDateTime fechaModificacion;
 
     @PreUpdate
     protected void onUpdate() {
-        fechaModificacion = LocalDateTime.now();
+        fechaModificacion = OffsetDateTime.now();
     }
 }

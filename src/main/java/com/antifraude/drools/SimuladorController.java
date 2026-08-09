@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -101,7 +101,7 @@ public class SimuladorController {
                 .paisOrigenRef(paisOrigen)
                 .paisDestinoRef(paisDestino)
                 .producto(producto)
-                .fechaTransaccion(request.fechaHora() != null ? request.fechaHora() : LocalDateTime.now())
+                .fechaTransaccion(request.fechaHora() != null ? request.fechaHora() : OffsetDateTime.now())
                 .estado("SIMULACION")
                 .estadoEvaluacion(EstadoEvaluacion.PENDIENTE)
                 .build();

@@ -6,7 +6,7 @@ import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -37,7 +37,7 @@ public class ClienteSnapshotAlerta {
 
     @Column(name = "fecha_consulta")
     @Builder.Default
-    private LocalDateTime fechaConsulta = LocalDateTime.now();
+    private OffsetDateTime fechaConsulta = OffsetDateTime.now();
 
     @PrePersist
     protected void rellenarTenant() {

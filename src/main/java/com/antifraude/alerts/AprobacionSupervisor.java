@@ -6,7 +6,7 @@ import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -55,10 +55,10 @@ public class AprobacionSupervisor {
 
     @Column(name = "fecha_hora_creacion", nullable = false, insertable = false, updatable = false)
     @Builder.Default
-    private LocalDateTime fechaSolicitud = LocalDateTime.now();
+    private OffsetDateTime fechaSolicitud = OffsetDateTime.now();
 
     @Column(name = "fecha_decision")
-    private LocalDateTime fechaAprobacion;
+    private OffsetDateTime fechaAprobacion;
 
     @PrePersist
     protected void rellenarTenant() {

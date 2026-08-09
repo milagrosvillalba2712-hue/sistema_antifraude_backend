@@ -1,6 +1,6 @@
 package com.antifraude.dto;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record AlertaResponse(
@@ -17,7 +17,7 @@ public record AlertaResponse(
         String moneda,
         String canal,
         String paisOrigen,
-        LocalDateTime fechaTransaccion,
+        OffsetDateTime fechaTransaccion,
         String nivelRiesgo,
         java.math.BigDecimal score,
         String severidad,
@@ -26,6 +26,6 @@ public record AlertaResponse(
         String observacion,
         UUID asignadoA,
         String asignadoNombre,
-        LocalDateTime fechaGeneracion,
-        LocalDateTime fechaResolucion) {
+        OffsetDateTime fechaGeneracion,
+        OffsetDateTime fechaResolucion) {
 }

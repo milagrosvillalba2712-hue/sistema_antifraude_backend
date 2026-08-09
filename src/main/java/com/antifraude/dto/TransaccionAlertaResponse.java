@@ -1,7 +1,7 @@
 package com.antifraude.dto;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.Map;
 
 public record TransaccionAlertaResponse(
@@ -17,7 +17,7 @@ public record TransaccionAlertaResponse(
         String tipoTransaccion,
         String ipOrigen,
         String paisOrigen,
-        LocalDateTime fechaTransaccion,
+        OffsetDateTime fechaTransaccion,
         BigDecimal scoreRiesgo,
         String nivelRiesgo,
         String estadoEvaluacion,

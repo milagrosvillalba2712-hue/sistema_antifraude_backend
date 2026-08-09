@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -50,7 +50,7 @@ public class PerfilService {
         PerfilUsuario perfil = obtenerPorUsuarioId(usuarioId);
         perfil.setEstado(estado);
         perfil.setEstadoPersonalizado(estadoPersonalizado);
-        perfil.setUltimaActualizacionEstado(LocalDateTime.now());
+        perfil.setUltimaActualizacionEstado(OffsetDateTime.now());
         return perfilRepository.save(perfil);
     }
 
@@ -68,7 +68,7 @@ public class PerfilService {
                 .usuario(usuario)
                 .nombreVisible(usuario.getNombre())
                 .estado("DISPONIBLE")
-                .ultimaActualizacionEstado(LocalDateTime.now())
+                .ultimaActualizacionEstado(OffsetDateTime.now())
                 .build();
         return perfilRepository.save(perfil);
     }

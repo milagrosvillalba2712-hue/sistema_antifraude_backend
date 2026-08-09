@@ -7,7 +7,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -40,7 +40,7 @@ public class CoincidenciaListaAlerta {
     private Transaccion transaccion;
 
     @Column(name = "fecha_transaccion", insertable = false, updatable = false)
-    private LocalDateTime fechaTransaccion;
+    private OffsetDateTime fechaTransaccion;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sujeto_riesgo_id")
@@ -71,7 +71,7 @@ public class CoincidenciaListaAlerta {
 
     @Column(name = "fecha_hora_creacion", updatable = false, insertable = false)
     @Builder.Default
-    private LocalDateTime fechaRegistro = LocalDateTime.now();
+    private OffsetDateTime fechaRegistro = OffsetDateTime.now();
 
     @PrePersist
     protected void rellenarTenant() {

@@ -13,7 +13,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -36,7 +36,7 @@ public class Transaccion {
 
     @Id
     @Column(name = "fecha_transaccion", nullable = false)
-    private LocalDateTime fechaTransaccion;
+    private OffsetDateTime fechaTransaccion;
 
     @Column(name = "transaction_uuid", nullable = false)
     private UUID transactionUuid;
@@ -49,10 +49,10 @@ public class Transaccion {
     private String codigo;
 
     @Column(name = "fecha_procesamiento")
-    private LocalDateTime fechaProcesamiento;
+    private OffsetDateTime fechaProcesamiento;
 
     @Column(name = "fecha_liquidacion")
-    private LocalDateTime fechaLiquidacion;
+    private OffsetDateTime fechaLiquidacion;
 
     @Column(length = 30)
     private String estado;
@@ -162,10 +162,12 @@ public class Transaccion {
     private String numeroComprobante;
 
     @Column(name = "requiere_declaracion_fondos")
-    private Boolean requiereDeclaracionFondos;
+    @Builder.Default
+    private Boolean requiereDeclaracionFondos = false;
 
     @Column(name = "depositante_tercero")
-    private Boolean depositanteTercero;
+    @Builder.Default
+    private Boolean depositanteTercero = false;
 
     @Column(name = "terminal_id", length = 80)
     private String terminalId;

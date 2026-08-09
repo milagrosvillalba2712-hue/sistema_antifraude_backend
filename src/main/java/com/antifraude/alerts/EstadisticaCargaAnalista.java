@@ -6,7 +6,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -48,7 +48,7 @@ public class EstadisticaCargaAnalista {
     private BigDecimal tiempoPromedioMinutos;
 
     @Column(name = "fecha_hora_modificacion")
-    private LocalDateTime ultimaActualizacion;
+    private OffsetDateTime ultimaActualizacion;
 
     @Transient
     private Long tiempoPromedioResolucion;

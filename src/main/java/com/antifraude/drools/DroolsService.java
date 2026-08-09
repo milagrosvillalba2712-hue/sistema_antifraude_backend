@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -109,6 +109,7 @@ public class DroolsService {
             }
             EjecucionRegla ejecucion = EjecucionRegla.builder()
                     .regla(regla)
+                    .reglaCodigo(regla.getCodigo())
                     .transaccion(context.getTransaccion())
                     .scoreRegla(score)
                     .cumplida(cumplida)
@@ -116,7 +117,7 @@ public class DroolsService {
                     .resultadoEvaluacion(cumplida ? "CUMPLIO" : "NO_CUMPLIO")
                     .condicionEvaluada(regla.getCondicion())
                     .tiempoEjecucionMs(tiempoMs)
-                    .fechaEjecucion(LocalDateTime.now())
+                    .fechaEjecucion(OffsetDateTime.now())
                     .detalle(regla.getAccionesJson())
                     .build();
             ejecucionReglaRepository.save(ejecucion);

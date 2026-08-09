@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Data
@@ -46,10 +46,10 @@ public class Caso extends BaseEntity {
     private Usuario usuarioAnalista;
 
     @Column(name = "fecha_apertura", nullable = false)
-    private LocalDateTime fechaApertura;
+    private OffsetDateTime fechaApertura;
 
     @Column(name = "fecha_cierre")
-    private LocalDateTime fechaCierre;
+    private OffsetDateTime fechaCierre;
 
     @Column(length = 30)
     @Enumerated(EnumType.STRING)

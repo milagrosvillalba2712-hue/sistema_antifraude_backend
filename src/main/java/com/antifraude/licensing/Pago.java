@@ -6,7 +6,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "pago")
@@ -40,7 +40,7 @@ public class Pago extends AuditableEntity {
     private Moneda monedaRef;
 
     @Column(name = "fecha_pago")
-    private LocalDateTime fechaPago;
+    private OffsetDateTime fechaPago;
 
     @Column(name = "metodo_pago", length = 60)
     private String metodoPago;

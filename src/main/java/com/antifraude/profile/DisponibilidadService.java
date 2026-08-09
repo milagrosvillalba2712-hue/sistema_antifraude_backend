@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -51,7 +51,7 @@ public class DisponibilidadService {
                 .build();
         DisponibilidadUsuario creada = disponibilidadRepository.save(disponibilidad);
 
-        if (!creada.getEsProgramado() && creada.getFechaInicio().isBefore(LocalDateTime.now().plusMinutes(1))) {
+        if (!creada.getEsProgramado() && creada.getFechaInicio().isBefore(OffsetDateTime.now().plusMinutes(1))) {
             perfilService.cambiarEstado(usuarioId, request.tipoEstado(), request.motivo());
         }
 
@@ -93,12 +93,12 @@ public class DisponibilidadService {
 
     public List<DisponibilidadUsuario> findProgramadasRecientes() {
         return disponibilidadRepository.findProgramadasRecientes(
-                LocalDateTime.now(), LocalDateTime.now().minusMinutes(2));
+                OffsetDateTime.now(), OffsetDateTime.now().minusMinutes(2));
     }
 
     public void procesarProgramacionesPendientes() {
         List<DisponibilidadUsuario> programadas = disponibilidadRepository
-                .findProgramadasRecientes(LocalDateTime.now(), LocalDateTime.now().minusMinutes(2));
+                .findProgramadasRecientes(OffsetDateTime.now(), OffsetDateTime.now().minusMinutes(2));
         for (DisponibilidadUsuario disp : programadas) {
             UUID usuarioId = disp.getUsuario().getId();
             perfilService.cambiarEstado(usuarioId, disp.getTipoEstado(), disp.getMotivo());
@@ -107,7 +107,7 @@ public class DisponibilidadService {
 
         List<DisponibilidadUsuario> expiradas = disponibilidadRepository.findAll().stream()
                 .filter(d -> d.getActivo() && d.getEsProgramado()
-                        && d.getFechaFin() != null && d.getFechaFin().isBefore(LocalDateTime.now()))
+                        && d.getFechaFin() != null && d.getFechaFin().isBefore(OffsetDateTime.now()))
                 .toList();
         for (DisponibilidadUsuario disp : expiradas) {
             disp.setActivo(false);

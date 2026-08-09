@@ -4,7 +4,7 @@ import com.antifraude.licensing.Empresa;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "consultas_externas")
@@ -29,5 +29,5 @@ public class ConsultaExterna {
     @Column(name = "categoria_error", length = 60) private String categoriaError;
     @Column(name = "estado", nullable = false, length = 40) private String estado;
     @Column(name = "fecha_consulta", updatable = false)
-    @Builder.Default private LocalDateTime fechaConsulta = LocalDateTime.now();
+    @Builder.Default private OffsetDateTime fechaConsulta = OffsetDateTime.now();
 }

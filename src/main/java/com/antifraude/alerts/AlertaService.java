@@ -30,7 +30,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -186,7 +186,7 @@ public class AlertaService {
         String valorAnterior = alertaAuditJson(alerta);
         alerta.setAsignadoA(analista);
         alerta.setEstado("ASIGNADA");
-        alerta.setFechaAsignacion(LocalDateTime.now());
+        alerta.setFechaAsignacion(OffsetDateTime.now());
 
         HistorialAsignacion historial = HistorialAsignacion.builder()
                 .alerta(alerta)
@@ -228,7 +228,7 @@ public class AlertaService {
         }
         Usuario nuevoAnalista = usuarioRepository.findById(nuevoAnalistaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario", "id", nuevoAnalistaId));
-        List<DisponibilidadUsuario> estados = disponibilidadRepository.findActivasAhora(nuevoAnalistaId, LocalDateTime.now());
+        List<DisponibilidadUsuario> estados = disponibilidadRepository.findActivasAhora(nuevoAnalistaId, OffsetDateTime.now());
         String estadoDestino = estados.isEmpty() ? "DISPONIBLE" : estados.get(0).getTipoEstado();
         if (!List.of("DISPONIBLE", "CAPACITACION").contains(estadoDestino)) {
             throw new BusinessException("ANALISTA_NO_DISPONIBLE", "El analista destino no esta disponible");
@@ -246,7 +246,7 @@ public class AlertaService {
 
         alerta.setAsignadoA(nuevoAnalista);
         alerta.setEstado("ASIGNADA");
-        alerta.setFechaAsignacion(LocalDateTime.now());
+        alerta.setFechaAsignacion(OffsetDateTime.now());
 
         auditoriaService.registrar(origen.getId(),
                 alerta.getEmpresa() != null ? alerta.getEmpresa().getId() : null,
@@ -264,7 +264,7 @@ public class AlertaService {
         String valorAnterior = alertaAuditJson(alerta);
         alerta.setEstado("CERRADA");
         alerta.setObservacion(observacion);
-        alerta.setFechaResolucion(LocalDateTime.now());
+        alerta.setFechaResolucion(OffsetDateTime.now());
         if (alerta.getAsignadoA() != null) {
             auditoriaService.registrar(alerta.getAsignadoA().getId(),
                     alerta.getEmpresa() != null ? alerta.getEmpresa().getId() : null,
@@ -286,7 +286,7 @@ public class AlertaService {
     public List<AnalistaDisponibleResponse> listarAnalistasDisponibles() {
         List<Usuario> analistas = usuarioRepository.findActivosByRolCodigo("ANALISTA");
         return analistas.stream().map(usuario -> {
-            List<DisponibilidadUsuario> estados = disponibilidadRepository.findActivasAhora(usuario.getId(), LocalDateTime.now());
+            List<DisponibilidadUsuario> estados = disponibilidadRepository.findActivasAhora(usuario.getId(), OffsetDateTime.now());
             String estado = estados.isEmpty() ? "DISPONIBLE" : estados.get(0).getTipoEstado();
             boolean disponible = List.of("DISPONIBLE", "CAPACITACION").contains(estado);
             long activas = alertaRepository.countByAsignadoAIdAndEstadoIn(usuario.getId(), List.of("ASIGNADA", "EN_REVISION"));
@@ -447,7 +447,7 @@ public class AlertaService {
                 .resolucionAlerta(guardada)
                 .estado("PENDIENTE")
                 .observacion("Resolucion propuesta por " + usuario.getNombre())
-                .fechaSolicitud(LocalDateTime.now())
+                .fechaSolicitud(OffsetDateTime.now())
                 .build();
         aprobacionSupervisorRepository.save(aprobacion);
 
@@ -470,15 +470,15 @@ public class AlertaService {
                 .orElseThrow(() -> new BusinessException("RESOLUCION_REQUERIDA", "No existe resolucion propuesta"));
         String valorAnterior = alertaAuditJson(alerta);
         AprobacionSupervisor aprobacion = aprobacionSupervisorRepository.findFirstByAlertaIdOrderByFechaSolicitudDesc(alertaId)
-                .orElseGet(() -> AprobacionSupervisor.builder().alerta(alerta).resolucionAlerta(resolucion).fechaSolicitud(LocalDateTime.now()).build());
+                .orElseGet(() -> AprobacionSupervisor.builder().alerta(alerta).resolucionAlerta(resolucion).fechaSolicitud(OffsetDateTime.now()).build());
         aprobacion.setSupervisor(supervisor);
         aprobacion.setEstado("APROBADA");
         aprobacion.setObservacion(observacion);
-        aprobacion.setFechaAprobacion(LocalDateTime.now());
+        aprobacion.setFechaAprobacion(OffsetDateTime.now());
         aprobacionSupervisorRepository.save(aprobacion);
 
         alerta.setEstado("CERRADA");
-        alerta.setFechaResolucion(LocalDateTime.now());
+        alerta.setFechaResolucion(OffsetDateTime.now());
         alerta.setObservacion(resolucion.getConclusion());
         alertaRepository.save(alerta);
         auditoriaService.registrar(supervisor != null ? supervisor.getId() : null,
@@ -500,12 +500,12 @@ public class AlertaService {
                 .orElseThrow(() -> new BusinessException("RESOLUCION_REQUERIDA", "No existe resolucion propuesta"));
         String valorAnterior = alertaAuditJson(alerta);
         AprobacionSupervisor aprobacion = aprobacionSupervisorRepository.findFirstByAlertaIdOrderByFechaSolicitudDesc(alertaId)
-                .orElseGet(() -> AprobacionSupervisor.builder().alerta(alerta).resolucionAlerta(resolucion).fechaSolicitud(LocalDateTime.now()).build());
+                .orElseGet(() -> AprobacionSupervisor.builder().alerta(alerta).resolucionAlerta(resolucion).fechaSolicitud(OffsetDateTime.now()).build());
         aprobacion.setSupervisor(supervisor);
         aprobacion.setEstado("RECHAZADA");
         aprobacion.setMotivoRechazo(motivo);
         aprobacion.setFaltantes(faltantes);
-        aprobacion.setFechaAprobacion(LocalDateTime.now());
+        aprobacion.setFechaAprobacion(OffsetDateTime.now());
         aprobacionSupervisorRepository.save(aprobacion);
 
         alerta.setEstado("REEVALUACION");
@@ -526,7 +526,7 @@ public class AlertaService {
         Alerta alerta = buscarPorId(alertaId);
         String valorAnterior = alertaAuditJson(alerta);
         alerta.setEstado("CERRADA");
-        alerta.setFechaResolucion(LocalDateTime.now());
+        alerta.setFechaResolucion(OffsetDateTime.now());
         Alerta cerrada = alertaRepository.save(alerta);
         auditoriaService.registrar(alerta.getAsignadoA() != null ? alerta.getAsignadoA().getId() : null,
                 alerta.getEmpresa() != null ? alerta.getEmpresa().getId() : null,
@@ -569,7 +569,7 @@ public class AlertaService {
         return eventos;
     }
 
-    public record TimelineEvent(String tipo, String descripcion, LocalDateTime fecha, String usuario) {}
+    public record TimelineEvent(String tipo, String descripcion, OffsetDateTime fecha, String usuario) {}
 
     public AlertaResponse toAlertaResponse(Alerta a) {
         return new AlertaResponse(
@@ -892,7 +892,7 @@ public class AlertaService {
             }
             if (estado != null && !estado.isBlank()) predicates.add(cb.equal(root.get("estado"), estado));
             if (analistaId != null) predicates.add(cb.equal(asignado.get("id"), analistaId));
-            LocalDateTime[] rango = resolveDateRange(rangoFecha, desde, hasta);
+            OffsetDateTime[] rango = resolveDateRange(rangoFecha, desde, hasta);
             if (rango[0] != null) predicates.add(cb.greaterThanOrEqualTo(root.get("fechaGeneracion"), rango[0]));
             if (rango[1] != null) predicates.add(cb.lessThanOrEqualTo(root.get("fechaGeneracion"), rango[1]));
             return cb.and(predicates.toArray(new Predicate[0]));
@@ -909,10 +909,10 @@ public class AlertaService {
         };
     }
 
-    private LocalDateTime[] resolveDateRange(String rangoFecha, String desde, String hasta) {
-        LocalDateTime start = parseDate(desde);
-        LocalDateTime end = parseDate(hasta);
-        LocalDateTime now = LocalDateTime.now();
+    private OffsetDateTime[] resolveDateRange(String rangoFecha, String desde, String hasta) {
+        OffsetDateTime start = parseDate(desde);
+        OffsetDateTime end = parseDate(hasta);
+        OffsetDateTime now = OffsetDateTime.now();
         if ((start == null && end == null) && rangoFecha != null) {
             start = switch (rangoFecha) {
                 case "24h" -> now.minusHours(24);
@@ -921,13 +921,13 @@ public class AlertaService {
                 default -> null;
             };
         }
-        return new LocalDateTime[]{start, end};
+        return new OffsetDateTime[]{start, end};
     }
 
-    private LocalDateTime parseDate(String value) {
+    private OffsetDateTime parseDate(String value) {
         if (value == null || value.isBlank()) return null;
         try {
-            return LocalDateTime.parse(value);
+            return OffsetDateTime.parse(value);
         } catch (DateTimeParseException ex) {
             return null;
         }

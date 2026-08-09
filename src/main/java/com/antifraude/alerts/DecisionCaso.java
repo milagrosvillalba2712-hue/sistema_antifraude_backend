@@ -5,7 +5,7 @@ import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "decision_caso")
@@ -48,5 +48,5 @@ public class DecisionCaso {
 
     @Column(name = "fecha_decision")
     @Builder.Default
-    private LocalDateTime fechaDecision = LocalDateTime.now();
+    private OffsetDateTime fechaDecision = OffsetDateTime.now();
 }

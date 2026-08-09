@@ -4,7 +4,7 @@ import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "evidencia_alerta", indexes = {
@@ -61,7 +61,7 @@ public class EvidenciaAlerta {
 
     @Column(name = "fecha_carga", updatable = false)
     @Builder.Default
-    private LocalDateTime fechaCarga = LocalDateTime.now();
+    private OffsetDateTime fechaCarga = OffsetDateTime.now();
 
     @PrePersist
     void prePersist() {
@@ -69,7 +69,7 @@ public class EvidenciaAlerta {
             empresaId = alerta.getEmpresaId();
         }
         if (fechaCarga == null) {
-            fechaCarga = LocalDateTime.now();
+            fechaCarga = OffsetDateTime.now();
         }
     }
 }

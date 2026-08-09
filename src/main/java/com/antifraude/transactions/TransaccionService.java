@@ -23,7 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -121,7 +121,7 @@ public class TransaccionService {
                 .personaRemitente(remitente)
                 .personaBeneficiario(beneficiario)
                 .producto(producto)
-                .fechaTransaccion(request.fechaTransaccion() != null ? request.fechaTransaccion() : LocalDateTime.now())
+                .fechaTransaccion(request.fechaTransaccion() != null ? request.fechaTransaccion() : OffsetDateTime.now())
                 .estado("PENDIENTE")
                 .estadoEvaluacion(Transaccion.EstadoEvaluacion.PENDIENTE)
                 .datosEspecificos("{}")
@@ -167,7 +167,7 @@ public class TransaccionService {
         transaccion.setEstado(estado);
         transaccion.setEstadoEvaluacion(estadoEvaluacion);
         transaccion.setProcesada(true);
-        transaccion.setFechaProcesamiento(LocalDateTime.now());
+        transaccion.setFechaProcesamiento(OffsetDateTime.now());
         return transaccionRepository.save(transaccion);
     }
 

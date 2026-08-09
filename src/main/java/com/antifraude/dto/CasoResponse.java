@@ -4,7 +4,7 @@ import com.antifraude.common.entity.Caso.EstadoCaso;
 import com.antifraude.common.entity.Caso.PrioridadCaso;
 import com.antifraude.common.entity.Caso.ResultadoInvestigacion;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record CasoResponse(
@@ -17,8 +17,8 @@ public record CasoResponse(
         Integer score,
         UUID usuarioAnalistaId,
         String usuarioAnalistaNombre,
-        LocalDateTime fechaApertura,
-        LocalDateTime fechaCierre,
+        OffsetDateTime fechaApertura,
+        OffsetDateTime fechaCierre,
         ResultadoInvestigacion resultado,
         String observaciones) {
 }

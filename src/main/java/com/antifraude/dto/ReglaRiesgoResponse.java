@@ -1,6 +1,6 @@
 package com.antifraude.dto;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.math.BigDecimal;
 import java.util.UUID;
 
@@ -22,6 +22,6 @@ public record ReglaRiesgoResponse(
         String accionesJson,
         Boolean activa,
         UUID creadaPor,
-        LocalDateTime fechaCreacion,
-        LocalDateTime fechaModificacion) {
+        OffsetDateTime fechaCreacion,
+        OffsetDateTime fechaModificacion) {
 }

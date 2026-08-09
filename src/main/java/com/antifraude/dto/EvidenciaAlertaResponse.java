@@ -1,6 +1,6 @@
 package com.antifraude.dto;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 public record EvidenciaAlertaResponse(
         Long id,
@@ -13,5 +13,5 @@ public record EvidenciaAlertaResponse(
         String estado,
         String referenciaArchivo,
         String cargadoPor,
-        LocalDateTime fechaCarga) {
+        OffsetDateTime fechaCarga) {
 }

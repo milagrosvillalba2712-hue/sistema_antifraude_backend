@@ -1,6 +1,6 @@
 package com.antifraude.dto;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record HistorialAsignacionResponse(
@@ -10,7 +10,7 @@ public record HistorialAsignacionResponse(
         String usuarioOrigenNombre,
         UUID usuarioDestinoId,
         String usuarioDestinoNombre,
-        LocalDateTime fecha,
+        OffsetDateTime fecha,
         String motivo,
         String tipo) {
 }

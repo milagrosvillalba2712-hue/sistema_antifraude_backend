@@ -6,7 +6,7 @@ import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -34,7 +34,7 @@ public class TransaccionDetalleSnapshot {
 
     @Column(name = "fecha_registro")
     @Builder.Default
-    private LocalDateTime fechaRegistro = LocalDateTime.now();
+    private OffsetDateTime fechaRegistro = OffsetDateTime.now();
 
     @PrePersist
     protected void rellenarTenant() {

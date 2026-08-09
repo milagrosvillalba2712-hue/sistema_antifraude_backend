@@ -4,7 +4,7 @@ import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -39,7 +39,7 @@ public class DisponibilidadUsuario {
 
     @Column(name = "ultima_actualizacion", nullable = false)
     @Builder.Default
-    private LocalDateTime ultimaActualizacion = LocalDateTime.now();
+    private OffsetDateTime ultimaActualizacion = OffsetDateTime.now();
 
     @Column(name = "motivo_no_disponible", columnDefinition = "TEXT")
     private String motivoNoDisponible;
@@ -48,10 +48,10 @@ public class DisponibilidadUsuario {
     private String tipoEstado;
 
     @Column(name = "fecha_inicio")
-    private LocalDateTime fechaInicio;
+    private OffsetDateTime fechaInicio;
 
     @Column(name = "fecha_fin")
-    private LocalDateTime fechaFin;
+    private OffsetDateTime fechaFin;
 
     @Column(name = "es_programado", nullable = false)
     @Builder.Default
@@ -76,7 +76,7 @@ public class DisponibilidadUsuario {
             empresaId = usuario.getEmpresaId();
         }
         if (ultimaActualizacion == null) {
-            ultimaActualizacion = LocalDateTime.now();
+            ultimaActualizacion = OffsetDateTime.now();
         }
     }
 
@@ -89,20 +89,20 @@ public class DisponibilidadUsuario {
         this.estado = tipoEstado;
     }
 
-    public LocalDateTime getFechaInicio() {
+    public OffsetDateTime getFechaInicio() {
         return fechaInicio != null ? fechaInicio : ultimaActualizacion;
     }
 
-    public void setFechaInicio(LocalDateTime fechaInicio) {
+    public void setFechaInicio(OffsetDateTime fechaInicio) {
         this.fechaInicio = fechaInicio;
-        this.ultimaActualizacion = fechaInicio != null ? fechaInicio : LocalDateTime.now();
+        this.ultimaActualizacion = fechaInicio != null ? fechaInicio : OffsetDateTime.now();
     }
 
-    public LocalDateTime getFechaFin() {
+    public OffsetDateTime getFechaFin() {
         return fechaFin;
     }
 
-    public void setFechaFin(LocalDateTime fechaFin) {
+    public void setFechaFin(OffsetDateTime fechaFin) {
         this.fechaFin = fechaFin;
     }
 

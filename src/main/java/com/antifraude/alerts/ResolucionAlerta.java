@@ -5,7 +5,7 @@ import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -68,7 +68,7 @@ public class ResolucionAlerta {
 
     @Column(name = "fecha_resolucion", nullable = false)
     @Builder.Default
-    private LocalDateTime fechaResolucion = LocalDateTime.now();
+    private OffsetDateTime fechaResolucion = OffsetDateTime.now();
 
     @PrePersist
     protected void rellenarTenant() {

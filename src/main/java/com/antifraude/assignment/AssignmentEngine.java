@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -77,7 +77,7 @@ public class AssignmentEngine {
 
         alerta.setAsignadoA(analista);
         alerta.setEstado("ASIGNADA");
-        alerta.setFechaAsignacion(LocalDateTime.now());
+        alerta.setFechaAsignacion(OffsetDateTime.now());
         alertaRepository.save(alerta);
 
         HistorialAsignacion historial = HistorialAsignacion.builder()
@@ -109,7 +109,7 @@ public class AssignmentEngine {
                 if (!nuevoAnalista.getId().equals(usuarioId)) {
                     Usuario anterior = alerta.getAsignadoA();
                     alerta.setAsignadoA(nuevoAnalista);
-                    alerta.setFechaAsignacion(LocalDateTime.now());
+                    alerta.setFechaAsignacion(OffsetDateTime.now());
                     alertaRepository.save(alerta);
 
                     HistorialAsignacion historial = HistorialAsignacion.builder()
@@ -161,7 +161,7 @@ public class AssignmentEngine {
         stats.setAlertasPendientes((int) asignadas);
         stats.setAlertasAsignadas(stats.getAlertasAsignadas() + 1);
         stats.setAlertasResueltas((int) resueltas);
-        stats.setUltimaActualizacion(LocalDateTime.now());
+        stats.setUltimaActualizacion(OffsetDateTime.now());
         cargaRepository.save(stats);
     }
 }

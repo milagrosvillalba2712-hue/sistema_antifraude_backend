@@ -1,6 +1,6 @@
 package com.antifraude.dto;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record ResolucionAlertaResponse(Long id, Long alertaId, UUID usuarioId, String usuarioNombre,
@@ -9,5 +9,5 @@ public record ResolucionAlertaResponse(Long id, Long alertaId, UUID usuarioId, S
                                        String contactoCliente, Boolean fondosRetenidos,
                                        Boolean movimientoLiberable, Boolean requiereRos,
                                        Boolean requiereBloqueo, Boolean requiereEscalamientoLegal,
-                                       LocalDateTime fechaResolucion) {
+                                       OffsetDateTime fechaResolucion) {
 }

@@ -5,7 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -54,5 +54,5 @@ public class Auditoria {
 
     @Column(name = "fecha_evento", updatable = false)
     @Builder.Default
-    private LocalDateTime fechaEvento = LocalDateTime.now();
+    private OffsetDateTime fechaEvento = OffsetDateTime.now();
 }

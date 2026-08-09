@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Data
 @NoArgsConstructor
@@ -34,7 +34,7 @@ public class Actuacion extends TenantAwareEntity {
     private String resultado;
 
     @Column(name = "fecha_actuacion", nullable = false)
-    private LocalDateTime fechaHora;
+    private OffsetDateTime fechaHora;
 
     public enum TipoActuacion {
         CONSULTA_KYC, SOLICITUD_DOCUMENTOS, ENTREVISTA, VALIDACION, OBSERVACION, ESCALAMIENTO

@@ -1,7 +1,7 @@
 package com.antifraude.drools.fact;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * Fact de transaccion para Drools — POJO plano sin dependencias JPA.
@@ -23,7 +23,7 @@ public class TransaccionFact {
     private String paisOrigenNombre;
     private String paisDestinoCodigo;
     private String paisDestinoNombre;
-    private LocalDateTime fechaTransaccion;
+    private OffsetDateTime fechaTransaccion;
     private boolean esInternacional;
     private boolean esHorarioInhabil;
     private boolean coincideFeriado;
@@ -86,8 +86,8 @@ public class TransaccionFact {
     public void setPaisDestinoCodigo(String paisDestinoCodigo) { this.paisDestinoCodigo = paisDestinoCodigo; }
     public String getPaisDestinoNombre() { return paisDestinoNombre; }
     public void setPaisDestinoNombre(String paisDestinoNombre) { this.paisDestinoNombre = paisDestinoNombre; }
-    public LocalDateTime getFechaTransaccion() { return fechaTransaccion; }
-    public void setFechaTransaccion(LocalDateTime fechaTransaccion) { this.fechaTransaccion = fechaTransaccion; }
+    public OffsetDateTime getFechaTransaccion() { return fechaTransaccion; }
+    public void setFechaTransaccion(OffsetDateTime fechaTransaccion) { this.fechaTransaccion = fechaTransaccion; }
     public boolean isEsInternacional() { return esInternacional; }
     public void setEsInternacional(boolean esInternacional) { this.esInternacional = esInternacional; }
     public boolean isEsHorarioInhabil() { return esHorarioInhabil; }

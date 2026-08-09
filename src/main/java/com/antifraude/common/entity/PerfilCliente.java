@@ -6,8 +6,8 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 
 @Data
 @NoArgsConstructor
@@ -33,8 +33,8 @@ public class PerfilCliente extends TenantAwareEntity {
     private LocalTime horarioHabitualHasta;
 
     @Column(name = "ultima_operacion_fecha")
-    private LocalDateTime ultimaOperacionFecha;
+    private OffsetDateTime ultimaOperacionFecha;
 
     @Column(name = "fecha_calculo", nullable = false)
-    private LocalDateTime fechaCalculo;
+    private OffsetDateTime fechaCalculo;
 }

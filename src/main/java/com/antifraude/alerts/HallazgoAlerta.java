@@ -7,7 +7,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -35,7 +35,7 @@ public class HallazgoAlerta {
     private Long transaccionId;
 
     @Column(name = "fecha_transaccion", nullable = false)
-    private LocalDateTime fechaTransaccion;
+    private OffsetDateTime fechaTransaccion;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "regla_riesgo_id")
@@ -65,7 +65,7 @@ public class HallazgoAlerta {
 
     @Column(name = "fecha_hora_creacion", updatable = false)
     @Builder.Default
-    private LocalDateTime fechaRegistro = LocalDateTime.now();
+    private OffsetDateTime fechaRegistro = OffsetDateTime.now();
 
     @PrePersist
     void prePersist() {
@@ -77,7 +77,7 @@ public class HallazgoAlerta {
             fechaTransaccion = alerta.getTransaccion().getFechaTransaccion();
         }
         if (fechaRegistro == null) {
-            fechaRegistro = LocalDateTime.now();
+            fechaRegistro = OffsetDateTime.now();
         }
         if (score == null) {
             score = BigDecimal.ZERO;

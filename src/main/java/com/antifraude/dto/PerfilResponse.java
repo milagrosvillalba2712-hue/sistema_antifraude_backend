@@ -1,6 +1,6 @@
 package com.antifraude.dto;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record PerfilResponse(
@@ -10,5 +10,5 @@ public record PerfilResponse(
         String imagenPerfil,
         String estado,
         String estadoPersonalizado,
-        LocalDateTime ultimaActualizacionEstado) {
+        OffsetDateTime ultimaActualizacionEstado) {
 }

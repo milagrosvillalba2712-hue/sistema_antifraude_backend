@@ -5,7 +5,7 @@ import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -41,11 +41,11 @@ public class PerfilUsuario {
     private String estadoPersonalizado;
 
     @Column(name = "ultima_actualizacion_estado")
-    private LocalDateTime ultimaActualizacionEstado;
+    private OffsetDateTime ultimaActualizacionEstado;
 
     @Column(name = "fecha_creacion", updatable = false)
     @Builder.Default
-    private LocalDateTime fechaCreacion = LocalDateTime.now();
+    private OffsetDateTime fechaCreacion = OffsetDateTime.now();
 
     @PrePersist
     protected void rellenarTenant() {

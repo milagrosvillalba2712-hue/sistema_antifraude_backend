@@ -4,7 +4,7 @@ import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -36,7 +36,7 @@ public class HistorialAsignacion {
 
     @Column(name = "fecha_asignacion", nullable = false)
     @Builder.Default
-    private LocalDateTime fecha = LocalDateTime.now();
+    private OffsetDateTime fecha = OffsetDateTime.now();
 
     @Column(columnDefinition = "TEXT")
     private String motivo;
@@ -53,7 +53,7 @@ public class HistorialAsignacion {
             empresaId = alerta.getEmpresaId();
         }
         if (fecha == null) {
-            fecha = LocalDateTime.now();
+            fecha = OffsetDateTime.now();
         }
     }
 }

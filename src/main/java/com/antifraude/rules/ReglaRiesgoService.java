@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @Service
@@ -98,7 +98,7 @@ public class ReglaRiesgoService {
         regla.setScoreBase(actualizada.getScoreBase());
         regla.setParametros(actualizada.getParametros());
         regla.setEstado(actualizada.getEstado());
-        regla.setFechaModificacion(LocalDateTime.now());
+        regla.setFechaModificacion(OffsetDateTime.now());
         ReglaRiesgo guardada = reglaRiesgoRepository.save(regla);
         log.info("[RULES] Regla actualizada - ID: {} - Nombre: {} - Version: {}",
                 id, guardada.getNombre(), guardada.getVersion());
@@ -109,7 +109,7 @@ public class ReglaRiesgoService {
         log.info("[RULES] Actualizando regla ID: {}", id);
         ReglaRiesgo regla = buscarPorId(id);
         aplicarRequest(regla, request);
-        regla.setFechaModificacion(LocalDateTime.now());
+        regla.setFechaModificacion(OffsetDateTime.now());
         return reglaRiesgoRepository.save(regla);
     }
 
@@ -146,7 +146,7 @@ public class ReglaRiesgoService {
         log.info("[RULES] Cambiando estado de regla ID: {}", id);
         ReglaRiesgo regla = buscarPorId(id);
         regla.setActiva(!regla.getActiva());
-        regla.setFechaModificacion(LocalDateTime.now());
+        regla.setFechaModificacion(OffsetDateTime.now());
         reglaRiesgoRepository.save(regla);
         log.info("[RULES] Regla ID: {} - Activa: {}", id, regla.getActiva());
     }
@@ -156,7 +156,7 @@ public class ReglaRiesgoService {
         ReglaRiesgo regla = buscarPorId(id);
         regla.setActiva(true);
         regla.setEstado("ACTIVA");
-        regla.setFechaModificacion(LocalDateTime.now());
+        regla.setFechaModificacion(OffsetDateTime.now());
         reglaRiesgoRepository.save(regla);
         log.info("[RULES] Regla ID: {} activada", id);
     }
@@ -166,7 +166,7 @@ public class ReglaRiesgoService {
         ReglaRiesgo regla = buscarPorId(id);
         regla.setActiva(false);
         regla.setEstado("INACTIVA");
-        regla.setFechaModificacion(LocalDateTime.now());
+        regla.setFechaModificacion(OffsetDateTime.now());
         reglaRiesgoRepository.save(regla);
         log.info("[RULES] Regla ID: {} desactivada", id);
     }

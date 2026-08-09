@@ -3,9 +3,11 @@ package com.antifraude.rules;
 import com.antifraude.transactions.Transaccion;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "ejecucion_reglas", indexes = {
@@ -38,7 +40,7 @@ public class EjecucionRegla {
     private Transaccion transaccion;
 
     @Column(name = "fecha_transaccion", insertable = false, updatable = false)
-    private LocalDateTime fechaTransaccion;
+    private OffsetDateTime fechaTransaccion;
 
     @Column
     @Builder.Default
@@ -62,8 +64,9 @@ public class EjecucionRegla {
 
     @Column(name = "fecha_hora_creacion", updatable = false)
     @Builder.Default
-    private LocalDateTime fechaEjecucion = LocalDateTime.now();
+    private OffsetDateTime fechaEjecucion = OffsetDateTime.now();
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String detalle;
 
