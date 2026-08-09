@@ -8,6 +8,9 @@ import com.antifraude.common.repository.EscenarioRepository;
 import com.antifraude.dto.*;
 import com.antifraude.exception.BusinessException;
 import com.antifraude.exception.ResourceNotFoundException;
+import com.antifraude.external.ExternalInvestigationClient;
+import com.antifraude.external.ExternalProviderException;
+import com.antifraude.external.ProviderResult;
 import com.antifraude.profile.DisponibilidadRepository;
 import com.antifraude.profile.DisponibilidadUsuario;
 import com.antifraude.rules.EjecucionRegla;
@@ -61,6 +64,7 @@ public class AlertaService {
     private final EjecucionReglaRepository ejecucionReglaRepository;
     private final EscenarioRepository escenarioRepository;
     private final AuditoriaRepository auditoriaRepository;
+    private final ExternalInvestigationClient externalInvestigationClient;
 
     public AlertaService(AlertaRepository alertaRepository,
                           HistorialAsignacionRepository historialRepository,
@@ -76,7 +80,8 @@ public class AlertaService {
                           TransaccionDetalleSnapshotRepository transaccionDetalleSnapshotRepository,
                           EjecucionReglaRepository ejecucionReglaRepository,
                           EscenarioRepository escenarioRepository,
-                          AuditoriaRepository auditoriaRepository) {
+                          AuditoriaRepository auditoriaRepository,
+                          ExternalInvestigationClient externalInvestigationClient) {
         this.alertaRepository = alertaRepository;
         this.historialRepository = historialRepository;
         this.auditoriaService = auditoriaService;
@@ -92,6 +97,7 @@ public class AlertaService {
         this.ejecucionReglaRepository = ejecucionReglaRepository;
         this.escenarioRepository = escenarioRepository;
         this.auditoriaRepository = auditoriaRepository;
+        this.externalInvestigationClient = externalInvestigationClient;
     }
 
     public Alerta crearAlerta(Transaccion transaccion, ReglaRiesgo regla, String prioridad) {
@@ -298,12 +304,16 @@ public class AlertaService {
     public AlertaDetalleResponse obtenerDetalleFormal(Long alertaId) {
         Alerta alerta = buscarPorId(alertaId);
         Transaccion tx = alerta.getTransaccion();
-        List<TransaccionAlertaResponse> historial = new ArrayList<>();
+        ExternalInvestigationData externalData = cargarDatosExternos(alerta, tx);
+        List<TransaccionAlertaResponse> historial = externalData.historial();
         if (tx != null && tx.getIdentificadorDocumento() != null) {
-            historial = transaccionRepository.findUltimasPorDocumento(tx.getIdentificadorDocumento()).stream()
+            List<TransaccionAlertaResponse> historialLocal = transaccionRepository.findUltimasPorDocumento(tx.getIdentificadorDocumento()).stream()
                     .limit(15)
                     .map(this::transaccionResponse)
                     .toList();
+            if (!historialLocal.isEmpty()) {
+                historial = historialLocal;
+            }
         }
         List<TimelineEventResponse> eventos = obtenerTimeline(alertaId).stream()
                 .map(e -> new TimelineEventResponse(null, e.tipo(), e.descripcion(), e.fecha(), e.usuario()))
@@ -320,7 +330,7 @@ public class AlertaService {
         List<HallazgoAlertaResponse> hallazgos = hallazgos(alerta, reglasDisparadas);
         List<EvidenciaAlertaResponse> evidencias = listarEvidencias(alertaId);
         return new AlertaDetalleResponse(toAlertaResponse(alerta), transaccionResponse(tx), reglaResponse(alerta.getRegla()),
-                reglasDisparadas, hallazgos, clienteResponse(tx, alerta), historial, serviciosExternos(), eventos,
+                reglasDisparadas, hallazgos, clienteResponse(tx, alerta, externalData), historial, externalData.servicios(), eventos,
                 accionesTimeline(alertaId), evidencias, resolucion, aprobacion, accionesDisponibles(alerta));
     }
 
@@ -671,58 +681,80 @@ public class AlertaService {
                 regla.getEscenario() != null ? regla.getEscenario().getNombre() : "Sin escenario");
     }
 
-    private ClienteAlertaResponse clienteResponse(Transaccion tx, Alerta alerta) {
+    private ClienteAlertaResponse clienteResponse(Transaccion tx, Alerta alerta, ExternalInvestigationData externalData) {
         if (tx == null) return null;
         String documento = tx.getIdentificadorDocumento();
+        Map<String, Object> perfil = externalData.perfil();
+        Map<String, Object> documentos = externalData.documentos();
+        Map<String, Object> screening = externalData.screening();
+        Map<String, Object> personalRaw = nestedMap(perfil, "personal", mapOf());
+        Map<String, Object> laboralRaw = nestedMap(perfil, "laboral", mapOf());
+        Map<String, Object> academicoRaw = nestedMap(perfil, "academico", mapOf());
+        Map<String, Object> familiarRaw = nestedMap(perfil, "familiar", mapOf());
+        Map<String, Object> judicialRaw = nestedMap(perfil, "judicialRegulatorio", mapOf());
         Map<String, Object> personal = mapOf(
+                "Nombre Completo", firstNonBlank(personalRaw.get("nombreCompleto"), clienteNombre(tx), "No informado"),
                 "Número De Documento", documento,
-                "Tipo De Documento", "Pendiente API externa",
-                "Fecha De Nacimiento", "Pendiente API externa",
-                "Fecha De Emisión Documento", "Pendiente API externa",
-                "Fecha De Expiración Documento", "Pendiente API externa",
-                "País De Emisión", "Pendiente API externa",
-                "País De Residencia", tx.getPaisOrigen(),
-                "País De Nacionalidad", "Pendiente API externa",
-                "Ciudad De Residencia", "Pendiente API externa",
-                "Departamento Residencia", "Pendiente API externa",
-                "Dirección Residencia", "Pendiente API externa",
-                "Teléfono", "Pendiente API externa",
-                "Celular", "Pendiente API externa",
-                "Email", "Pendiente API externa",
-                "Edad", "Pendiente API externa",
-                "Foto Documento Frente", "No disponible",
-                "Foto Documento Dorso", "No disponible",
-                "Foto Perfil Cliente", "No disponible");
+                "Documento Enmascarado", firstNonBlank(personalRaw.get("documentoEnmascarado"), "No informado"),
+                "Tipo De Documento", firstNonBlank(personalRaw.get("tipoDocumento"), "No informado"),
+                "Fecha De Nacimiento", firstNonBlank(personalRaw.get("fechaNacimiento"), "No informado"),
+                "Fecha De Emisión Documento", firstNonBlank(personalRaw.get("fechaEmisionDocumento"), "No informado"),
+                "Fecha De Expiración Documento", firstNonBlank(personalRaw.get("fechaExpiracionDocumento"), "No informado"),
+                "País De Emisión", firstNonBlank(personalRaw.get("paisEmisionDocumento"), "No informado"),
+                "País De Residencia", firstNonBlank(personalRaw.get("paisResidencia"), tx.getPaisOrigen(), "No informado"),
+                "País De Nacionalidad", firstNonBlank(personalRaw.get("paisNacionalidad"), "No informado"),
+                "Ciudad De Residencia", firstNonBlank(personalRaw.get("ciudadResidencia"), "No informado"),
+                "Departamento Residencia", firstNonBlank(personalRaw.get("departamentoResidencia"), "No informado"),
+                "Dirección Residencia", firstNonBlank(personalRaw.get("direccionResidencia"), "No informado"),
+                "Teléfono", firstNonBlank(personalRaw.get("telefonoFijoEnmascarado"), "No informado"),
+                "Celular", firstNonBlank(personalRaw.get("telefonoMovilEnmascarado"), "No informado"),
+                "Email", firstNonBlank(personalRaw.get("email"), "No informado"),
+                "Edad", firstNonBlank(personalRaw.get("edad"), "No informado"),
+                "Foto Documento Frente", firstNonBlank(personalRaw.get("fotoDocumentoFrenteReferencia"), documentReference(documentos, "CI_PY", "frenteDisponible"), "No disponible"),
+                "Foto Documento Dorso", firstNonBlank(personalRaw.get("fotoDocumentoDorsoReferencia"), documentReference(documentos, "CI_PY", "dorsoDisponible"), "No disponible"),
+                "Foto Perfil Cliente", firstNonBlank(personalRaw.get("fotoPerfilReferencia"), "No disponible"));
         Map<String, Object> laboral = mapOf(
-                "Lugar De Trabajo", "Pendiente API externa",
-                "Dirección Del Trabajo", "Pendiente API externa",
-                "Contacto Corporativo", "Pendiente API externa",
-                "Ocupación", "Pendiente API externa",
-                "Rango", "Pendiente API externa",
-                "Antigüedad", "Pendiente API externa",
-                "Aproximación Salarial", "Pendiente API externa");
+                "Lugar De Trabajo", firstNonBlank(laboralRaw.get("lugarTrabajo"), "No informado"),
+                "Dirección Del Trabajo", firstNonBlank(laboralRaw.get("direccionTrabajo"), "No informado"),
+                "Contacto Corporativo", firstNonBlank(laboralRaw.get("contactoCorporativo"), "No informado"),
+                "Ocupación", firstNonBlank(laboralRaw.get("ocupacion"), "No informado"),
+                "Rango", firstNonBlank(laboralRaw.get("rango"), "No informado"),
+                "Antigüedad", firstNonBlank(laboralRaw.get("antiguedad"), "No informado"),
+                "Aproximación Salarial", firstNonBlank(laboralRaw.get("ingresoMensualEstimado"), "No informado"));
         Map<String, Object> academico = mapOf(
-                "Nivel De Estudios", "Pendiente API externa",
-                "Títulos Obtenidos", "Pendiente API externa",
-                "Institución Educativa", "Pendiente API externa",
-                "Años De Cursada Y Graduación", "Pendiente API externa",
-                "Calificaciones Y Expedientes", "Pendiente API externa",
-                "Logros Destacados", "Pendiente API externa",
-                "Certificaciones Y Cursos", "Pendiente API externa");
+                "Nivel De Estudios", firstNonBlank(academicoRaw.get("nivelEstudios"), academicoRaw.get("nivel"), "No informado"),
+                "Títulos Obtenidos", firstNonBlank(academicoRaw.get("titulosObtenidos"), "No informado"),
+                "Institución Educativa", firstNonBlank(academicoRaw.get("institucionEducativa"), academicoRaw.get("institucion"), "No informado"),
+                "Años De Cursada Y Graduación", firstNonBlank(academicoRaw.get("periodoCursada"), "No informado"),
+                "Calificaciones Y Expedientes", firstNonBlank(academicoRaw.get("calificacionesExpedientes"), "No informado"),
+                "Logros Destacados", firstNonBlank(academicoRaw.get("logrosDestacados"), "No informado"),
+                "Certificaciones Y Cursos", firstNonBlank(academicoRaw.get("certificacionesCursos"), academicoRaw.get("certificaciones"), "No informado"));
         Map<String, Object> familiar = mapOf(
-                "Estado Civil", "Pendiente API externa",
-                "Parentescos Directos", "Pendiente API externa",
-                "Contacto Familiar De Emergencia", "Pendiente API externa");
+                "Estado Civil", firstNonBlank(familiarRaw.get("estadoCivil"), "No informado"),
+                "Parentescos Directos", firstNonBlank(familiarRaw.get("parentescosDirectos"), "No informado"),
+                "Contacto Familiar De Emergencia", firstNonBlank(familiarRaw.get("contactoEmergencia"), "No informado"),
+                "Dirección Contacto Emergencia", firstNonBlank(familiarRaw.get("direccionContactoEmergencia"), "No informado"));
         Map<String, Object> judicial = mapOf(
-                "Antecedentes Penales", "Pendiente API externa",
-                "Procesos Judiciales Activos", "Pendiente API externa",
-                "Órdenes Y Requerimientos", "Pendiente API externa",
-                "Historial De Litigios", "Pendiente API externa");
+                "Antecedentes Penales", firstNonBlank(judicialRaw.get("antecedentesPenales"), judicialRaw.get("antecedentes"), "No informado"),
+                "Procesos Judiciales Activos", firstNonBlank(judicialRaw.get("procesosJudicialesActivos"), "No informado"),
+                "Órdenes Y Requerimientos", firstNonBlank(judicialRaw.get("ordenesRequerimientos"), "No informado"),
+                "Historial De Litigios", firstNonBlank(judicialRaw.get("historialLitigios"), "No informado"),
+                "PEP", firstNonBlank(judicialRaw.get("pep"), "No informado"),
+                "Sancionado", firstNonBlank(judicialRaw.get("sancionado"), "No informado"),
+                "Nivel De Riesgo", firstNonBlank(judicialRaw.get("nivelRiesgo"), perfil.get("nivelRiesgo"), "No informado"),
+                "Hallazgos", firstNonBlank(judicialRaw.get("hallazgos"), screening.get("hallazgos"), "No informado"));
+        String fuente = externalData.disponible()
+                ? "MOCK_EXTERNO_REGULA"
+                : clienteSnapshotAlertaRepository.findByAlertaId(alerta.getId())
+                        .map(ClienteSnapshotAlerta::getFuente)
+                        .orElse("API_EXTERNA_NO_DISPONIBLE");
+        String pep = booleanLabel(judicialRaw.get("pep"));
+        String sancionado = booleanLabel(judicialRaw.get("sancionado"));
+        String listas = screening.get("resultado") != null ? String.valueOf(screening.get("resultado")) : "Pendiente de consulta KYC";
         return new ClienteAlertaResponse(tx.getIdentificadorDocumento(),
                 tx.getPersonaRemitente() != null ? tx.getPersonaRemitente().getNombreCompleto() : null,
                 tx.getPersonaBeneficiario() != null ? tx.getPersonaBeneficiario().getNombreCompleto() : null,
-                "Pendiente de consulta KYC", "Pendiente de consulta KYC", "Pendiente de consulta KYC",
-                clienteSnapshotAlertaRepository.findByAlertaId(alerta.getId()).map(ClienteSnapshotAlerta::getFuente).orElse("API_EXTERNA_NO_DISPONIBLE"),
+                pep, sancionado, listas, fuente,
                 personal, laboral, academico, familiar, judicial);
     }
 
@@ -731,6 +763,138 @@ public class AlertaService {
                 "Consulta KYC externa",
                 "API externa no disponible",
                 "La vista queda preparada para integrar proveedores externos cuando estén disponibles"));
+    }
+
+    private ExternalInvestigationData cargarDatosExternos(Alerta alerta, Transaccion tx) {
+        String lookupKey = externalLookupKey(alerta, tx);
+        if (lookupKey == null) {
+            return ExternalInvestigationData.unavailable("No hay identificador seguro para consultar el mock externo.");
+        }
+        try {
+            ProviderResult<Map<String, Object>> perfil = externalInvestigationClient.consultarPerfil(lookupKey);
+            ProviderResult<Map<String, Object>> documentos = externalInvestigationClient.consultarDocumentos(lookupKey);
+            ProviderResult<Map<String, Object>> screening = externalInvestigationClient.consultarScreening(lookupKey);
+            ProviderResult<Map<String, Object>> historial = externalInvestigationClient.consultarHistorial(lookupKey, 15);
+            ProviderResult<Map<String, Object>> estado = externalInvestigationClient.consultarEstadoProveedores();
+            List<ServicioExternoAlertaResponse> servicios = List.of(
+                    servicioOk("Perfil KYC", perfil),
+                    servicioOk("Documentos Cliente", documentos),
+                    servicioOk("Screening Listas", screening),
+                    servicioOk("Historial Transaccional Externo", historial),
+                    servicioOk("Estado De Proveedores", estado)
+            );
+            return new ExternalInvestigationData(true, perfil.body(), documentos.body(), screening.body(),
+                    historialExterno(historial.body()), servicios);
+        } catch (ExternalProviderException | IllegalStateException exception) {
+            log.warn("[ALERTS] Mock externo no disponible para alerta {}: {}", alerta.getId(), exception.getMessage());
+            return ExternalInvestigationData.unavailable("No se pudo consultar el mock externo: " + exception.getClass().getSimpleName());
+        }
+    }
+
+    private ServicioExternoAlertaResponse servicioOk(String servicio, ProviderResult<?> result) {
+        return new ServicioExternoAlertaResponse(servicio, "DISPONIBLE_SIMULADO",
+                "Consulta completada. Correlation ID: " + result.correlationId());
+    }
+
+    private String externalLookupKey(Alerta alerta, Transaccion tx) {
+        if (tx != null && tx.getIdentificadorDocumento() != null && !tx.getIdentificadorDocumento().isBlank()) {
+            return tx.getIdentificadorDocumento();
+        }
+        return switch ((int) (alerta.getId() == null ? 0 : alerta.getId() % 4)) {
+            case 0 -> "400";
+            case 1 -> "100";
+            case 2 -> "200";
+            default -> "300";
+        };
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> nestedMap(Map<String, Object> source, String key, Map<String, Object> fallback) {
+        if (source == null) return fallback;
+        Object value = source.get(key);
+        return value instanceof Map<?, ?> map ? (Map<String, Object>) map : fallback;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<TransaccionAlertaResponse> historialExterno(Map<String, Object> response) {
+        if (response == null || !(response.get("transacciones") instanceof List<?> rows)) return List.of();
+        List<TransaccionAlertaResponse> result = new ArrayList<>();
+        for (Object row : rows) {
+            if (!(row instanceof Map<?, ?> raw)) continue;
+            Map<String, Object> item = (Map<String, Object>) raw;
+            result.add(new TransaccionAlertaResponse(null,
+                    stringValue(item.get("codigo")),
+                    null,
+                    null,
+                    null,
+                    null,
+                    bigDecimalValue(item.get("monto")),
+                    stringValue(item.get("moneda")),
+                    "EXTERNO",
+                    stringValue(item.get("tipo")),
+                    null,
+                    null,
+                    parseExternalDate(item.get("fecha")),
+                    bigDecimalValue(item.get("scoreRiesgo")),
+                    null,
+                    stringValue(item.get("estado")),
+                    mapOf("Fuente", "Mock externo Regula"),
+                    mapOf(),
+                    mapOf("Tipo", stringValue(item.get("tipo")), "Monto", item.get("monto"), "Moneda", item.get("moneda")),
+                    mapOf("Código", stringValue(item.get("codigo")), "Fecha", stringValue(item.get("fecha"))),
+                    mapOf()));
+        }
+        return result;
+    }
+
+    private OffsetDateTime parseExternalDate(Object value) {
+        if (value == null) return null;
+        try {
+            return OffsetDateTime.parse(String.valueOf(value));
+        } catch (DateTimeParseException ex) {
+            return null;
+        }
+    }
+
+    private java.math.BigDecimal bigDecimalValue(Object value) {
+        if (value == null) return null;
+        try {
+            return new java.math.BigDecimal(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private String booleanLabel(Object value) {
+        if (value instanceof Boolean bool) return bool ? "Sí" : "No";
+        return value == null ? "Pendiente de consulta KYC" : String.valueOf(value);
+    }
+
+    private Object firstNonBlank(Object... values) {
+        for (Object value : values) {
+            if (value == null) continue;
+            if (value instanceof String text && text.isBlank()) continue;
+            return value;
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object documentReference(Map<String, Object> documents, String type, String availabilityKey) {
+        if (documents == null || !(documents.get("documentos") instanceof List<?> rows)) return null;
+        for (Object row : rows) {
+            if (!(row instanceof Map<?, ?> raw)) continue;
+            Map<String, Object> item = (Map<String, Object>) raw;
+            if (!Objects.equals(type, item.get("tipo"))) continue;
+            Object available = item.get(availabilityKey);
+            if (Boolean.FALSE.equals(available)) return null;
+            return item.get("referencia");
+        }
+        return null;
     }
 
     private List<ReglaAlertaResponse> reglasDisparadas(Alerta alerta) {
@@ -972,5 +1136,21 @@ public class AlertaService {
 
     private String safe(String value) {
         return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private record ExternalInvestigationData(
+            boolean disponible,
+            Map<String, Object> perfil,
+            Map<String, Object> documentos,
+            Map<String, Object> screening,
+            List<TransaccionAlertaResponse> historial,
+            List<ServicioExternoAlertaResponse> servicios) {
+        private static ExternalInvestigationData unavailable(String mensaje) {
+            return new ExternalInvestigationData(false, Map.of(), Map.of(), Map.of(), List.of(),
+                    List.of(new ServicioExternoAlertaResponse(
+                            "Mock Externo Regula",
+                            "API_EXTERNA_NO_DISPONIBLE",
+                            mensaje)));
+        }
     }
 }

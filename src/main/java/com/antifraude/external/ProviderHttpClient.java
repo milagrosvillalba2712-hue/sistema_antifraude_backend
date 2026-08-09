@@ -1,23 +1,36 @@
 package com.antifraude.external;
 
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriBuilder;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.net.SocketTimeoutException;
+import java.net.URI;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Function;
 
 @Component
 class ProviderHttpClient {
     <T> ProviderResult<T> get(RestClient client, String provider, String path, String document,
                               Class<T> type, java.util.function.Predicate<T> match) {
+        return execute(client, provider, builder -> builder.path(path).build(document), type, match);
+    }
+
+    <T> ProviderResult<T> get(RestClient client, String provider, Function<UriBuilder, URI> uri,
+                              Class<T> type, java.util.function.Predicate<T> match) {
+        return execute(client, provider, uri, type, match);
+    }
+
+    private <T> ProviderResult<T> execute(RestClient client, String provider, Function<UriBuilder, URI> uri,
+                                          Class<T> type, java.util.function.Predicate<T> match) {
         String correlation = UUID.randomUUID().toString();
         long logicalStart = System.nanoTime();
         ExternalProviderException last = null;
         for (int attempt = 1; attempt <= 3; attempt++) {
             try {
-                T body = client.get().uri(builder -> builder.path(path).build(document))
+                T body = client.get().uri(uri)
                         .header("X-Correlation-Id", correlation).retrieve().body(type);
                 return new ProviderResult<>(provider, body, correlation, 200,
                         elapsed(logicalStart), attempt, match.test(body));
