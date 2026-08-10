@@ -26,16 +26,44 @@ public class ReporteController {
     }
 
     @GetMapping("/ros/{alertaId}")
-    public ResponseEntity<byte[]> generarRos(@PathVariable Long alertaId, Authentication auth,
+    public ResponseEntity<byte[]> generarRos(@PathVariable Long alertaId,
+                                              @RequestParam(defaultValue = "CSV") String formato,
+                                              Authentication auth,
                                               HttpServletRequest request) {
-        log.info("[REPORTS] GET /api/reportes/ros/{} - Usuario: {} - IP: {}",
-                alertaId, auth.getName(), request.getRemoteAddr());
+        String formatoNormalizado = normalizarFormato(formato);
+        log.info("[REPORTS] GET /api/reportes/ros/{} (formato {}) - Usuario: {} - IP: {}",
+                alertaId, formatoNormalizado, auth.getName(), request.getRemoteAddr());
         Usuario usuario = usuarioService.buscarPorEmail(auth.getName());
-        byte[] csv = reporteService.generarReporteRos(alertaId, usuario);
-        log.info("[REPORTS] Reporte ROS generado - Alerta ID: {} - Tamanio: {} bytes", alertaId, csv.length);
+        byte[] contenido = reporteService.generarReporteRos(alertaId, usuario, formatoNormalizado);
+        log.info("[REPORTS] Reporte ROS {} generado - Alerta ID: {} - Tamanio: {} bytes",
+                formatoNormalizado, alertaId, contenido.length);
+        String extension = extension(formatoNormalizado);
+        MediaType tipoContenido = mediaType(formatoNormalizado);
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=ROS_" + alertaId + ".csv")
-                .contentType(MediaType.parseMediaType("text/csv"))
-                .body(csv);
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=ROS_" + alertaId + "." + extension)
+                .contentType(tipoContenido)
+                .body(contenido);
+    }
+
+    private String normalizarFormato(String formato) {
+        if (formato == null) return "CSV";
+        String superior = formato.trim().toUpperCase();
+        return "JSON".equals(superior) || "XML".equals(superior) ? superior : "CSV";
+    }
+
+    private String extension(String formato) {
+        return switch (formato) {
+            case "JSON" -> "json";
+            case "XML" -> "xml";
+            default -> "csv";
+        };
+    }
+
+    private MediaType mediaType(String formato) {
+        return switch (formato) {
+            case "JSON" -> MediaType.APPLICATION_JSON;
+            case "XML" -> MediaType.APPLICATION_XML;
+            default -> MediaType.parseMediaType("text/csv");
+        };
     }
 }

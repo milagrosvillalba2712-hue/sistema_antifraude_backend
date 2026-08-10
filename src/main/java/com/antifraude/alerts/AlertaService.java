@@ -11,6 +11,7 @@ import com.antifraude.exception.ResourceNotFoundException;
 import com.antifraude.external.ExternalInvestigationClient;
 import com.antifraude.external.ExternalProviderException;
 import com.antifraude.external.ProviderResult;
+import com.antifraude.licensing.EnforcementService;
 import com.antifraude.profile.DisponibilidadRepository;
 import com.antifraude.profile.DisponibilidadUsuario;
 import com.antifraude.rules.EjecucionRegla;
@@ -65,6 +66,7 @@ public class AlertaService {
     private final EscenarioRepository escenarioRepository;
     private final AuditoriaRepository auditoriaRepository;
     private final ExternalInvestigationClient externalInvestigationClient;
+    private final EnforcementService enforcementService;
 
     public AlertaService(AlertaRepository alertaRepository,
                           HistorialAsignacionRepository historialRepository,
@@ -81,7 +83,8 @@ public class AlertaService {
                           EjecucionReglaRepository ejecucionReglaRepository,
                           EscenarioRepository escenarioRepository,
                           AuditoriaRepository auditoriaRepository,
-                          ExternalInvestigationClient externalInvestigationClient) {
+                          ExternalInvestigationClient externalInvestigationClient,
+                          EnforcementService enforcementService) {
         this.alertaRepository = alertaRepository;
         this.historialRepository = historialRepository;
         this.auditoriaService = auditoriaService;
@@ -98,6 +101,7 @@ public class AlertaService {
         this.escenarioRepository = escenarioRepository;
         this.auditoriaRepository = auditoriaRepository;
         this.externalInvestigationClient = externalInvestigationClient;
+        this.enforcementService = enforcementService;
     }
 
     public Alerta crearAlerta(Transaccion transaccion, ReglaRiesgo regla, String prioridad) {
@@ -771,24 +775,52 @@ public class AlertaService {
             return ExternalInvestigationData.unavailable("No hay identificador seguro para consultar el mock externo.");
         }
         try {
+            UUID empresaId = alerta.getEmpresa().getId();
+            boolean riesgoPaisHabilitado = enforcementService.moduloHabilitado(empresaId, "RIESGO_PAIS");
+            boolean beneficiarioFinalHabilitado = enforcementService.moduloHabilitado(empresaId, "BENEFICIARIO_FINAL");
+            Integer limiteHistorial = enforcementService.limiteHistorial(empresaId);
+            int historial = limiteHistorial != null ? limiteHistorial : 15;
+
             ProviderResult<Map<String, Object>> perfil = externalInvestigationClient.consultarPerfil(lookupKey);
             ProviderResult<Map<String, Object>> documentos = externalInvestigationClient.consultarDocumentos(lookupKey);
             ProviderResult<Map<String, Object>> screening = externalInvestigationClient.consultarScreening(lookupKey);
-            ProviderResult<Map<String, Object>> historial = externalInvestigationClient.consultarHistorial(lookupKey, 15);
+            ProviderResult<Map<String, Object>> historialProvider = externalInvestigationClient.consultarHistorial(lookupKey, historial);
             ProviderResult<Map<String, Object>> estado = externalInvestigationClient.consultarEstadoProveedores();
-            List<ServicioExternoAlertaResponse> servicios = List.of(
+            ProviderResult<Map<String, Object>> riesgoPais = riesgoPaisHabilitado
+                    ? externalInvestigationClient.consultarRiesgoPais(codigoIso(tx))
+                    : null;
+            ProviderResult<Map<String, Object>> beneficiarioFinal = beneficiarioFinalHabilitado
+                    ? externalInvestigationClient.consultarBeneficiarioFinal(lookupKey)
+                    : null;
+
+            List<ServicioExternoAlertaResponse> servicios = new ArrayList<>(List.of(
                     servicioOk("Perfil KYC", perfil),
                     servicioOk("Documentos Cliente", documentos),
                     servicioOk("Screening Listas", screening),
-                    servicioOk("Historial Transaccional Externo", historial),
+                    servicioOk("Historial Transaccional Externo", historialProvider),
                     servicioOk("Estado De Proveedores", estado)
-            );
+            ));
+            if (riesgoPais != null) {
+                servicios.add(servicioOk("Riesgo Pais", riesgoPais));
+            }
+            if (beneficiarioFinal != null) {
+                servicios.add(servicioOk("Beneficiario Final", beneficiarioFinal));
+            }
             return new ExternalInvestigationData(true, perfil.body(), documentos.body(), screening.body(),
-                    historialExterno(historial.body()), servicios);
+                    historialExterno(historialProvider.body()), servicios,
+                    riesgoPais != null ? riesgoPais.body() : Map.of(),
+                    beneficiarioFinal != null ? beneficiarioFinal.body() : Map.of());
         } catch (ExternalProviderException | IllegalStateException exception) {
             log.warn("[ALERTS] Mock externo no disponible para alerta {}: {}", alerta.getId(), exception.getMessage());
             return ExternalInvestigationData.unavailable("No se pudo consultar el mock externo: " + exception.getClass().getSimpleName());
         }
+    }
+
+    private String codigoIso(Transaccion tx) {
+        if (tx != null && tx.getPaisOrigen() != null && !tx.getPaisOrigen().isBlank()) {
+            return tx.getPaisOrigen();
+        }
+        return "PY";
     }
 
     private ServicioExternoAlertaResponse servicioOk(String servicio, ProviderResult<?> result) {
@@ -1144,13 +1176,16 @@ public class AlertaService {
             Map<String, Object> documentos,
             Map<String, Object> screening,
             List<TransaccionAlertaResponse> historial,
-            List<ServicioExternoAlertaResponse> servicios) {
+            List<ServicioExternoAlertaResponse> servicios,
+            Map<String, Object> riesgoPais,
+            Map<String, Object> beneficiarioFinal) {
         private static ExternalInvestigationData unavailable(String mensaje) {
             return new ExternalInvestigationData(false, Map.of(), Map.of(), Map.of(), List.of(),
                     List.of(new ServicioExternoAlertaResponse(
                             "Mock Externo Regula",
                             "API_EXTERNA_NO_DISPONIBLE",
-                            mensaje)));
+                            mensaje)),
+                    Map.of(), Map.of());
         }
     }
 }

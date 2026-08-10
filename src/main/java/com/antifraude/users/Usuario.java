@@ -42,6 +42,13 @@ public class Usuario extends AuditableEntity {
     @Column(name = "bloqueado_hasta")
     private OffsetDateTime bloqueadoHasta;
 
+    @Column(name = "email_verificado")
+    @Builder.Default
+    private Boolean emailVerificado = false;
+
+    @Column(name = "contrasena_cambiada_en")
+    private OffsetDateTime contrasenaCambiadaEn;
+
     @Transient
     private UUID empresaId;
 

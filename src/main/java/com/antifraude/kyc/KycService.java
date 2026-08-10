@@ -4,6 +4,8 @@ import com.antifraude.dto.KycRequest;
 import com.antifraude.dto.KycResponse;
 import com.antifraude.exception.BusinessException;
 import com.antifraude.external.*;
+import com.antifraude.licensing.ConsumoService;
+import com.antifraude.licensing.EnforcementService;
 import com.antifraude.security.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 import java.util.Locale;
@@ -15,14 +17,23 @@ public class KycService {
     private final BcpSancionesClient sanctions;
     private final SepreladPepClient pep;
     private final ExternalAuditService audit;
+    private final EnforcementService enforcementService;
+    private final ConsumoService consumoService;
 
     public KycService(IdentificacionesClient identities, BcpSancionesClient sanctions,
-                      SepreladPepClient pep, ExternalAuditService audit) {
+                      SepreladPepClient pep, ExternalAuditService audit,
+                      EnforcementService enforcementService, ConsumoService consumoService) {
         this.identities=identities; this.sanctions=sanctions; this.pep=pep; this.audit=audit;
+        this.enforcementService = enforcementService;
+        this.consumoService = consumoService;
     }
 
     public KycResponse consultar(KycRequest request, UUID usuarioId) {
         String type = request.tipoConsulta() == null ? "IDENTIDAD" : request.tipoConsulta().toUpperCase(Locale.ROOT);
+        UUID empresaId = TenantContext.getEmpresaId();
+        enforcementService.verificarSuscripcionVigente(empresaId);
+        enforcementService.verificarModulo(empresaId, "KYC");
+        enforcementService.verificarLimiteKyc(empresaId);
         try {
             ProviderResult<?> result = switch (type) {
                 case "IDENTIDAD", "IDENTIFICACIONES" -> identities.consultar(request.identificadorDocumento());
@@ -32,6 +43,7 @@ public class KycService {
             };
             saveAudit(request, result.provider(), result.correlationId(), result.statusHttp(), result.durationMs(),
                     result.attempts(), result.match(), "COMPLETADA", null);
+            consumoService.registrarConsultaKyc(empresaId);
             return new KycResponse("***", type, result.match(),
                     result.match() ? "Se encontró una coincidencia" : "Sin coincidencias");
         } catch (NonRetryableExternalException exception) {

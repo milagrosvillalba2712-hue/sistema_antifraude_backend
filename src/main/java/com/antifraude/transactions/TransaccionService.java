@@ -11,6 +11,8 @@ import com.antifraude.exception.BusinessException;
 import com.antifraude.exception.ResourceNotFoundException;
 import com.antifraude.licensing.Empresa;
 import com.antifraude.licensing.EmpresaRepository;
+import com.antifraude.licensing.ConsumoService;
+import com.antifraude.licensing.EnforcementService;
 import com.antifraude.rules.ReglaRiesgo;
 import com.antifraude.rules.ReglaRiesgoRepository;
 import com.antifraude.security.crypto.AesGcmCryptoService;
@@ -46,6 +48,8 @@ public class TransaccionService {
     private final JdbcTemplate jdbcTemplate;
     private final AesGcmCryptoService aesGcmCryptoService;
     private final HmacHashService hmacHashService;
+    private final EnforcementService enforcementService;
+    private final ConsumoService consumoService;
 
     public TransaccionService(TransaccionRepository transaccionRepository, DroolsService droolsService,
                               RiskContextBuilder riskContextBuilder,
@@ -53,7 +57,8 @@ public class TransaccionService {
                               CanalRepository canalRepository, ProductoRepository productoRepository,
                               PersonaRepository personaRepository, ReglaRiesgoRepository reglaRiesgoRepository,
                               EmpresaRepository empresaRepository, JdbcTemplate jdbcTemplate,
-                              AesGcmCryptoService aesGcmCryptoService, HmacHashService hmacHashService) {
+                              AesGcmCryptoService aesGcmCryptoService, HmacHashService hmacHashService,
+                              EnforcementService enforcementService, ConsumoService consumoService) {
         this.transaccionRepository = transaccionRepository;
         this.droolsService = droolsService;
         this.riskContextBuilder = riskContextBuilder;
@@ -67,6 +72,8 @@ public class TransaccionService {
         this.jdbcTemplate = jdbcTemplate;
         this.aesGcmCryptoService = aesGcmCryptoService;
         this.hmacHashService = hmacHashService;
+        this.enforcementService = enforcementService;
+        this.consumoService = consumoService;
     }
 
     public Transaccion crearDesdeRequest(TransaccionRequest request) {
@@ -85,6 +92,10 @@ public class TransaccionService {
         Pais paisOrigen = resolvePais(request.paisOrigen());
         Pais paisDestino = resolvePais(request.paisDestino());
         Empresa empresa = resolveEmpresa();
+        UUID empresaId = empresa.getId();
+        enforcementService.verificarSuscripcionVigente(empresaId);
+        enforcementService.verificarModulo(empresaId, "TRANSACCIONES");
+        enforcementService.verificarLimiteTransacciones(empresaId);
         Producto producto = request.productoId() != null
                 ? productoRepository.findById(request.productoId()).orElse(null) : null;
         Persona remitente = request.personaRemitenteId() != null
@@ -130,6 +141,7 @@ public class TransaccionService {
                 .reglasDisparadasJson("[]")
                 .build();
         Transaccion guardada = transaccionRepository.save(transaccion);
+        consumoService.registrarTransaccion(empresaId);
         log.info("[TX] Transaccion creada - ID: {} - UUID: {}", guardada.getId(), uuid);
         return guardada;
     }

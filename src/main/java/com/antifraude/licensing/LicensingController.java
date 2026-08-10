@@ -23,6 +23,8 @@ public class LicensingController {
     private final RolSistemaRepository rolSistemaRepository;
     private final PermisoSistemaRepository permisoSistemaRepository;
     private final UsuarioEmpresaRepository usuarioEmpresaRepository;
+    private final PlanPlanPreciosRolRepository planPlanPreciosRolRepository;
+    private final EnforcementService enforcementService;
 
     public LicensingController(EmpresaRepository empresaRepository,
                                PlanLicenciaRepository planLicenciaRepository,
@@ -32,7 +34,9 @@ public class LicensingController {
                                UsoSuscripcionRepository usoSuscripcionRepository,
                                RolSistemaRepository rolSistemaRepository,
                                PermisoSistemaRepository permisoSistemaRepository,
-                               UsuarioEmpresaRepository usuarioEmpresaRepository) {
+                               UsuarioEmpresaRepository usuarioEmpresaRepository,
+                               PlanPlanPreciosRolRepository planPlanPreciosRolRepository,
+                               EnforcementService enforcementService) {
         this.empresaRepository = empresaRepository;
         this.planLicenciaRepository = planLicenciaRepository;
         this.suscripcionRepository = suscripcionRepository;
@@ -42,6 +46,8 @@ public class LicensingController {
         this.rolSistemaRepository = rolSistemaRepository;
         this.permisoSistemaRepository = permisoSistemaRepository;
         this.usuarioEmpresaRepository = usuarioEmpresaRepository;
+        this.planPlanPreciosRolRepository = planPlanPreciosRolRepository;
+        this.enforcementService = enforcementService;
     }
 
     @GetMapping("/empresas")
@@ -56,7 +62,9 @@ public class LicensingController {
     public ResponseEntity<List<Map<String, Object>>> planes() {
         return ResponseEntity.ok(planLicenciaRepository.findAll().stream().map(p -> mapOf(
                 "id", p.getId(), "codigo", p.getCodigo(), "nombre", p.getNombre(), "limiteUsuarios", p.getLimiteUsuarios(),
-                "limiteTransaccionesMensuales", p.getLimiteTransaccionesMensuales(), "precioAnual", p.getPrecioAnual(), "activo", p.getActivo()
+                "limiteTransaccionesMensuales", p.getLimiteTransaccionesMensuales(), "precioAnual", p.getPrecioAnual(),
+                "limiteReglas", p.getLimiteReglas(), "limiteHistorialTransaccional", p.getLimiteHistorialTransaccional(),
+                "limiteEscenarios", p.getLimiteEscenarios(), "activo", p.getActivo()
         )).toList());
     }
 
@@ -103,6 +111,36 @@ public class LicensingController {
                 "transaccionesProcesadas", u.getTransaccionesProcesadas(), "consultasKyc", u.getConsultasKyc(),
                 "alertasGeneradas", u.getAlertasGeneradas(), "reportesGenerados", u.getReportesGenerados()
         )).toList());
+    }
+
+    @GetMapping("/limites")
+    public ResponseEntity<Map<String, Object>> limites(@RequestParam UUID empresaId) {
+        PlanLicencia plan = enforcementService.planVigente(empresaId);
+        return ResponseEntity.ok(mapOf(
+                "empresaId", empresaId,
+                "plan", plan.getCodigo(),
+                "limiteUsuarios", plan.getLimiteUsuarios(),
+                "limiteTransaccionesMensuales", plan.getLimiteTransaccionesMensuales(),
+                "limiteConsultasKycMensuales", plan.getLimiteConsultasKycMensuales(),
+                "limiteReportesMensuales", plan.getLimiteReportesMensuales(),
+                "limiteReglas", plan.getLimiteReglas(),
+                "limiteHistorialTransaccional", plan.getLimiteHistorialTransaccional(),
+                "limiteEscenarios", plan.getLimiteEscenarios()
+        ));
+    }
+
+    @GetMapping("/planes/{planId}/precios-rol")
+    public ResponseEntity<List<Map<String, Object>>> preciosRol(@PathVariable Long planId) {
+        PlanLicencia plan = planLicenciaRepository.findById(planId)
+                .orElseThrow(() -> new com.antifraude.exception.ResourceNotFoundException("PlanLicencia", "id", planId));
+        return ResponseEntity.ok(planPlanPreciosRolRepository
+                .findByPlanLicenciaCodigoOrderByPrecioAnualAsc(plan.getCodigo()).stream()
+                .map(ppr -> mapOf(
+                        "rol", ppr.getRol().getCodigo(),
+                        "rolNombre", ppr.getRol().getNombre(),
+                        "precioAnual", ppr.getPrecioAnual(),
+                        "activo", ppr.getActivo()
+                )).toList());
     }
 
     @GetMapping("/roles")

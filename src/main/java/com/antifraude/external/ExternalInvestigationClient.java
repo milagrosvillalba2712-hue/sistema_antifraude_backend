@@ -46,6 +46,18 @@ public class ExternalInvestigationClient {
     }
 
     @SuppressWarnings("unchecked")
+    public ProviderResult<Map<String, Object>> consultarRiesgoPais(String codigoIso) {
+        return (ProviderResult<Map<String, Object>>) (ProviderResult<?>) http.get(client, "RIESGO_PAIS",
+                "/api/v1/riesgo-pais/{codigoIso}", codigoIso, Map.class, body -> true);
+    }
+
+    @SuppressWarnings("unchecked")
+    public ProviderResult<Map<String, Object>> consultarBeneficiarioFinal(String rucSeguro) {
+        return (ProviderResult<Map<String, Object>>) (ProviderResult<?>) http.get(client, "BENEFICIARIO_FINAL",
+                "/api/v1/beneficiario-final/{ruc}", rucSeguro, Map.class, body -> true);
+    }
+
+    @SuppressWarnings("unchecked")
     public ProviderResult<Map<String, Object>> consultarEstadoProveedores() {
         return (ProviderResult<Map<String, Object>>) (ProviderResult<?>) http.get(client, "ESTADO_PROVEEDORES",
                 builder -> builder.path("/api/v1/proveedores/estado").build(),

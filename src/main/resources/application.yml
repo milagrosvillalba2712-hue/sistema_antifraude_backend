@@ -27,8 +27,22 @@ spring:
 app:
   seed:
     enabled: ${SEED_ENABLED:false}
+  auth:
+    link-base-url: ${AUTH_LINK_BASE_URL:http://localhost:5173}
+    require-email-verified: ${AUTH_REQUIRE_EMAIL_VERIFIED:false}
   scheduler:
     enabled: ${SCHEDULER_ENABLED:false}
+  licenses:
+    enforcement:
+      enabled: ${LICENSES_ENFORCEMENT_ENABLED:true}
+    control-plane:
+      url: ${LICENSES_CONTROL_PLANE_URL:}
+      api-key: ${LICENSES_CONTROL_PLANE_API_KEY:}
+    local:
+      scheduler:
+        enabled: ${LICENSES_LOCAL_SCHEDULER_ENABLED:false}
+  audit:
+    nivel: ${AUDIT_NIVEL:avanzada}
   jwt:
     secret: ${JWT_SECRET:jwt_secret_key_default_change_in_production}
     expiration-ms: 86400000

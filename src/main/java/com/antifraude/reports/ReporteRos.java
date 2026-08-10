@@ -55,6 +55,10 @@ public class ReporteRos {
     @Column(name = "soporte_referencia", length = 260)
     private String soporteReferencia;
 
+    @Column(name = "formato", nullable = false, length = 20)
+    @Builder.Default
+    private String formato = "CSV";
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "reporte_json", nullable = false, columnDefinition = "jsonb")
     @Builder.Default
