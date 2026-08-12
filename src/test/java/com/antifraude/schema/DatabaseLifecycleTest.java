@@ -9,6 +9,7 @@ import db.productmigration.V6__External_api_audit;
 import db.productmigration.V7__Remove_external_response_payload;
 import db.productmigration.V8__Preauthenticated_user_tenant_lookup;
 import db.productmigration.V9__Canonical_fk_indexes;
+import db.productmigration.V10__Product_plans_and_role_pricing;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.Container;
@@ -55,7 +56,7 @@ class DatabaseLifecycleTest {
             assertThat(queryInt(postgres, "select count(*) from transacciones"))
                     .isEqualTo(87);
             assertThat(queryInt(postgres, "select count(*) from plan_licencia"))
-                    .isEqualTo(3);
+                    .isEqualTo(6);
             assertThat(queryInt(postgres, "select count(*) from consultas_externas"))
                     .isEqualTo(12);
         }
@@ -82,9 +83,10 @@ class DatabaseLifecycleTest {
                     new V6__External_api_audit(),
                     new V7__Remove_external_response_payload(),
                     new V8__Preauthenticated_user_tenant_lookup(),
-                    new V9__Canonical_fk_indexes());
+                    new V9__Canonical_fk_indexes(),
+                    new V10__Product_plans_and_role_pricing());
 
-            assertThat(historyCount(postgres)).isEqualTo(9);
+            assertThat(historyCount(postgres)).isEqualTo(10);
             assertThat(tableExists(postgres, "licencia_local")).isTrue();
             assertThat(queryInt(postgres, "select count(*) from information_schema.columns where table_name='consultas_externas' and column_name='respuesta_json'"))
                     .isZero();
@@ -106,7 +108,8 @@ class DatabaseLifecycleTest {
                     new V6__External_api_audit(),
                     new V7__Remove_external_response_payload(),
                     new V8__Preauthenticated_user_tenant_lookup(),
-                    new V9__Canonical_fk_indexes());
+                    new V9__Canonical_fk_indexes(),
+                    new V10__Product_plans_and_role_pricing());
 
             execute(postgres, "insert into empresa(id,codigo,nombre,ruc,estado) values " +
                     "('00000000-0000-0000-0000-000000000099','BACKUP_TEST','Backup test','80000099-9','ACTIVA')");
@@ -121,7 +124,7 @@ class DatabaseLifecycleTest {
             assertThat(tableExists(postgres, "empresa")).isTrue();
             assertThat(queryInt(postgres, "select count(*) from empresa where codigo='BACKUP_TEST'"))
                     .isEqualTo(1);
-            assertThat(historyCount(postgres)).isEqualTo(9);
+            assertThat(historyCount(postgres)).isEqualTo(10);
         }
     }
 

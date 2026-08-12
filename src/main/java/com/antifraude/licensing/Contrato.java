@@ -45,6 +45,6 @@ public class Contrato extends AuditableEntity {
     private EstadoContrato estado = EstadoContrato.VIGENTE;
 
     public enum EstadoContrato {
-        BORRADOR, VIGENTE, VENCIDO, RESCINDIDO
+        BORRADOR, VIGENTE, VENCIDO, RESCINDIDO, FINALIZADO
     }
 }

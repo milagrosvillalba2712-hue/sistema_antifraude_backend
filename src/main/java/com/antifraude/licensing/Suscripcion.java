@@ -43,6 +43,6 @@ public class Suscripcion extends AuditableEntity {
     private Boolean renovacionAutomatica = true;
 
     public enum EstadoSuscripcion {
-        ACTIVA, VENCIDA, SUSPENDIDA, CANCELADA
+        ACTIVA, POR_VENCER, VENCIDA, SUSPENDIDA, CANCELADA, CERRADA
     }
 }

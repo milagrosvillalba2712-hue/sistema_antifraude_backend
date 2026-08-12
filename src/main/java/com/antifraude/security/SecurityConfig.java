@@ -2,6 +2,7 @@ package com.antifraude.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -12,6 +13,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import com.antifraude.security.tenant.TenantTransactionFilter;
+import com.antifraude.licensing.LicenciaFilter;
+import org.springframework.http.HttpMethod;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -26,15 +29,21 @@ public class SecurityConfig {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
     private final TenantTransactionFilter tenantTransactionFilter;
+    private final LicenciaFilter licenciaFilter;
+    private final String allowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
                           JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
                           JwtAccessDeniedHandler jwtAccessDeniedHandler,
-                          TenantTransactionFilter tenantTransactionFilter) {
+                          TenantTransactionFilter tenantTransactionFilter,
+                          LicenciaFilter licenciaFilter,
+                          @Value("${app.cors.allowed-origins:http://localhost:5173,http://127.0.0.1:5173}") String allowedOrigins) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
         this.jwtAccessDeniedHandler = jwtAccessDeniedHandler;
         this.tenantTransactionFilter = tenantTransactionFilter;
+        this.licenciaFilter = licenciaFilter;
+        this.allowedOrigins = allowedOrigins;
     }
 
     @Bean
@@ -42,15 +51,22 @@ public class SecurityConfig {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
+            .headers(headers -> headers.frameOptions(frame -> frame.deny()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .exceptionHandling(exception -> exception
                     .authenticationEntryPoint(jwtAuthenticationEntryPoint)
                     .accessDeniedHandler(jwtAccessDeniedHandler))
             .authorizeHttpRequests(auth -> auth
+                    .requestMatchers("/api/auth/change-password").authenticated()
                     .requestMatchers("/api/auth/**").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/licensing-local/install").hasAuthority("LICENCIAS_GESTIONAR")
+                    .requestMatchers(HttpMethod.POST, "/api/licensing-local/activate").hasAuthority("LICENCIAS_GESTIONAR")
+                    .requestMatchers(HttpMethod.POST, "/api/licensing-local/heartbeat").hasAuthority("LICENCIAS_GESTIONAR")
+                    .requestMatchers("/api/licensing-local/**").authenticated()
                     .requestMatchers("/swagger-ui/**").permitAll()
                     .requestMatchers("/swagger-ui.html").permitAll()
                     .requestMatchers("/api-docs/**").permitAll()
+                    .requestMatchers("/error").permitAll()
                     .requestMatchers("/api/admin/**").hasAuthority("USUARIOS_VER")
                     .requestMatchers("/api/licensing/**").hasAuthority("LICENCIAS_VER")
                     .requestMatchers("/api/reglas/**").hasAuthority("REGLAS_VER")
@@ -62,7 +78,8 @@ public class SecurityConfig {
                     .requestMatchers("/api/auditoria/**").hasAuthority("AUDITORIA_VER")
                     .anyRequest().authenticated())
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-            .addFilterAfter(tenantTransactionFilter, JwtAuthenticationFilter.class);
+            .addFilterAfter(tenantTransactionFilter, JwtAuthenticationFilter.class)
+            .addFilterAfter(licenciaFilter, TenantTransactionFilter.class);
 
         return http.build();
     }
@@ -70,15 +87,24 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("*"));
+        configuration.setAllowedOrigins(parseAllowedOrigins());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
+        configuration.setExposedHeaders(List.of("Content-Disposition"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
+    }
+
+    private List<String> parseAllowedOrigins() {
+        return java.util.Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isBlank())
+                .filter(origin -> !"*".equals(origin))
+                .toList();
     }
 
     @Bean

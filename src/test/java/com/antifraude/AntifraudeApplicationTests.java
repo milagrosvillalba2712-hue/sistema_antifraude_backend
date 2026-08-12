@@ -71,7 +71,7 @@ class AntifraudeApplicationTests {
     }
 
     @Test
-    void baselineCanonicaTieneOchoVersionesUnicas() {
+    void baselineCanonicaTieneTreceVersionesUnicas() {
         Integer total = jdbcTemplate.queryForObject("select count(*) from flyway_schema_history where success", Integer.class);
         Integer duplicadas = jdbcTemplate.queryForObject("""
                 select count(*) from (
@@ -79,7 +79,7 @@ class AntifraudeApplicationTests {
                     where version is not null group by version having count(*) > 1
                 ) d
                 """, Integer.class);
-        assertThat(total).isEqualTo(8);
+        assertThat(total).isEqualTo(13);
         assertThat(duplicadas).isZero();
     }
 

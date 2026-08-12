@@ -35,6 +35,9 @@ public class ExternalClientsConfig {
     }
 
     private RestClient client(String url, String key) {
+        if (key == null || key.isBlank()) {
+            throw new IllegalStateException("La integración externa requiere API key operacional explícita");
+        }
         HttpClient.Builder httpBuilder = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2));
         if (url.startsWith("https://")) httpBuilder.sslContext(sslContext());
         HttpClient httpClient = httpBuilder.build();

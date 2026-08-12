@@ -42,6 +42,15 @@ public class PlanLicencia extends AuditableEntity {
     @Column(name = "limite_reportes_mensuales")
     private Integer limiteReportesMensuales;
 
+    @Column(name = "limite_reglas")
+    private Integer limiteReglas;
+
+    @Column(name = "limite_historial_transaccional")
+    private Integer limiteHistorialTransaccional;
+
+    @Column(name = "limite_escenarios")
+    private Integer limiteEscenarios;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "modulos_incluidos_json", columnDefinition = "jsonb")
     private String modulosIncluidosJson;

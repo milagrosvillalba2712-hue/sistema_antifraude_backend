@@ -3,6 +3,9 @@ package com.antifraude.rules;
 import com.antifraude.exception.ResourceNotFoundException;
 import com.antifraude.common.repository.EscenarioRepository;
 import com.antifraude.dto.ReglaRiesgoRequest;
+import com.antifraude.licensing.EmpresaRepository;
+import com.antifraude.licensing.EnforcementService;
+import com.antifraude.security.tenant.TenantContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -21,13 +25,19 @@ public class ReglaRiesgoService {
 
     private final ReglaRiesgoRepository reglaRiesgoRepository;
     private final EscenarioRepository escenarioRepository;
+    private final EnforcementService enforcementService;
+    private final EmpresaRepository empresaRepository;
     private final ObjectMapper objectMapper;
 
     public ReglaRiesgoService(ReglaRiesgoRepository reglaRiesgoRepository,
                               EscenarioRepository escenarioRepository,
+                              EnforcementService enforcementService,
+                              EmpresaRepository empresaRepository,
                               ObjectMapper objectMapper) {
         this.reglaRiesgoRepository = reglaRiesgoRepository;
         this.escenarioRepository = escenarioRepository;
+        this.enforcementService = enforcementService;
+        this.empresaRepository = empresaRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -41,6 +51,14 @@ public class ReglaRiesgoService {
     public ReglaRiesgo crear(ReglaRiesgo regla) {
         log.info("[RULES] Creando regla: {} - Tipo: {} - Severidad: {}",
                 regla.getNombre(), regla.getTipoRegla(), regla.getSeveridad());
+        UUID empresaId = TenantContext.getEmpresaId();
+        if (empresaId != null) {
+            enforcementService.verificarLimiteReglas(empresaId,
+                    reglaRiesgoRepository.countParaEmpresa(empresaId));
+            if (regla.getEmpresa() == null) {
+                regla.setEmpresa(empresaRepository.getReferenceById(empresaId));
+            }
+        }
         if (regla.getVersion() == null) {
             regla.setVersion(1);
         }

@@ -59,7 +59,8 @@ public class Caso extends BaseEntity {
     private String observaciones;
 
     public enum EstadoCaso {
-        NUEVO, ASIGNADO, EN_INVESTIGACION, EN_REVISION, RESUELTO, ROS_GENERADO, CERRADO
+        NUEVO, ASIGNADO, EN_INVESTIGACION, EN_REVISION, PENDIENTE_APROBACION, REEVALUACION,
+        RESUELTO, ROS_GENERADO, CERRADO
     }
 
     public enum PrioridadCaso {

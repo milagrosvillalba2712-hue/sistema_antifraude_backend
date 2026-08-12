@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 public interface CasoRepository extends JpaRepository<Caso, Long> {
@@ -17,8 +18,8 @@ public interface CasoRepository extends JpaRepository<Caso, Long> {
     long countByEstado(Caso.EstadoCaso estado);
     
     @Query("SELECT c FROM Caso c WHERE c.usuarioAnalista.id = :analistaId AND c.estado NOT IN ('CERRADO', 'RESUELTO')")
-    List<Caso> findOpenCasesByAnalista(Long analistaId);
+    List<Caso> findOpenCasesByAnalista(UUID analistaId);
     
     @Query("SELECT COUNT(c) FROM Caso c WHERE c.usuarioAnalista.id = :analistaId AND c.estado NOT IN ('CERRADO', 'RESUELTO')")
-    Long countOpenCasesByAnalista(Long analistaId);
+    Long countOpenCasesByAnalista(UUID analistaId);
 }
