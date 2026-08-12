@@ -16,7 +16,7 @@ public class RuleEngineFactsController {
         return ResponseEntity.ok(List.of(
                 new FactDefinition("monto", "Monto de la transaccion", "NUMERICO", null,
                         List.of(">", ">=", "<", "<=", "between")),
-                new FactDefinition("canal", "Canal utilizado", "CATALOGO", "canal",
+                new FactDefinition("canal", "Canal utilizado", "CATALOGO", "canal_transaccion",
                         List.of("==", "!=", "in")),
                 new FactDefinition("moneda", "Moneda", "CATALOGO", "moneda",
                         List.of("==", "!=", "in")),
