@@ -7,4 +7,5 @@ import java.util.UUID;
 
 public interface ConsumoLicenciaLocalRepository extends JpaRepository<ConsumoLicenciaLocal, Long> {
     Optional<ConsumoLicenciaLocal> findByInstalacionIdAndAnioAndMes(UUID instalacionId, int anio, int mes);
+    java.util.List<ConsumoLicenciaLocal> findTop12ByInstalacionIdOrderByAnioDescMesDesc(UUID instalacionId);
 }

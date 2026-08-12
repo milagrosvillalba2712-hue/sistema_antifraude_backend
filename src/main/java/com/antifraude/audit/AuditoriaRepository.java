@@ -17,4 +17,6 @@ public interface AuditoriaRepository extends JpaRepository<Auditoria, Long> {
     List<Auditoria> findByFechaEventoBetween(OffsetDateTime inicio, OffsetDateTime fin);
 
     List<Auditoria> findByEntidadAfectadaAndEntidadIdOrderByFechaEventoDesc(String entidadAfectada, String entidadId);
+
+    List<Auditoria> findTop50ByEmpresaIdOrderByFechaEventoDesc(UUID empresaId);
 }
