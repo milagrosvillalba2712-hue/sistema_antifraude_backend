@@ -25,7 +25,7 @@ public class ConsumoService {
     @Transactional
     public UsoSuscripcion usoActual(UUID empresaId) {
         YearMonth periodo = YearMonth.now();
-        return usoSuscripcionRepository.findByEmpresaIdAndAnioAndMes(empresaId, periodo.getYear(), periodo.getMonthValue())
+        return usoSuscripcionRepository.findFirstByEmpresaIdAndAnioAndMesOrderByIdDesc(empresaId, periodo.getYear(), periodo.getMonthValue())
                 .orElseGet(() -> nuevaUso(empresaId, periodo.getYear(), periodo.getMonthValue()));
     }
 

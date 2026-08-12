@@ -91,7 +91,7 @@ public class AdminEmpresaController {
                 .orElse(null);
         LicenciaLocal licencia = licenciaVigente(instalacion);
         UsoSuscripcion uso = usoSuscripcionRepository
-                .findByEmpresaIdAndAnioAndMes(empresaId, LocalDate.now().getYear(), LocalDate.now().getMonthValue())
+                .findFirstByEmpresaIdAndAnioAndMesOrderByIdDesc(empresaId, LocalDate.now().getYear(), LocalDate.now().getMonthValue())
                 .orElse(null);
         List<ConsultaExterna> consultas = consultaExternaRepository.findTop50ByEmpresaIdOrderByFechaConsultaDesc(empresaId);
 
