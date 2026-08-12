@@ -8,6 +8,7 @@ import com.antifraude.exception.BusinessException;
 import com.antifraude.external.ConsultaExterna;
 import com.antifraude.external.ConsultaExternaRepository;
 import com.antifraude.security.tenant.TenantContext;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,7 +17,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,6 +46,7 @@ public class AdminEmpresaController {
     private final LicensingValidationService validationService;
     private final LicensingControlPlaneClient controlPlaneClient;
     private final AuditoriaService auditoriaService;
+    private final ObjectMapper objectMapper;
 
     public AdminEmpresaController(EmpresaRepository empresaRepository,
                                   SuscripcionRepository suscripcionRepository,
@@ -57,7 +61,8 @@ public class AdminEmpresaController {
                                   AuditoriaRepository auditoriaRepository,
                                   LicensingValidationService validationService,
                                   LicensingControlPlaneClient controlPlaneClient,
-                                  AuditoriaService auditoriaService) {
+                                  AuditoriaService auditoriaService,
+                                  ObjectMapper objectMapper) {
         this.empresaRepository = empresaRepository;
         this.suscripcionRepository = suscripcionRepository;
         this.pagoRepository = pagoRepository;
@@ -72,6 +77,7 @@ public class AdminEmpresaController {
         this.validationService = validationService;
         this.controlPlaneClient = controlPlaneClient;
         this.auditoriaService = auditoriaService;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping("/resumen")
@@ -123,7 +129,12 @@ public class AdminEmpresaController {
         InstalacionLocal instalacion = instalacionRepository.findTopByEmpresaIdOrderByActivadaEnDesc(empresaId)
                 .orElseThrow(() -> new BusinessException("INSTALACION_NO_ENCONTRADA",
                         "No existe una instalacion local para validar"));
-        LicensingValidationService.ResultadoValidacion resultado = validationService.validar(instalacion.getId(), true);
+        Map<String, Object> controlPlane = controlPlaneClient.validarLease(instalacion.getId(), instalacion.getFingerprintHash());
+        boolean online = Boolean.TRUE.equals(controlPlane.get("online"));
+        if (online && controlPlane.get("leaseToken") != null) {
+            renovarLeaseFirmado(instalacion, controlPlane, controlPlaneClient.jwks());
+        }
+        LicensingValidationService.ResultadoValidacion resultado = validationService.validar(instalacion.getId(), online);
         auditoriaService.registrar(TenantContext.getUsuarioId(), empresaId, "VALIDAR_LICENCIA_ADMIN_EMPRESA",
                 "Validacion manual de licencia desde Admin Empresa", ClientIpResolver.resolve(request),
                 request.getHeader("User-Agent"), "instalacion_local", instalacion.getId(), null, null);
@@ -135,6 +146,7 @@ public class AdminEmpresaController {
                 "detalle", resultado.detalle(),
                 "firmaValida", resultado.firmaValida(),
                 "online", resultado.online(),
+                "controlPlane", controlPlane,
                 "venceEn", resultado.venceEn()
         ));
     }
@@ -237,6 +249,65 @@ public class AdminEmpresaController {
         UUID empresaId = empresaActual();
         return ResponseEntity.ok(auditoriaRepository.findTop50ByEmpresaIdOrderByFechaEventoDesc(empresaId)
                 .stream().map(this::auditoriaDto).toList());
+    }
+
+    private void renovarLeaseFirmado(InstalacionLocal instalacion, Map<String, Object> controlPlane,
+                                     Map<String, Object> jwks) {
+        String leaseToken = String.valueOf(controlPlane.get("leaseToken"));
+        String[] parts = leaseToken.split("\\.");
+        if (parts.length != 3 || !Boolean.TRUE.equals(jwks.get("online"))) {
+            return;
+        }
+        LicenciaLocal licencia = licenciaVigente(instalacion);
+        if (licencia == null) {
+            licencia = LicenciaLocal.builder()
+                    .instalacion(instalacion)
+                    .suscripcionReferencia("CONTROL_PLANE")
+                    .planVersion(1)
+                    .emitidaEn(OffsetDateTime.now())
+                    .estado(LicensingLocalService.LICENCIA_ACTIVA)
+                    .modulosJson("[]")
+                    .limitesJson("{}")
+                    .build();
+        }
+        OffsetDateTime venceEn = OffsetDateTime.parse(String.valueOf(controlPlane.get("vence")));
+        OffsetDateTime graceUntil = OffsetDateTime.parse(String.valueOf(controlPlane.get("graceUntil")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> leasePayload = controlPlane.get("leasePayload") instanceof Map<?, ?> map
+                ? (Map<String, Object>) map
+                : Map.of();
+
+        licencia.setPlanCodigo(String.valueOf(controlPlane.getOrDefault("plan", licencia.getPlanCodigo())));
+        licencia.setEstado(LicensingLocalService.LICENCIA_ACTIVA);
+        licencia.setEmitidaEn(OffsetDateTime.now());
+        licencia.setVenceEn(venceEn);
+        licencia.setDiasGracia((int) Math.max(0, Duration.between(venceEn, graceUntil).toDays()));
+        licencia.setModulosJson(safeJson(leasePayload.getOrDefault("modules", List.of())));
+        licencia.setLimitesJson(safeJson(mapOf(
+                "usuarios", leasePayload.get("maxUsers"),
+                "transaccionesMensuales", leasePayload.get("maxTransactionsMonth"),
+                "consultasKycMensuales", leasePayload.get("maxKycMonth"),
+                "reportesMensuales", leasePayload.get("maxReportsMonth"),
+                "reglas", leasePayload.get("maxRules")
+        )));
+        licencia.setLeasePayload(parts[0] + "." + parts[1]);
+        licencia.setLeaseFirma(parts[2]);
+        licencia.setKidFirma(String.valueOf(controlPlane.get("kid")));
+        licencia.setUltimaValidacionEn(OffsetDateTime.now());
+        licenciaRepository.save(licencia);
+
+        instalacion.setClavePublicaPem(safeJson(jwks));
+        instalacion.setUltimoHeartbeatEn(OffsetDateTime.now());
+        instalacionRepository.save(instalacion);
+
+        eventoRepository.save(EventoLicenciaLocal.builder()
+                .instalacionId(instalacion.getId())
+                .licenciaId(licencia.getId())
+                .tipoEvento("RENOVACION_CONTROL_PLANE_RS256")
+                .resultado("OK")
+                .correlationId(LicenseCryptoService.generarCorrelationId(instalacion.getId()))
+                .detalleSanitizadoJson(mapOf("kid", licencia.getKidFirma(), "venceEn", licencia.getVenceEn()))
+                .build());
     }
 
     private UUID empresaActual() {
@@ -370,6 +441,14 @@ public class AdminEmpresaController {
         return mapOf("id", a.getId(), "usuarioId", a.getUsuarioId(), "accion", a.getAccion(),
                 "descripcion", a.getDescripcion(), "entidadAfectada", a.getEntidadAfectada(),
                 "entidadId", a.getEntidadId(), "direccionIp", a.getDireccionIp(), "fechaEvento", a.getFechaEvento());
+    }
+
+    private String safeJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            return "{}";
+        }
     }
 
     private Map<String, Object> mapOf(Object... values) {

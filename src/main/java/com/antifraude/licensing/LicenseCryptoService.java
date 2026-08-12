@@ -6,9 +6,17 @@ import org.springframework.util.StringUtils;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
+import java.math.BigInteger;
+import java.security.KeyFactory;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.security.spec.RSAPublicKeySpec;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.UUID;
 
@@ -24,6 +32,7 @@ public class LicenseCryptoService {
     static final String KID_FIRMA = "hmac-sha256-v1";
 
     private final byte[] secretKey;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public LicenseCryptoService(@Value("${app.hmac.secret:${app.aes.secret}}") String secret) {
         if (!StringUtils.hasText(secret) || secret.length() < 32) {
@@ -78,6 +87,45 @@ public class LicenseCryptoService {
             diff |= a[i] ^ b[i];
         }
         return diff == 0;
+    }
+
+    /**
+     * Verifica leases nuevos firmados por el Control Plane con RS256 y conserva
+     * compatibilidad con el HMAC local usado en la demo previa.
+     */
+    public boolean verificar(String payload, String firma, String fingerprintHash, String kid, String jwksJson) {
+        if (StringUtils.hasText(kid) && !"hmac-sha256-v1".equals(kid)) {
+            return verificarRs256(payload, firma, kid, jwksJson);
+        }
+        return verificar(payload, firma, fingerprintHash);
+    }
+
+    private boolean verificarRs256(String signingInput, String firmaBase64Url, String kid, String jwksJson) {
+        if (!StringUtils.hasText(signingInput) || !StringUtils.hasText(firmaBase64Url)
+                || !StringUtils.hasText(kid) || !StringUtils.hasText(jwksJson)) {
+            return false;
+        }
+        try {
+            PublicKey publicKey = publicKeyFromJwks(kid, jwksJson);
+            Signature signature = Signature.getInstance("SHA256withRSA");
+            signature.initVerify(publicKey);
+            signature.update(signingInput.getBytes(StandardCharsets.UTF_8));
+            return signature.verify(Base64.getUrlDecoder().decode(firmaBase64Url));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private PublicKey publicKeyFromJwks(String kid, String jwksJson) throws Exception {
+        JsonNode keys = objectMapper.readTree(jwksJson).path("keys");
+        for (JsonNode key : keys) {
+            if (kid.equals(key.path("kid").asText()) && "RSA".equals(key.path("kty").asText())) {
+                BigInteger modulus = new BigInteger(1, Base64.getUrlDecoder().decode(key.path("n").asText()));
+                BigInteger exponent = new BigInteger(1, Base64.getUrlDecoder().decode(key.path("e").asText()));
+                return KeyFactory.getInstance("RSA").generatePublic(new RSAPublicKeySpec(modulus, exponent));
+            }
+        }
+        throw new IllegalArgumentException("No existe clave publica para kid " + kid);
     }
 
     private byte[] derivarClave(String fingerprintHash) {

@@ -35,21 +35,29 @@ public class LicensingControlPlaneClient {
     }
 
     public RespuestaControlPlane validar(UUID instalacionId, String fingerprintHash) {
+        Map<String, Object> response = validarLease(instalacionId, fingerprintHash);
+        if (Boolean.TRUE.equals(response.get("online"))) {
+            return RespuestaControlPlane.respuestaOnline(String.valueOf(response.getOrDefault("estado", "VALIDO")));
+        }
+        return RespuestaControlPlane.respuestaOffline();
+    }
+
+    public Map<String, Object> validarLease(UUID instalacionId, String fingerprintHash) {
         if (!habilitado || restClient == null || !StringUtils.hasText(fingerprintHash)) {
-            return RespuestaControlPlane.respuestaOffline();
+            return offlinePayload("VALIDAR_LICENCIA");
         }
         try {
-            restClient.post()
+            Map<?, ?> response = restClient.post()
                     .uri("/api/v1/licencias/validar")
                     .header("X-API-Key", apiKey)
                     .body(Map.of("instalacionId", instalacionId.toString(), "fingerprintHash", fingerprintHash))
                     .retrieve()
-                    .body(RespuestaControlPlane.class);
-            return RespuestaControlPlane.respuestaOnline();
+                    .body(Map.class);
+            return sanitizeMap(response);
         } catch (RuntimeException exception) {
             log.info("[LICENCIA] Control plane indisponible - instalacion {} - {}", instalacionId,
                     exception.getClass().getSimpleName());
-            return RespuestaControlPlane.respuestaOffline();
+            return offlinePayload("VALIDAR_LICENCIA");
         }
     }
 
@@ -71,6 +79,23 @@ public class LicensingControlPlaneClient {
         } catch (RuntimeException exception) {
             log.info("[LICENCIA] No se pudo obtener manifest de catalogos - {}", exception.getClass().getSimpleName());
             return offlinePayload("CATALOG_MANIFEST");
+        }
+    }
+
+    public Map<String, Object> jwks() {
+        if (!habilitado || restClient == null) {
+            return offlinePayload("JWKS");
+        }
+        try {
+            Map<?, ?> response = restClient.get()
+                    .uri("/api/v1/licencias/jwks")
+                    .header("X-API-Key", apiKey)
+                    .retrieve()
+                    .body(Map.class);
+            return sanitizeMap(response);
+        } catch (RuntimeException exception) {
+            log.info("[LICENCIA] No se pudo obtener JWKS de licencias - {}", exception.getClass().getSimpleName());
+            return offlinePayload("JWKS");
         }
     }
 
@@ -149,8 +174,8 @@ public class LicensingControlPlaneClient {
     }
 
     public record RespuestaControlPlane(boolean online, String estado, String motivo) {
-        static RespuestaControlPlane respuestaOnline() {
-            return new RespuestaControlPlane(true, "VALIDO", null);
+        static RespuestaControlPlane respuestaOnline(String estado) {
+            return new RespuestaControlPlane(true, estado, null);
         }
 
         static RespuestaControlPlane respuestaOffline() {

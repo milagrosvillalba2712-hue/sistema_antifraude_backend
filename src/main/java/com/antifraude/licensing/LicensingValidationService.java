@@ -51,7 +51,8 @@ public class LicensingValidationService {
         }
 
         boolean firmaValida = cryptoService.verificar(licencia.getLeasePayload(),
-                licencia.getLeaseFirma(), instalacion.getFingerprintHash());
+                licencia.getLeaseFirma(), instalacion.getFingerprintHash(),
+                licencia.getKidFirma(), instalacion.getClavePublicaPem());
         if (!firmaValida) {
             return ResultadoValidacion.bloqueado(licencia,
                     "FIRMA_INVALIDA", "El lease no supero la verificacion criptografica");
