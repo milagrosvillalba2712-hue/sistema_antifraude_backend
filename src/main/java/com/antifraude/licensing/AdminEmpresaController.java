@@ -193,6 +193,7 @@ public class AdminEmpresaController {
     public ResponseEntity<Map<String, Object>> configuracion() {
         UUID empresaId = empresaActual();
         PlanLicencia plan = suscripcionActiva(empresaId) != null ? suscripcionActiva(empresaId).getPlanLicencia() : null;
+        Map<String, Object> paqueteControlPlane = controlPlaneClient.configurationPackage();
         return ResponseEntity.ok(mapOf(
                 "empresaId", empresaId,
                 "parametrosEditables", List.of(
@@ -207,7 +208,8 @@ public class AdminEmpresaController {
                         mapOf("codigo", "LICENSE_USAGE_SYNC", "descripcion", "Actualiza consumo local", "estado", "ACTIVO"),
                         mapOf("codigo", "CATALOG_SYNC", "descripcion", "Sincroniza catalogos permitidos", "estado", "PENDIENTE_IMPLEMENTACION")
                 ),
-                "modulosPlan", plan != null ? plan.getModulosIncluidosJson() : null
+                "modulosPlan", plan != null ? plan.getModulosIncluidosJson() : null,
+                "paqueteControlPlane", paqueteControlPlane
         ));
     }
 
@@ -215,14 +217,18 @@ public class AdminEmpresaController {
     @Transactional
     public ResponseEntity<Map<String, Object>> sincronizarCatalogos(HttpServletRequest request) {
         UUID empresaId = empresaActual();
+        Map<String, Object> manifest = controlPlaneClient.catalogManifest();
         auditoriaService.registrar(TenantContext.getUsuarioId(), empresaId, "SOLICITAR_SYNC_CATALOGOS",
                 "Solicitud manual de sincronizacion de catalogos desde Admin Empresa",
                 ClientIpResolver.resolve(request), request.getHeader("User-Agent"),
-                "catalogo_sync", empresaId, null, null);
+                "catalogo_sync", empresaId, null, "{\"manifestOnline\":" + Boolean.TRUE.equals(manifest.get("online")) + "}");
         return ResponseEntity.ok(mapOf(
-                "estado", "PENDIENTE_IMPLEMENTACION_CONTROL_PLANE",
-                "mensaje", "La solicitud quedo auditada. La descarga real se implementara al conectar el Control Plane.",
-                "controlPlaneHabilitado", controlPlaneClient.habilitado()
+                "estado", Boolean.TRUE.equals(manifest.get("online")) ? "MANIFEST_RECIBIDO" : "SIN_CONECTIVIDAD",
+                "mensaje", Boolean.TRUE.equals(manifest.get("online"))
+                        ? "Manifest de catalogos recibido desde Control Plane simulado."
+                        : "La solicitud quedo auditada, pero el Control Plane no esta disponible.",
+                "controlPlaneHabilitado", controlPlaneClient.habilitado(),
+                "manifest", manifest
         ));
     }
 

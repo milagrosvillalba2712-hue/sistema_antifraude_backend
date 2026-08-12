@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -54,6 +55,97 @@ public class LicensingControlPlaneClient {
 
     public boolean habilitado() {
         return habilitado;
+    }
+
+    public Map<String, Object> catalogManifest() {
+        if (!habilitado || restClient == null) {
+            return offlinePayload("CATALOG_MANIFEST");
+        }
+        try {
+            Map<?, ?> response = restClient.get()
+                    .uri("/api/v1/catalogs/manifest")
+                    .header("X-API-Key", apiKey)
+                    .retrieve()
+                    .body(Map.class);
+            return sanitizeMap(response);
+        } catch (RuntimeException exception) {
+            log.info("[LICENCIA] No se pudo obtener manifest de catalogos - {}", exception.getClass().getSimpleName());
+            return offlinePayload("CATALOG_MANIFEST");
+        }
+    }
+
+    public Map<String, Object> configurationPackage() {
+        if (!habilitado || restClient == null) {
+            return offlinePayload("CONFIGURATION_PACKAGE");
+        }
+        try {
+            Map<?, ?> response = restClient.get()
+                    .uri("/api/v1/configuration/package")
+                    .header("X-API-Key", apiKey)
+                    .retrieve()
+                    .body(Map.class);
+            return sanitizeMap(response);
+        } catch (RuntimeException exception) {
+            log.info("[LICENCIA] No se pudo obtener paquete de configuracion - {}", exception.getClass().getSimpleName());
+            return offlinePayload("CONFIGURATION_PACKAGE");
+        }
+    }
+
+    public Map<String, Object> reportHeartbeat(UUID instalacionId) {
+        if (!habilitado || restClient == null || instalacionId == null) {
+            return offlinePayload("HEARTBEAT");
+        }
+        try {
+            Map<?, ?> response = restClient.post()
+                    .uri("/api/v1/telemetry/heartbeat")
+                    .header("X-API-Key", apiKey)
+                    .body(Map.of("instalacionId", instalacionId.toString()))
+                    .retrieve()
+                    .body(Map.class);
+            return sanitizeMap(response);
+        } catch (RuntimeException exception) {
+            log.info("[LICENCIA] Heartbeat hacia Control Plane no disponible - {}", exception.getClass().getSimpleName());
+            return offlinePayload("HEARTBEAT");
+        }
+    }
+
+    public Map<String, Object> reportUsage(UUID instalacionId, Map<String, Object> usage) {
+        if (!habilitado || restClient == null || instalacionId == null) {
+            return offlinePayload("USAGE");
+        }
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>(usage != null ? usage : Map.of());
+            payload.put("instalacionId", instalacionId.toString());
+            Map<?, ?> response = restClient.post()
+                    .uri("/api/v1/telemetry/usage")
+                    .header("X-API-Key", apiKey)
+                    .body(payload)
+                    .retrieve()
+                    .body(Map.class);
+            return sanitizeMap(response);
+        } catch (RuntimeException exception) {
+            log.info("[LICENCIA] Reporte de uso hacia Control Plane no disponible - {}", exception.getClass().getSimpleName());
+            return offlinePayload("USAGE");
+        }
+    }
+
+    private Map<String, Object> offlinePayload(String operation) {
+        return Map.of(
+                "online", false,
+                "operation", operation,
+                "estado", "SIN_CONECTIVIDAD",
+                "mensaje", "Control Plane no configurado o no disponible"
+        );
+    }
+
+    private Map<String, Object> sanitizeMap(Map<?, ?> response) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (response == null) {
+            return result;
+        }
+        response.forEach((key, value) -> result.put(String.valueOf(key), value));
+        result.putIfAbsent("online", true);
+        return result;
     }
 
     public record RespuestaControlPlane(boolean online, String estado, String motivo) {
