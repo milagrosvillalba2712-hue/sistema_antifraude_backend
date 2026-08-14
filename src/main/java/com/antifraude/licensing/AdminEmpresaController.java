@@ -205,13 +205,10 @@ public class AdminEmpresaController {
             consultas = List.of();
         }
         List<ApiErrorDescriptor> catalogo = observabilityService.catalogoErrores();
-        List<ApiErrorDescriptor> internas = catalogo.stream()
-                .filter(error -> "INTERNA".equalsIgnoreCase(error.tipoOrigen()))
-                .toList();
-        List<ApiErrorDescriptor> externas = catalogo.stream()
-                .filter(error -> !"INTERNA".equalsIgnoreCase(error.tipoOrigen()))
-                .toList();
         List<Map<String, Object>> eventosRecientes = observabilityService.apiErrors(empresaId, status, parseDate(desde), parseDate(hasta));
+        List<Map<String, Object>> eventosInternos = eventosRecientes.stream()
+                .filter(evento -> "INTERNA".equalsIgnoreCase(String.valueOf(evento.get("tipo"))))
+                .toList();
         List<Map<String, Object>> eventosExternos = eventosRecientes.stream()
                 .filter(evento -> "EXTERNA".equalsIgnoreCase(String.valueOf(evento.get("tipo"))))
                 .toList();
@@ -223,8 +220,8 @@ public class AdminEmpresaController {
                 .toList();
         return ResponseEntity.ok(mapOf(
                 "catalogo", catalogo,
-                "internas", internas,
-                "externas", externas,
+                "internas", eventosInternos,
+                "externas", eventosExternos,
                 "eventosExternos", eventosExternos,
                 "eventosRecientes", eventosRecientes,
                 "statusCodes", statusCodes
