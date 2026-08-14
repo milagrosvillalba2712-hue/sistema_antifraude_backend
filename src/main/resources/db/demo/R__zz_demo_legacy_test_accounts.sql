@@ -46,7 +46,7 @@ WITH cuentas(email,nombre,rol_codigo) AS (VALUES
 )
 INSERT INTO usuarios(id,email,nombre,password_hash,activo)
 SELECT md5(c.email)::uuid,c.email,c.nombre,crypt('Regula2026!',gen_salt('bf')),true FROM cuentas c
-ON CONFLICT(email) DO UPDATE SET nombre=EXCLUDED.nombre,password_hash=EXCLUDED.password_hash,
+ON CONFLICT(id) DO UPDATE SET email=EXCLUDED.email,nombre=EXCLUDED.nombre,password_hash=EXCLUDED.password_hash,
 activo=true,intentos_fallidos=0,bloqueado_hasta=NULL;
 
 WITH cuentas(email,rol_codigo) AS (VALUES

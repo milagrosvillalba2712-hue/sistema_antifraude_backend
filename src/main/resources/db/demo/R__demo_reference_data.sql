@@ -1,7 +1,11 @@
 -- Datos exclusivamente académicos. Esta ubicación solo se activa con el perfil demo.
 INSERT INTO empresa (id, codigo, nombre, ruc, estado)
 VALUES ('00000000-0000-0000-0000-000000000001', 'REGULA_DEMO', 'Empresa académica Regula', '80000000-0', 'ACTIVA')
-ON CONFLICT (codigo) DO NOTHING;
+ON CONFLICT (id) DO UPDATE
+SET codigo = EXCLUDED.codigo,
+    nombre = EXCLUDED.nombre,
+    ruc = EXCLUDED.ruc,
+    estado = EXCLUDED.estado;
 
 INSERT INTO pais (codigo_iso, codigo_iso3, nombre, activo)
 VALUES ('PY', 'PRY', 'Paraguay', true)
@@ -26,7 +30,7 @@ INSERT INTO usuarios (id, email, nombre, password_hash, activo)
 VALUES
   ('00000000-0000-0000-0000-000000000101', 'admin@demo.regula.local', 'Administración Académica', crypt('RegulaDemo2026!', gen_salt('bf')), true),
   ('00000000-0000-0000-0000-000000000102', 'analista@demo.regula.local', 'Analista Académico', crypt('RegulaDemo2026!', gen_salt('bf')), true)
-ON CONFLICT (email) DO UPDATE SET nombre=EXCLUDED.nombre, activo=true;
+ON CONFLICT (id) DO UPDATE SET email=EXCLUDED.email, nombre=EXCLUDED.nombre, activo=true;
 
 INSERT INTO rol (codigo, nombre, descripcion, alcance, tipo)
 VALUES

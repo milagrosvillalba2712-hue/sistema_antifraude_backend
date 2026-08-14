@@ -4,11 +4,15 @@
 -- ordene antes del seed de escenarios deterministas.
 INSERT INTO empresa(id,codigo,nombre,ruc,estado)
 VALUES('00000000-0000-0000-0000-000000000001','REGULA_DEMO','Empresa academica Regula','80000000-0','ACTIVA')
-ON CONFLICT(codigo) DO UPDATE SET nombre=EXCLUDED.nombre,estado=EXCLUDED.estado;
+ON CONFLICT(id) DO UPDATE
+SET codigo = EXCLUDED.codigo,
+    nombre = EXCLUDED.nombre,
+    ruc = EXCLUDED.ruc,
+    estado = EXCLUDED.estado;
 INSERT INTO usuarios(id,email,nombre,password_hash,activo) VALUES
 ('00000000-0000-0000-0000-000000000101','admin@demo.regula.local','Administracion Academica',crypt('RegulaDemo2026!',gen_salt('bf')),true),
 ('00000000-0000-0000-0000-000000000102','analista@demo.regula.local','Analista Academico',crypt('RegulaDemo2026!',gen_salt('bf')),true)
-ON CONFLICT(email) DO UPDATE SET nombre=EXCLUDED.nombre,activo=true;
+ON CONFLICT(id) DO UPDATE SET email=EXCLUDED.email,nombre=EXCLUDED.nombre,activo=true;
 SELECT set_config('app.current_empresa_id','00000000-0000-0000-0000-000000000001',false);
 SELECT set_config('app.current_usuario_id','00000000-0000-0000-0000-000000000101',false);
 
@@ -123,7 +127,7 @@ INSERT INTO usuarios(id,email,nombre,password_hash,activo) VALUES
 ('00000000-0000-0000-0000-000000000103','supervisor@demo.regula.local','Supervisor Cumplimiento Demo',crypt('RegulaDemo2026!',gen_salt('bf')),true),
 ('00000000-0000-0000-0000-000000000104','auditor@demo.regula.local','Auditor Interno Demo',crypt('RegulaDemo2026!',gen_salt('bf')),true),
 ('00000000-0000-0000-0000-000000000105','analista2@demo.regula.local','Segundo Analista Demo',crypt('RegulaDemo2026!',gen_salt('bf')),true)
-ON CONFLICT(email) DO UPDATE SET nombre=EXCLUDED.nombre,activo=true;
+ON CONFLICT(id) DO UPDATE SET email=EXCLUDED.email,nombre=EXCLUDED.nombre,activo=true;
 
 INSERT INTO usuario_empresa(empresa_id,usuario_id,rol_id,estado)
 SELECT '00000000-0000-0000-0000-000000000001',u.id,r.id,'ACTIVO'
@@ -181,11 +185,11 @@ ON CONFLICT(empresa_id,suscripcion_id,periodo) DO UPDATE SET transacciones_proce
 
 INSERT INTO instalacion_local(id,empresa_id,identificador_instalacion,fingerprint_hash,clave_publica_pem,estado,version_producto,activada_en,ultimo_heartbeat_en)
 VALUES('00000000-0000-0000-0000-000000009001','00000000-0000-0000-0000-000000000001','INST-DEMO-ASUNCION-01','sha256:demo-fingerprint-no-productivo','-----BEGIN PUBLIC KEY-----\nDEMO-NO-CRIPTOGRAFICO\n-----END PUBLIC KEY-----','ACTIVA','1.0.0-demo',TIMESTAMPTZ '2026-01-02 09:00:00-03',TIMESTAMPTZ '2026-08-05 21:00:00-03')
-ON CONFLICT(identificador_instalacion) DO UPDATE SET estado=EXCLUDED.estado,version_producto=EXCLUDED.version_producto;
+ON CONFLICT(id) DO UPDATE SET empresa_id=EXCLUDED.empresa_id,identificador_instalacion=EXCLUDED.identificador_instalacion,estado=EXCLUDED.estado,version_producto=EXCLUDED.version_producto,ultimo_heartbeat_en=EXCLUDED.ultimo_heartbeat_en;
 
 INSERT INTO licencia_local(id,instalacion_id,suscripcion_referencia,plan_codigo,plan_version,estado,emitida_en,vence_en,dias_gracia,modulos_json,limites_json,lease_payload,lease_firma,kid_firma,ultima_validacion_en)
-VALUES('00000000-0000-0000-0000-000000009101','00000000-0000-0000-0000-000000009001','SUB-DEMO-2026','PROFESSIONAL',1,'ACTIVA',TIMESTAMPTZ '2026-08-05 20:00:00-03',TIMESTAMPTZ '2026-08-06 20:00:00-03',15,'["TRANSACCIONES","ALERTAS","KYC","CASOS","ROS"]','{"usuarios":50,"transaccionesMes":1000000,"consultasKycMes":20000}','eyJkZW1vIjp0cnVlLCJub1ZhbGlkYXJGaXJtYSI6dHJ1ZX0','DEMO_SIGNATURE_NOT_CRYPTOGRAPHIC','demo-key-2026',TIMESTAMPTZ '2026-08-05 21:00:00-03')
-ON CONFLICT(id) DO UPDATE SET estado=EXCLUDED.estado,vence_en=EXCLUDED.vence_en,ultima_validacion_en=EXCLUDED.ultima_validacion_en;
+VALUES('00000000-0000-0000-0000-000000009101','00000000-0000-0000-0000-000000009001','SUB-DEMO-2026','PROFESSIONAL',1,'ACTIVA',TIMESTAMPTZ '2026-08-05 20:00:00-03',TIMESTAMPTZ '2026-12-31 23:59:59-03',15,'["TRANSACCIONES","ALERTAS","KYC","CASOS","ROS"]','{"usuarios":50,"transaccionesMes":1000000,"consultasKycMes":20000}','eyJkZW1vIjp0cnVlLCJub1ZhbGlkYXJGaXJtYSI6dHJ1ZX0','DEMO_SIGNATURE_NOT_CRYPTOGRAPHIC','demo-key-2026',TIMESTAMPTZ '2026-08-05 21:00:00-03')
+ON CONFLICT(id) DO UPDATE SET suscripcion_referencia=EXCLUDED.suscripcion_referencia,plan_codigo=EXCLUDED.plan_codigo,estado=EXCLUDED.estado,emitida_en=EXCLUDED.emitida_en,vence_en=EXCLUDED.vence_en,ultima_validacion_en=EXCLUDED.ultima_validacion_en;
 
 INSERT INTO consumo_licencia_local(instalacion_id,anio,mes,usuarios_activos,transacciones_procesadas,consultas_kyc,alertas_generadas,reportes_generados) VALUES
 ('00000000-0000-0000-0000-000000009001',2026,7,5,7000,140,35,3),

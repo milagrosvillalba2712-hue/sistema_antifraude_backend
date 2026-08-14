@@ -5,7 +5,6 @@ import com.antifraude.audit.AuditoriaRepository;
 import com.antifraude.audit.AuditoriaService;
 import com.antifraude.config.ClientIpResolver;
 import com.antifraude.dto.ApiErrorDescriptor;
-import com.antifraude.exception.ApiErrorCatalog;
 import com.antifraude.exception.BusinessException;
 import com.antifraude.external.ConsultaExterna;
 import com.antifraude.external.ConsultaExternaRepository;
@@ -205,12 +204,12 @@ public class AdminEmpresaController {
             log.warn("No se pudieron cargar consultas externas para el monitor de errores de la empresa {}", empresaId, ex);
             consultas = List.of();
         }
-        List<ApiErrorDescriptor> catalogo = ApiErrorCatalog.all();
+        List<ApiErrorDescriptor> catalogo = observabilityService.catalogoErrores();
         List<ApiErrorDescriptor> internas = catalogo.stream()
-                .filter(error -> error.origen().startsWith("INTERNA:"))
+                .filter(error -> "INTERNA".equalsIgnoreCase(error.tipoOrigen()))
                 .toList();
         List<ApiErrorDescriptor> externas = catalogo.stream()
-                .filter(error -> error.origen().startsWith("EXTERNA:"))
+                .filter(error -> !"INTERNA".equalsIgnoreCase(error.tipoOrigen()))
                 .toList();
         List<Map<String, Object>> eventosRecientes = observabilityService.apiErrors(empresaId, status, parseDate(desde), parseDate(hasta));
         List<Map<String, Object>> eventosExternos = eventosRecientes.stream()
@@ -260,20 +259,11 @@ public class AdminEmpresaController {
         UUID empresaId = empresaActual();
         PlanLicencia plan = suscripcionActiva(empresaId) != null ? suscripcionActiva(empresaId).getPlanLicencia() : null;
         Map<String, Object> paqueteControlPlane = controlPlaneClient.configurationPackage();
+        Map<String, Object> configuracionLocal = observabilityService.configuracionLocal(empresaId);
         return ResponseEntity.ok(mapOf(
                 "empresaId", empresaId,
-                "parametrosEditables", List.of(
-                        "Frecuencia de heartbeat",
-                        "Frecuencia de sincronizacion de catalogos",
-                        "Modo offline dentro de gracia",
-                        "Notificaciones administrativas",
-                        "Ventanas de mantenimiento"
-                ),
-                "jobs", List.of(
-                        mapOf("codigo", "LICENSE_HEARTBEAT", "descripcion", "Reporta vida de instalacion", "estado", "ACTIVO"),
-                        mapOf("codigo", "LICENSE_USAGE_SYNC", "descripcion", "Actualiza consumo local", "estado", "ACTIVO"),
-                        mapOf("codigo", "CATALOG_SYNC", "descripcion", "Sincroniza catalogos permitidos", "estado", "PENDIENTE_IMPLEMENTACION")
-                ),
+                "parametrosEditables", configuracionLocal.get("parametrosEditables"),
+                "jobs", configuracionLocal.get("jobs"),
                 "modulosPlan", plan != null ? plan.getModulosIncluidosJson() : null,
                 "paqueteControlPlane", paqueteControlPlane
         ));
@@ -472,19 +462,27 @@ public class AdminEmpresaController {
         String codigo = c.getCategoriaError() != null && !c.getCategoriaError().isBlank()
                 ? c.getCategoriaError()
                 : "HTTP_" + c.getStatusHttp();
-        ApiErrorDescriptor descriptor = ApiErrorCatalog.find(c.getProveedor(), codigo)
-                .orElseGet(() -> ApiErrorCatalog.find(null, codigo)
-                        .orElse(new ApiErrorDescriptor(
-                                "EXTERNA:" + (c.getProveedor() != null ? c.getProveedor() : "PROVEEDOR"),
-                                c.getProveedor() != null ? c.getProveedor() : "PROVEEDOR",
-                                codigo,
-                                c.getStatusHttp() != null ? c.getStatusHttp() : 0,
-                                "Error reportado por API externa",
-                                "Evento registrado en consultas_externas.",
-                                "EXTERNA"
-                        )));
+        ApiErrorDescriptor descriptor = observabilityService.catalogoErrores().stream()
+                .filter(error -> error.codigoError().equalsIgnoreCase(codigo))
+                .filter(error -> c.getProveedor() == null || error.api().equalsIgnoreCase(c.getProveedor()))
+                .findFirst()
+                .or(() -> observabilityService.catalogoErrores().stream()
+                        .filter(error -> error.codigoError().equalsIgnoreCase(codigo))
+                        .findFirst())
+                .orElse(new ApiErrorDescriptor(
+                        c.getProveedor() != null ? c.getProveedor() : "PROVEEDOR",
+                        "EXTERNA",
+                        c.getProveedor() != null ? c.getProveedor() : "PROVEEDOR",
+                        codigo,
+                        c.getStatusHttp() != null ? c.getStatusHttp() : 0,
+                        "Error reportado por API externa",
+                        "Evento registrado en consultas_externas.",
+                        "EXTERNA",
+                        c.getFechaConsulta()
+                ));
         return mapOf("id", c.getId(),
                 "origen", descriptor.origen(),
+                "tipoOrigen", descriptor.tipoOrigen(),
                 "api", descriptor.api(),
                 "codigo_error", descriptor.codigoError(),
                 "status_code", c.getStatusHttp() != null ? c.getStatusHttp() : descriptor.statusCode(),

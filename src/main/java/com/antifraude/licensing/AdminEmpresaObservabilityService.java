@@ -1,5 +1,6 @@
 package com.antifraude.licensing;
 
+import com.antifraude.dto.ApiErrorDescriptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -209,6 +210,44 @@ public class AdminEmpresaObservabilityService {
 
     public List<Map<String, Object>> recentApiErrors(UUID empresaId) {
         return errorHistory(empresaId);
+    }
+
+    public Map<String, Object> configuracionLocal(UUID empresaId) {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+                select id, tipo, codigo, nombre, descripcion, estado, editable, orden, detalle_json as detalle
+                from admin_empresa_configuracion_local
+                where empresa_id = ?
+                  and estado <> 'ELIMINADO'
+                order by tipo, orden, codigo
+                """, empresaId);
+        return mapOf(
+                "parametrosEditables", rows.stream()
+                        .filter(row -> "PARAMETRO".equalsIgnoreCase(String.valueOf(row.get("tipo"))))
+                        .toList(),
+                "jobs", rows.stream()
+                        .filter(row -> "JOB".equalsIgnoreCase(String.valueOf(row.get("tipo"))))
+                        .toList()
+        );
+    }
+
+    public List<ApiErrorDescriptor> catalogoErrores() {
+        return jdbcTemplate.query("""
+                select origen, tipo_origen, api, codigo_error, status_code, mensaje, detalles, categoria,
+                       coalesce(fecha_hora_modificacion, fecha_hora_creacion) as fecha
+                from api_error_catalogo
+                where activo = true
+                order by origen, codigo_error
+                """, (rs, rowNum) -> new ApiErrorDescriptor(
+                rs.getString("origen"),
+                rs.getString("tipo_origen"),
+                rs.getString("api"),
+                rs.getString("codigo_error"),
+                rs.getInt("status_code"),
+                rs.getString("mensaje"),
+                rs.getString("detalles"),
+                rs.getString("categoria"),
+                rs.getObject("fecha", OffsetDateTime.class)
+        ));
     }
 
     private Map<String, Object> latestUsage(UUID empresaId) {

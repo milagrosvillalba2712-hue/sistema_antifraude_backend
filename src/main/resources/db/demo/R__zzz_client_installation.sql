@@ -59,7 +59,7 @@ WITH cuentas(id,email,nombre,rol_codigo,cargo,area) AS (VALUES
 )
 INSERT INTO usuarios(id,email,nombre,password_hash,activo,intentos_fallidos,bloqueado_hasta)
 SELECT id,email,nombre,crypt('Regula2026!',gen_salt('bf')),true,0,NULL FROM cuentas
-ON CONFLICT(email) DO UPDATE SET nombre=EXCLUDED.nombre,password_hash=EXCLUDED.password_hash,
+ON CONFLICT(id) DO UPDATE SET email=EXCLUDED.email,nombre=EXCLUDED.nombre,password_hash=EXCLUDED.password_hash,
  activo=true,intentos_fallidos=0,bloqueado_hasta=NULL;
 
 WITH cuentas(email,rol_codigo) AS (VALUES
@@ -89,26 +89,48 @@ FROM usuarios u WHERE u.email='analista@santaclara.local'
 ON CONFLICT(empresa_id,usuario_id) DO UPDATE SET estado='DISPONIBLE',capacidad_maxima=20;
 
 -- Contrato y licencia local con identificadores propios de la empresa instalada.
-UPDATE suscripcion SET codigo='SUB-SCL-2026-001',observacion='Licencia anual Professional'
- WHERE codigo='SUB-DEMO-2026';
-UPDATE contrato SET numero_contrato='SCL-REGULA-2026-001',
+UPDATE suscripcion SET codigo='SUB-SCL-2026-001'
+ WHERE codigo='SUB-DEMO-2026'
+   AND NOT EXISTS(SELECT 1 FROM suscripcion WHERE codigo='SUB-SCL-2026-001');
+UPDATE suscripcion SET observacion='Licencia anual Professional'
+ WHERE codigo='SUB-SCL-2026-001';
+
+UPDATE contrato SET numero_contrato='SCL-REGULA-2026-001'
+ WHERE numero_contrato='CTR-DEMO-2026-001'
+   AND NOT EXISTS(SELECT 1 FROM contrato WHERE numero_contrato='SCL-REGULA-2026-001');
+UPDATE contrato SET
  documento_referencia='contratos/SCL-REGULA-2026-001.pdf',
  observaciones='Contrato de simulación de aceptación',
  hash_documento=hmac('SCL-REGULA-2026-001','regula-local-test-key','sha256')
- WHERE numero_contrato='CTR-DEMO-2026-001';
-UPDATE pago SET codigo='PAG-SCL-2026-001',comprobante_referencia='TRX-SCL-2025-001'
- WHERE codigo='PAG-DEMO-2026-001';
+ WHERE numero_contrato='SCL-REGULA-2026-001';
+
+UPDATE pago SET codigo='PAG-SCL-2026-001'
+ WHERE codigo='PAG-DEMO-2026-001'
+   AND NOT EXISTS(SELECT 1 FROM pago WHERE codigo='PAG-SCL-2026-001');
+UPDATE pago SET comprobante_referencia='TRX-SCL-2025-001'
+ WHERE codigo='PAG-SCL-2026-001';
+
 UPDATE uso_suscripcion SET consumo_json=consumo_json-'demo';
-UPDATE instalacion_local SET identificador_instalacion='SCL-ASUNCION-01',
+UPDATE instalacion_local SET identificador_instalacion='SCL-ASUNCION-01'
+ WHERE identificador_instalacion='INST-DEMO-ASUNCION-01'
+   AND NOT EXISTS(SELECT 1 FROM instalacion_local WHERE identificador_instalacion='SCL-ASUNCION-01');
+UPDATE instalacion_local SET
  fingerprint_hash='sha256:installation-fingerprint-placeholder',
  clave_publica_pem='-----BEGIN PUBLIC KEY-----\nPENDING-ACTIVATION\n-----END PUBLIC KEY-----',
- version_producto='1.0.0' WHERE identificador_instalacion='INST-DEMO-ASUNCION-01';
+ version_producto='1.0.0' WHERE identificador_instalacion='SCL-ASUNCION-01';
 UPDATE licencia_local SET suscripcion_referencia='SUB-SCL-2026-001',
  lease_payload='eyJtb2RvIjoic2ltdWxhY2lvbi1sb2NhbCJ9',
  lease_firma='PENDING-CONTROL-PLANE-SIGNATURE',kid_firma='local-acceptance-key'
- WHERE suscripcion_referencia='SUB-DEMO-2026';
+ WHERE suscripcion_referencia IN ('SUB-DEMO-2026','SUB-SCL-2026-001');
 UPDATE evento_licencia_local SET correlation_id=replace(correlation_id,'demo-license','scl-license'),
- detalle_sanitizado_json=detalle_sanitizado_json-'demo';
+ detalle_sanitizado_json=detalle_sanitizado_json-'demo'
+ WHERE correlation_id LIKE 'demo-license-%'
+   AND NOT EXISTS (
+       SELECT 1 FROM evento_licencia_local e2
+       WHERE e2.correlation_id = replace(evento_licencia_local.correlation_id,'demo-license','scl-license')
+   );
+UPDATE evento_licencia_local SET detalle_sanitizado_json=detalle_sanitizado_json-'demo'
+ WHERE correlation_id LIKE 'scl-license-%';
 
 -- Sustituye etiquetas académicas visibles conservando el origen ficticio de forma explícita.
 UPDATE usuarios SET
@@ -121,53 +143,99 @@ UPDATE usuarios SET
    ELSE replace(email,'@cliente.local','@santaclara.local') END,
  nombre=replace(replace(nombre,' Demo',''),'Académico','de Cumplimiento')
 WHERE email LIKE '%@demo.regula.local' OR email LIKE '%@cliente.local';
-UPDATE rol SET codigo=replace(codigo,'_DEMO','_BASE'),nombre=replace(nombre,' demo',' base'),
- descripcion=replace(replace(descripcion,'demo','instalación'),'académica','operativa') WHERE codigo LIKE '%DEMO%';
-UPDATE permiso SET codigo=replace(codigo,'DEMO','CONTROL'),nombre=replace(nombre,'demo','control'),
+UPDATE rol r SET codigo=replace(r.codigo,'_DEMO','_BASE'),nombre=replace(r.nombre,' demo',' base'),
+ descripcion=replace(replace(r.descripcion,'demo','instalación'),'académica','operativa')
+WHERE r.codigo LIKE '%DEMO%'
+  AND NOT EXISTS(SELECT 1 FROM rol r2 WHERE r2.codigo=replace(r.codigo,'_DEMO','_BASE'));
+UPDATE permiso p SET codigo=replace(p.codigo,'DEMO','CONTROL'),nombre=replace(p.nombre,'demo','control'),
  descripcion=replace(replace(descripcion,'demo','control'),'académico','operativo'),modulo=replace(modulo,'Demo','Control')
-WHERE codigo ILIKE '%demo%' OR nombre ILIKE '%demo%' OR descripcion ILIKE '%demo%' OR modulo ILIKE '%demo%';
+WHERE (p.codigo ILIKE '%demo%' OR p.nombre ILIKE '%demo%' OR p.descripcion ILIKE '%demo%' OR p.modulo ILIKE '%demo%')
+  AND NOT EXISTS(SELECT 1 FROM permiso p2 WHERE p2.codigo=replace(p.codigo,'DEMO','CONTROL'));
 UPDATE canal_transaccion SET codigo='API_CONTROL',nombre='API de integración',descripcion='Canal API para pruebas de aceptación'
-WHERE codigo='API_DEMO';
+WHERE codigo='API_DEMO' AND NOT EXISTS(SELECT 1 FROM canal_transaccion WHERE codigo='API_CONTROL');
 UPDATE tipo_transaccion SET codigo='TRANSFERENCIA_CONTROL',nombre='Transferencia de control',
- descripcion='Transferencia ficticia para validación funcional' WHERE codigo='TRANSFERENCIA_DEMO';
-UPDATE producto SET codigo='CUENTA_CONTROL',nombre='Cuenta transaccional' WHERE codigo='CUENTA_DEMO';
-UPDATE banco_emisor SET codigo=replace(codigo,'DEMO','SCL'),nombre=replace(nombre,'Demo','Santa Clara') WHERE codigo LIKE '%DEMO%';
-UPDATE procesadora_tarjeta SET codigo='PROCESADORA_LOCAL',nombre='Procesadora local de pruebas' WHERE codigo='PROCESADORA_DEMO';
+ descripcion='Transferencia ficticia para validación funcional'
+WHERE codigo='TRANSFERENCIA_DEMO' AND NOT EXISTS(SELECT 1 FROM tipo_transaccion WHERE codigo='TRANSFERENCIA_CONTROL');
+UPDATE producto SET codigo='CUENTA_CONTROL',nombre='Cuenta transaccional'
+WHERE codigo='CUENTA_DEMO' AND NOT EXISTS(SELECT 1 FROM producto WHERE codigo='CUENTA_CONTROL');
+UPDATE banco_emisor b SET codigo=replace(b.codigo,'DEMO','SCL'),nombre=replace(b.nombre,'Demo','Santa Clara')
+WHERE b.codigo LIKE '%DEMO%' AND NOT EXISTS(SELECT 1 FROM banco_emisor b2 WHERE b2.codigo=replace(b.codigo,'DEMO','SCL'));
+UPDATE procesadora_tarjeta SET codigo='PROCESADORA_LOCAL',nombre='Procesadora local de pruebas'
+WHERE codigo='PROCESADORA_DEMO' AND NOT EXISTS(SELECT 1 FROM procesadora_tarjeta WHERE codigo='PROCESADORA_LOCAL');
 UPDATE empe_operador SET nombre=replace(nombre,' Demo','') WHERE nombre ILIKE '%demo%';
 UPDATE persona SET nombre_razon_social=replace(replace(replace(replace(nombre_razon_social,'Sintética','Ficticia'),'Sintetica','Ficticia'),'Sintetico','Ficticio'),' Demo','');
 UPDATE perfil_cliente SET actividad_economica='Actividad declarada por el cliente',perfil_json=perfil_json-'demo';
-UPDATE fuente_datos_riesgo SET codigo=replace(codigo,'_DEMO','_CONTROL'),
+UPDATE fuente_datos_riesgo f SET codigo=replace(f.codigo,'_DEMO','_CONTROL')
+WHERE f.codigo LIKE '%\_DEMO' ESCAPE '\'
+  AND NOT EXISTS(SELECT 1 FROM fuente_datos_riesgo f2 WHERE f2.codigo=replace(f.codigo,'_DEMO','_CONTROL'));
+UPDATE fuente_datos_riesgo SET
  nombre=replace(replace(nombre,'Sintetica','de control'),'Sinteticos','de control'),
- organismo='Control interno Santa Clara',url_oficial=NULL,licencia_uso='Datos ficticios para validación interna';
-UPDATE lista_regulatoria SET codigo=replace(codigo,'_DEMO','_CONTROL'),alcance='CONTROL_INTERNO',
- url_descarga=NULL,licencia_uso='Datos ficticios; no es una lista oficial';
-UPDATE elemento_lista SET valor_identificador=replace(valor_identificador,'DEMO-ELEMENTO','CONTROL-ELEMENTO');
-UPDATE sujeto_riesgo SET codigo=replace(codigo,'SR-DEMO','SR-CONTROL'),
- nombre_normalizado=replace(nombre_normalizado,'Sintetico','Ficticio'),detalle_json=detalle_json-'demo';
+ organismo='Control interno Santa Clara',url_oficial=NULL,licencia_uso='Datos ficticios para validación interna'
+WHERE codigo LIKE '%\_CONTROL' ESCAPE '\' OR codigo LIKE '%\_DEMO' ESCAPE '\';
+UPDATE lista_regulatoria l SET codigo=replace(l.codigo,'_DEMO','_CONTROL')
+WHERE l.codigo LIKE '%\_DEMO%' ESCAPE '\'
+  AND NOT EXISTS(SELECT 1 FROM lista_regulatoria l2 WHERE l2.codigo=replace(l.codigo,'_DEMO','_CONTROL'));
+UPDATE lista_regulatoria SET alcance='CONTROL_INTERNO',
+ url_descarga=NULL,licencia_uso='Datos ficticios; no es una lista oficial'
+WHERE codigo LIKE '%\_CONTROL%' ESCAPE '\' OR codigo LIKE '%\_DEMO%' ESCAPE '\';
+UPDATE elemento_lista el SET valor_identificador=replace(el.valor_identificador,'DEMO-ELEMENTO','CONTROL-ELEMENTO')
+WHERE el.valor_identificador LIKE 'DEMO-ELEMENTO%'
+  AND NOT EXISTS (
+      SELECT 1 FROM elemento_lista el2
+      WHERE el2.lista_regulatoria_id=el.lista_regulatoria_id
+        AND el2.valor_identificador=replace(el.valor_identificador,'DEMO-ELEMENTO','CONTROL-ELEMENTO')
+  );
+UPDATE sujeto_riesgo s SET codigo=replace(s.codigo,'SR-DEMO','SR-CONTROL')
+WHERE s.codigo LIKE 'SR-DEMO%'
+  AND NOT EXISTS(SELECT 1 FROM sujeto_riesgo s2 WHERE s2.codigo=replace(s.codigo,'SR-DEMO','SR-CONTROL'));
+UPDATE sujeto_riesgo SET
+ nombre_normalizado=replace(nombre_normalizado,'Sintetico','Ficticio'),detalle_json=detalle_json-'demo'
+WHERE codigo LIKE 'SR-CONTROL%' OR codigo LIKE 'SR-DEMO%';
 UPDATE pais_riesgo SET categoria=replace(categoria,'_DEMO','_REFERENCIAL'),motivo='Clasificación interna de pruebas; validar contra fuente vigente';
-UPDATE escenario SET codigo=replace(codigo,'DEMO','CONTROL'),nombre=replace(nombre,'de tesis','de control'),
+UPDATE escenario e SET codigo=replace(e.codigo,'DEMO','CONTROL')
+WHERE e.codigo ILIKE '%demo%'
+  AND NOT EXISTS(SELECT 1 FROM escenario e2 WHERE e2.empresa_id=e.empresa_id AND e2.codigo=replace(e.codigo,'DEMO','CONTROL'));
+UPDATE escenario SET nombre=replace(nombre,'de tesis','de control'),
  descripcion=replace(replace(descripcion,'sintéticos','ficticios'),'académicos','de control')
 WHERE codigo ILIKE '%demo%' OR nombre ILIKE '%tesis%' OR descripcion ILIKE '%sint%tico%';
-UPDATE accion SET codigo=replace(codigo,'DEMO','CONTROL'),nombre=replace(nombre,'académica','de control'),
+UPDATE accion a SET codigo=replace(a.codigo,'DEMO','CONTROL')
+WHERE a.codigo ILIKE '%demo%'
+  AND NOT EXISTS(SELECT 1 FROM accion a2 WHERE a2.empresa_id=a.empresa_id AND a2.codigo=replace(a.codigo,'DEMO','CONTROL'));
+UPDATE accion SET nombre=replace(nombre,'académica','de control'),
  descripcion=replace(descripcion,'demostración','validación') WHERE codigo ILIKE '%demo%' OR nombre ILIKE '%acad%mica%';
-UPDATE reglas_riesgo SET codigo=replace(codigo,'DEMO','CONTROL'),nombre=replace(nombre,'académica','de control'),
+UPDATE reglas_riesgo r SET codigo=replace(r.codigo,'DEMO','CONTROL')
+WHERE r.codigo ILIKE '%demo%'
+  AND NOT EXISTS(SELECT 1 FROM reglas_riesgo r2 WHERE r2.empresa_id=r.empresa_id AND r2.codigo=replace(r.codigo,'DEMO','CONTROL') AND r2.version=r.version);
+UPDATE reglas_riesgo SET nombre=replace(nombre,'académica','de control'),
  descripcion=replace(descripcion,'demo','preinstalada'),condiciones_json=condiciones_json-'demo'
 WHERE codigo ILIKE '%demo%' OR nombre ILIKE '%acad%mica%' OR descripcion ILIKE '%demo%' OR condiciones_json ? 'demo';
-UPDATE transacciones SET codigo=replace(codigo,'TX-DEMO','TX-CONTROL'),
+UPDATE transacciones t SET codigo=replace(t.codigo,'TX-DEMO','TX-CONTROL')
+WHERE t.codigo LIKE 'TX-DEMO%'
+  AND NOT EXISTS(SELECT 1 FROM transacciones t2 WHERE t2.codigo=replace(t.codigo,'TX-DEMO','TX-CONTROL'));
+UPDATE transacciones SET
  nombre_remitente=replace(replace(nombre_remitente,'Sintética','Ficticia'),'Sintetico','Ficticio'),
  nombre_beneficiario=replace(replace(nombre_beneficiario,'Sintético','Ficticio'),'Sintetico','Ficticio');
 UPDATE transacciones SET nombre_remitente=replace(nombre_remitente,' Demo',''),
  nombre_beneficiario=replace(nombre_beneficiario,' Demo','')
 WHERE nombre_remitente ILIKE '%demo%' OR nombre_beneficiario ILIKE '%demo%';
-UPDATE alertas_antifraude SET codigo=replace(codigo,'TX-DEMO','TX-CONTROL'),
+UPDATE alertas_antifraude a SET codigo=replace(a.codigo,'TX-DEMO','TX-CONTROL')
+WHERE a.codigo LIKE '%DEMO%'
+  AND NOT EXISTS(SELECT 1 FROM alertas_antifraude a2 WHERE a2.codigo=replace(a.codigo,'TX-DEMO','TX-CONTROL'));
+UPDATE alertas_antifraude SET
  motivo=replace(replace(motivo,'académico','de control'),'Demo','Control') WHERE codigo LIKE '%DEMO%' OR motivo ILIKE '%demo%' OR motivo ILIKE '%acad%mico%';
-UPDATE caso SET codigo=replace(codigo,'TX-DEMO','TX-CONTROL'),titulo=replace(titulo,'TX-DEMO','TX-CONTROL'),
+UPDATE caso c SET codigo=replace(c.codigo,'TX-DEMO','TX-CONTROL')
+WHERE c.codigo LIKE '%DEMO%'
+  AND NOT EXISTS(SELECT 1 FROM caso c2 WHERE c2.codigo=replace(c.codigo,'TX-DEMO','TX-CONTROL'));
+UPDATE caso SET titulo=replace(titulo,'TX-DEMO','TX-CONTROL'),
  descripcion=replace(descripcion,'sintético','ficticio') WHERE codigo LIKE '%DEMO%' OR descripcion ILIKE '%sint%tico%';
 UPDATE evidencia SET nombre=replace(nombre,'TX-DEMO','TX-CONTROL'),descripcion='Evidencia ficticia para validación del flujo',
  referencia_archivo=replace(replace(referencia_archivo,'demo/','control/'),'TX-DEMO','TX-CONTROL');
 UPDATE resolucion_alerta SET conclusion=replace(conclusion,'académica','de control'),
  justificacion='Decisión preconfigurada sobre datos ficticios',evidencia_descripcion='Evidencia ficticia';
-UPDATE reportes_ros SET codigo=replace(codigo,'DEMO','CONTROL'),descripcion_sospecha='Caso ficticio para validar la generación de ROS',
+UPDATE reportes_ros rr SET codigo=replace(rr.codigo,'DEMO','CONTROL')
+WHERE rr.codigo ILIKE '%demo%'
+  AND NOT EXISTS(SELECT 1 FROM reportes_ros rr2 WHERE rr2.codigo=replace(rr.codigo,'DEMO','CONTROL'));
+UPDATE reportes_ros SET descripcion_sospecha='Caso ficticio para validar la generación de ROS',
  soporte_referencia='control/ros',reporte_json=reporte_json-'demo',nombre_archivo=replace(nombre_archivo,'demo','control');
 UPDATE evaluaciones_riesgo SET detalle=detalle-'demo';
 UPDATE ejecucion_reglas SET detalle=detalle-'demo';
@@ -175,12 +243,36 @@ UPDATE transaccion_detalle_snapshot SET snapshot_json=snapshot_json-'demo',fuent
 UPDATE hallazgo_alerta SET detalle_json=detalle_json-'demo';
 UPDATE hallazgo_alerta SET descripcion=replace(replace(descripcion,'TX-DEMO','TX-CONTROL'),'sintetico','ficticio');
 UPDATE coincidencia_lista_alerta SET detalle_json=detalle_json-'demo';
-UPDATE cliente_snapshot_alerta SET snapshot_json=snapshot_json-'demo';
-UPDATE cliente_snapshot_alerta SET snapshot_json=jsonb_set(jsonb_set(snapshot_json,'{nombre}',to_jsonb(replace(snapshot_json->>'nombre',' Demo',''))),'{perfil}','"ficticio"');
+UPDATE cliente_snapshot_alerta SET snapshot_json=coalesce(snapshot_json,'{}'::jsonb)-'demo';
+UPDATE cliente_snapshot_alerta
+SET snapshot_json=jsonb_set(
+        jsonb_set(
+            coalesce(snapshot_json,'{}'::jsonb),
+            '{nombre}',
+            to_jsonb(coalesce(replace(snapshot_json->>'nombre',' Demo',''),'Cliente Ficticio')),
+            true
+        ),
+        '{perfil}',
+        to_jsonb('ficticio'::text),
+        true
+    );
 UPDATE historial_asignacion SET motivo=replace(motivo,' demo',''),observacion='Asignación inicial de control';
 UPDATE historial_estado_caso SET motivo=replace(motivo,' demo','');
-UPDATE servicio_externo SET codigo=replace(codigo,'_MOCK','_SANDBOX'),nombre=replace(nombre,'Mock','Sandbox'),
- configuracion_json='{"modo":"SANDBOX","piiEnLogs":false}'::jsonb;
+UPDATE servicio_externo
+SET nombre = replace(nombre, 'Mock', 'Sandbox'),
+    estado = 'ACTIVO',
+    configuracion_json = '{"modo":"SANDBOX","piiEnLogs":false}'::jsonb
+WHERE codigo LIKE '%\_SANDBOX' ESCAPE '\';
+
+UPDATE servicio_externo
+SET estado = 'INACTIVO',
+    configuracion_json = '{"modo":"LEGACY_MOCK","piiEnLogs":false}'::jsonb
+WHERE codigo LIKE '%\_MOCK' ESCAPE '\'
+  AND EXISTS (
+      SELECT 1
+      FROM servicio_externo sandbox
+      WHERE sandbox.codigo = replace(servicio_externo.codigo, '_MOCK', '_SANDBOX')
+  );
 UPDATE consultas_externas SET correlation_id=replace(correlation_id,'seed-ext','scl-ext');
 UPDATE auditoria_sistema SET accion=replace(accion,'DEMO','CONTROL'),
  descripcion=replace(replace(descripcion,'demo','control'),'sintética','ficticia'),
