@@ -9,5 +9,6 @@ import java.util.UUID;
 public interface UsuarioEmpresaRepository extends JpaRepository<UsuarioEmpresa, Long> {
     List<UsuarioEmpresa> findByUsuarioIdAndActivoTrue(UUID usuarioId);
     Optional<UsuarioEmpresa> findFirstByUsuarioIdAndActivoTrueOrderByIdAsc(UUID usuarioId);
+    List<UsuarioEmpresa> findByEmpresaIdAndActivoTrueOrderByUsuarioNombreAsc(UUID empresaId);
     boolean existsByUsuarioIdAndRolCodigo(UUID usuarioId, String rolCodigo);
 }

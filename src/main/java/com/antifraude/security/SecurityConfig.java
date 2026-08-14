@@ -63,6 +63,8 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/api/licensing-local/activate").hasAuthority("LICENCIAS_GESTIONAR")
                     .requestMatchers(HttpMethod.POST, "/api/licensing-local/heartbeat").hasAuthority("LICENCIAS_GESTIONAR")
                     .requestMatchers("/api/licensing-local/**").authenticated()
+                    .requestMatchers(HttpMethod.POST, "/api/admin-empresa/**").hasAuthority("LICENCIAS_GESTIONAR")
+                    .requestMatchers("/api/admin-empresa/**").hasAuthority("LICENCIAS_VER")
                     .requestMatchers("/swagger-ui/**").permitAll()
                     .requestMatchers("/swagger-ui.html").permitAll()
                     .requestMatchers("/api-docs/**").permitAll()

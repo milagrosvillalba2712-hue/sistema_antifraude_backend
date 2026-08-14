@@ -1,5 +1,6 @@
 package com.antifraude.licensing;
 
+import com.antifraude.dto.ErrorResponse;
 import com.antifraude.exception.BusinessException;
 import com.antifraude.security.tenant.TenantContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,9 +13,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Map;
 
 /**
  * Enforcement de licencias por request:
@@ -119,11 +120,13 @@ public class LicenciaFilter extends OncePerRequestFilter {
                                String message, String path) throws IOException {
         response.setStatus(status);
         response.setContentType("application/json;charset=UTF-8");
-        objectMapper.writeValue(response.getWriter(), Map.of(
-                "status", status,
-                "code", code,
-                "message", message,
-                "path", path
+        objectMapper.writeValue(response.getWriter(), ErrorResponse.of(
+                status,
+                code,
+                message,
+                path,
+                "INTERNA:LICENCIAMIENTO",
+                Map.of("filtro", "LicenciaFilter")
         ));
     }
 
