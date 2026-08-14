@@ -12,6 +12,7 @@ import com.antifraude.external.ExternalInvestigationClient;
 import com.antifraude.external.ExternalProviderException;
 import com.antifraude.external.ProviderResult;
 import com.antifraude.licensing.EnforcementService;
+import com.antifraude.observability.ApiEventoService;
 import com.antifraude.profile.DisponibilidadRepository;
 import com.antifraude.profile.DisponibilidadUsuario;
 import com.antifraude.rules.EjecucionRegla;
@@ -67,6 +68,7 @@ public class AlertaService {
     private final AuditoriaRepository auditoriaRepository;
     private final ExternalInvestigationClient externalInvestigationClient;
     private final EnforcementService enforcementService;
+    private final ApiEventoService apiEventoService;
 
     public AlertaService(AlertaRepository alertaRepository,
                           HistorialAsignacionRepository historialRepository,
@@ -84,7 +86,8 @@ public class AlertaService {
                           EscenarioRepository escenarioRepository,
                           AuditoriaRepository auditoriaRepository,
                           ExternalInvestigationClient externalInvestigationClient,
-                          EnforcementService enforcementService) {
+                          EnforcementService enforcementService,
+                          ApiEventoService apiEventoService) {
         this.alertaRepository = alertaRepository;
         this.historialRepository = historialRepository;
         this.auditoriaService = auditoriaService;
@@ -102,6 +105,7 @@ public class AlertaService {
         this.auditoriaRepository = auditoriaRepository;
         this.externalInvestigationClient = externalInvestigationClient;
         this.enforcementService = enforcementService;
+        this.apiEventoService = apiEventoService;
     }
 
     public Alerta crearAlerta(Transaccion transaccion, ReglaRiesgo regla, String prioridad) {
@@ -792,6 +796,13 @@ public class AlertaService {
             ProviderResult<Map<String, Object>> beneficiarioFinal = beneficiarioFinalHabilitado
                     ? externalInvestigationClient.consultarBeneficiarioFinal(lookupKey)
                     : null;
+            registrarConsultaExterna(alerta, "KYC_PERFIL", perfil);
+            registrarConsultaExterna(alerta, "KYC_DOCUMENTOS", documentos);
+            registrarConsultaExterna(alerta, "SCREENING_LISTAS", screening);
+            registrarConsultaExterna(alerta, "CORE_HISTORIAL", historialProvider);
+            registrarConsultaExterna(alerta, "ESTADO_PROVEEDORES", estado);
+            registrarConsultaExterna(alerta, "RIESGO_PAIS", riesgoPais);
+            registrarConsultaExterna(alerta, "BENEFICIARIO_FINAL", beneficiarioFinal);
 
             List<ServicioExternoAlertaResponse> servicios = new ArrayList<>(List.of(
                     servicioOk("Perfil KYC", perfil),
@@ -812,8 +823,24 @@ public class AlertaService {
                     beneficiarioFinal != null ? beneficiarioFinal.body() : Map.of());
         } catch (ExternalProviderException | IllegalStateException exception) {
             log.warn("[ALERTS] Mock externo no disponible para alerta {}: {}", alerta.getId(), exception.getMessage());
+            if (exception instanceof ExternalProviderException external) {
+                apiEventoService.registrarExterna(alerta.getEmpresa() != null ? alerta.getEmpresa().getId() : null,
+                        null, external.provider(), "DETALLE_ALERTA", external.statusHttp(), external.durationMs(),
+                        external.correlationId(), external.category(), external.getMessage(), false, external.category(),
+                        "alertas", alerta.getId() != null ? String.valueOf(alerta.getId()) : null);
+            }
             return ExternalInvestigationData.unavailable("No se pudo consultar el mock externo: " + exception.getClass().getSimpleName());
         }
+    }
+
+    private void registrarConsultaExterna(Alerta alerta, String endpoint, ProviderResult<?> result) {
+        if (result == null) {
+            return;
+        }
+        apiEventoService.registrarExterna(alerta.getEmpresa() != null ? alerta.getEmpresa().getId() : null,
+                null, result.provider(), endpoint, result.statusHttp(), result.durationMs(), result.correlationId(),
+                null, "Consulta externa completada", true, null, "alertas",
+                alerta.getId() != null ? String.valueOf(alerta.getId()) : null);
     }
 
     private String codigoIso(Transaccion tx) {

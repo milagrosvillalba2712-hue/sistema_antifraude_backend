@@ -44,6 +44,8 @@ class AntifraudeApplicationTests {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("spring.flyway.user", POSTGRES::getUsername);
+        registry.add("spring.flyway.password", POSTGRES::getPassword);
         registry.add("app.external.identificaciones.url", () -> EXTERNAL.url("/").toString());
         registry.add("app.external.sanciones.url", () -> EXTERNAL.url("/").toString());
         registry.add("app.external.pep.url", () -> EXTERNAL.url("/").toString());
@@ -71,7 +73,7 @@ class AntifraudeApplicationTests {
     }
 
     @Test
-    void baselineCanonicaTieneTreceVersionesUnicas() {
+    void baselineCanonicaTieneMigracionesActualesUnicas() {
         Integer total = jdbcTemplate.queryForObject("select count(*) from flyway_schema_history where success", Integer.class);
         Integer duplicadas = jdbcTemplate.queryForObject("""
                 select count(*) from (
@@ -79,7 +81,7 @@ class AntifraudeApplicationTests {
                     where version is not null group by version having count(*) > 1
                 ) d
                 """, Integer.class);
-        assertThat(total).isEqualTo(13);
+        assertThat(total).isEqualTo(18);
         assertThat(duplicadas).isZero();
     }
 
@@ -99,13 +101,13 @@ class AntifraudeApplicationTests {
         jdbcTemplate.execute((ConnectionCallback<Void>) connection -> {
             try (Statement statement = connection.createStatement()) {
                 statement.execute("insert into empresa(id, codigo, nombre, ruc, estado) values " +
-                        "('00000000-0000-0000-0000-000000000001','TENANT_A','Tenant A','80000001-1','ACTIVA')," +
-                        "('00000000-0000-0000-0000-000000000002','TENANT_B','Tenant B','80000002-2','ACTIVA')");
+                        "('00000000-0000-0000-0000-000000009991','TENANT_TEST_A','Tenant Test A','89999991-1','ACTIVA')," +
+                        "('00000000-0000-0000-0000-000000009992','TENANT_TEST_B','Tenant Test B','89999992-2','ACTIVA')");
                 statement.execute("insert into caso(empresa_id,codigo,titulo,estado,severidad) values " +
-                        "('00000000-0000-0000-0000-000000000001','CASO-A','Caso A','NUEVO','MEDIA')," +
-                        "('00000000-0000-0000-0000-000000000002','CASO-B','Caso B','NUEVO','MEDIA')");
+                        "('00000000-0000-0000-0000-000000009991','CASO-TEST-A','Caso Test A','NUEVO','MEDIA')," +
+                        "('00000000-0000-0000-0000-000000009992','CASO-TEST-B','Caso Test B','NUEVO','MEDIA')");
                 statement.execute("set role regula_app");
-                statement.execute("select set_config('app.current_empresa_id','00000000-0000-0000-0000-000000000001',false)");
+                statement.execute("select set_config('app.current_empresa_id','00000000-0000-0000-0000-000000009991',false)");
                 try (var result = statement.executeQuery("select count(*) from caso")) {
                     result.next();
                     assertThat(result.getInt(1)).isEqualTo(1);

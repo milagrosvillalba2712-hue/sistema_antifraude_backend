@@ -54,6 +54,7 @@ public class HallazgoAlerta {
     private String severidad;
 
     @Column(nullable = false, precision = 8, scale = 2)
+    @Builder.Default
     private BigDecimal score = BigDecimal.ZERO;
 
     @Transient

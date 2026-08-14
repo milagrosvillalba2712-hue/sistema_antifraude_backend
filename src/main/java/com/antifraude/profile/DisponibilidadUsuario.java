@@ -27,6 +27,7 @@ public class DisponibilidadUsuario {
     private Usuario usuario;
 
     @Column(nullable = false, length = 40)
+    @Builder.Default
     private String estado = "DISPONIBLE";
 
     @Column(name = "carga_actual", nullable = false)
