@@ -1,6 +1,11 @@
 package com.antifraude.exception;
 
 import com.antifraude.dto.ErrorResponse;
+import com.antifraude.audit.AuditoriaService;
+import com.antifraude.config.ClientIpResolver;
+import com.antifraude.external.ExternalProviderException;
+import com.antifraude.observability.ApiEventoService;
+import com.antifraude.security.tenant.TenantContext;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,18 +27,26 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private final AuditoriaService auditoriaService;
+
+    public GlobalExceptionHandler(AuditoriaService auditoriaService) {
+        this.auditoriaService = auditoriaService;
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleResourceNotFound(ResourceNotFoundException ex,
                                                                 HttpServletRequest request) {
         log.warn("[NOT_FOUND] {} - Ruta: {}", ex.getMessage(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ErrorResponse.of(
-                        HttpStatus.NOT_FOUND.value(),
-                        "NOT_FOUND",
-                        ex.getMessage(),
-                        request.getRequestURI()
-                ));
+                .body(error(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request, null));
+    }
+
+    @ExceptionHandler(QuotaExceededException.class)
+    public ResponseEntity<ErrorResponse> handleQuotaExceeded(QuotaExceededException ex,
+                                                             HttpServletRequest request) {
+        log.warn("[QUOTA] {} [{}] - Ruta: {}", ex.getMessage(), ex.getCode(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(error(HttpStatus.TOO_MANY_REQUESTS, ex.getCode(), ex.getMessage(), request, null));
     }
 
     @ExceptionHandler(BusinessException.class)
@@ -41,18 +54,14 @@ public class GlobalExceptionHandler {
                                                         HttpServletRequest request) {
         log.warn("[BUSINESS] {} [{}] - Ruta: {}", ex.getMessage(), ex.getCode(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of(
-                        HttpStatus.BAD_REQUEST.value(),
-                        ex.getCode(),
-                        ex.getMessage(),
-                        request.getRequestURI()
-                ));
+                .body(error(HttpStatus.BAD_REQUEST, ex.getCode(), ex.getMessage(), request, null));
     }
 
     @ExceptionHandler(ValidationErrorException.class)
     public ResponseEntity<ErrorResponse> handleValidation(ValidationErrorException ex,
                                                           HttpServletRequest request) {
         log.warn("[VALIDATION] {} - Ruta: {} - Campos: {}", ex.getMessage(), request.getRequestURI(), ex.getFieldErrors());
+        markApiError(request, "VALIDATION_ERROR", "VALIDACION", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of(
                         HttpStatus.BAD_REQUEST.value(),
@@ -74,6 +83,7 @@ public class GlobalExceptionHandler {
         });
 
         log.warn("[VALIDATION] Error de validacion en {} - Campos: {}", request.getRequestURI(), fieldErrors);
+        markApiError(request, "VALIDATION_ERROR", "VALIDACION", "Errores de validacion en los campos enviados");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of(
                         HttpStatus.BAD_REQUEST.value(),
@@ -90,12 +100,7 @@ public class GlobalExceptionHandler {
         log.warn("[AUTH] Fallo de autenticacion: {} - IP: {} - Ruta: {}",
                 ex.getMessage(), request.getRemoteAddr(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ErrorResponse.of(
-                        HttpStatus.UNAUTHORIZED.value(),
-                        "AUTHENTICATION_ERROR",
-                        ex.getMessage(),
-                        request.getRequestURI()
-                ));
+                .body(error(HttpStatus.UNAUTHORIZED, "AUTHENTICATION_ERROR", ex.getMessage(), request, null));
     }
 
     @ExceptionHandler(BadCredentialsException.class)
@@ -104,12 +109,7 @@ public class GlobalExceptionHandler {
         log.warn("[AUTH] Credenciales invalidas para IP: {} - Ruta: {}",
                 request.getRemoteAddr(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ErrorResponse.of(
-                        HttpStatus.UNAUTHORIZED.value(),
-                        "BAD_CREDENTIALS",
-                        "Email o password incorrectos",
-                        request.getRequestURI()
-                ));
+                .body(error(HttpStatus.UNAUTHORIZED, "BAD_CREDENTIALS", "Email o password incorrectos", request, null));
     }
 
     @ExceptionHandler(LockedException.class)
@@ -118,12 +118,8 @@ public class GlobalExceptionHandler {
         log.warn("[AUTH] Cuenta bloqueada: {} - IP: {} - Ruta: {}",
                 ex.getMessage(), request.getRemoteAddr(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ErrorResponse.of(
-                        HttpStatus.FORBIDDEN.value(),
-                        "ACCOUNT_LOCKED",
-                        "La cuenta ha sido bloqueada por exceso de intentos fallidos",
-                        request.getRequestURI()
-                ));
+                .body(error(HttpStatus.FORBIDDEN, "ACCOUNT_LOCKED",
+                        "La cuenta ha sido bloqueada por exceso de intentos fallidos", request, null));
     }
 
     @ExceptionHandler(DisabledException.class)
@@ -132,12 +128,8 @@ public class GlobalExceptionHandler {
         log.warn("[AUTH] Cuenta deshabilitada: {} - IP: {} - Ruta: {}",
                 ex.getMessage(), request.getRemoteAddr(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ErrorResponse.of(
-                        HttpStatus.FORBIDDEN.value(),
-                        "ACCOUNT_DISABLED",
-                        "La cuenta se encuentra deshabilitada",
-                        request.getRequestURI()
-                ));
+                .body(error(HttpStatus.FORBIDDEN, "ACCOUNT_DISABLED",
+                        "La cuenta se encuentra deshabilitada", request, null));
     }
 
     @ExceptionHandler(AuthorizationErrorException.class)
@@ -146,12 +138,7 @@ public class GlobalExceptionHandler {
         log.warn("[AUTH] Fallo de autorizacion: {} - IP: {} - Ruta: {}",
                 ex.getMessage(), request.getRemoteAddr(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ErrorResponse.of(
-                        HttpStatus.FORBIDDEN.value(),
-                        "AUTHORIZATION_ERROR",
-                        ex.getMessage(),
-                        request.getRequestURI()
-                ));
+                .body(error(HttpStatus.FORBIDDEN, "AUTHORIZATION_ERROR", ex.getMessage(), request, null));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -160,12 +147,30 @@ public class GlobalExceptionHandler {
         log.warn("[AUTH] Acceso denegado: {} - IP: {} - Ruta: {}",
                 ex.getMessage(), request.getRemoteAddr(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ErrorResponse.of(
-                        HttpStatus.FORBIDDEN.value(),
-                        "ACCESS_DENIED",
-                        "No tiene permisos para acceder a este recurso",
-                        request.getRequestURI()
-                ));
+                .body(error(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
+                        "No tiene permisos para acceder a este recurso", request, null));
+    }
+
+    @ExceptionHandler(ExternalProviderException.class)
+    public ResponseEntity<ErrorResponse> handleExternalProvider(ExternalProviderException ex,
+                                                                HttpServletRequest request) {
+        int status = ex.statusHttp() >= 400 && ex.statusHttp() < 600
+                ? ex.statusHttp()
+                : HttpStatus.SERVICE_UNAVAILABLE.value();
+        String code = ex.category() != null && !ex.category().isBlank() ? ex.category() : "EXTERNAL_PROVIDER_ERROR";
+        log.warn("[EXTERNAL] {} [{}] status={} correlation={} attempts={} ruta={}",
+                ex.provider(), code, status, ex.correlationId(), ex.attempts(), request.getRequestURI());
+        Map<String, Object> detalles = Map.of(
+                "proveedor", ex.provider(),
+                "correlationId", ex.correlationId(),
+                "duracionMs", ex.durationMs(),
+                "intentos", ex.attempts()
+        );
+        markApiError(request, code, "ERROR_PROVEEDOR_EXTERNO", ex.getMessage());
+        auditApiError(status, code, ex.getMessage(), request, detalles);
+        return ResponseEntity.status(status)
+                .body(ErrorResponse.of(status, code, ex.getMessage(), request.getRequestURI(),
+                        "EXTERNA:" + ex.provider(), detalles));
     }
 
     @ExceptionHandler(Exception.class)
@@ -174,11 +179,52 @@ public class GlobalExceptionHandler {
         log.error("[ERROR] Excepcion no controlada en {} - Tipo: {} - Mensaje: {}",
                 request.getRequestURI(), ex.getClass().getSimpleName(), ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ErrorResponse.of(
-                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                        "INTERNAL_ERROR",
-                        "Error interno del servidor",
-                        request.getRequestURI()
-                ));
+                .body(error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
+                        "Error interno del servidor", request,
+                        Map.of("tipo", ex.getClass().getSimpleName())));
+    }
+
+    private ErrorResponse error(HttpStatus status, String code, String message,
+                                HttpServletRequest request, Map<String, Object> details) {
+        markApiError(request, code, status.is5xxServerError() ? "ERROR_SERVIDOR" : "ERROR_NEGOCIO", message);
+        auditApiError(status.value(), code, message, request, details);
+        return ErrorResponse.of(status.value(), code, message, request.getRequestURI(), null, details);
+    }
+
+    private void markApiError(HttpServletRequest request, String code, String category, String message) {
+        if (request == null) {
+            return;
+        }
+        request.setAttribute(ApiEventoService.ATTR_CODIGO_ERROR, code);
+        request.setAttribute(ApiEventoService.ATTR_CATEGORIA_ERROR, category);
+        request.setAttribute(ApiEventoService.ATTR_MENSAJE_ERROR, message);
+    }
+
+    private void auditApiError(int status, String code, String message,
+                               HttpServletRequest request, Map<String, Object> details) {
+        if (request == null || request.getRequestURI() == null || !request.getRequestURI().startsWith("/api/")) {
+            return;
+        }
+        try {
+            String detalle = "{\"status\":" + status
+                    + ",\"codigo\":\"" + jsonSafe(code) + "\""
+                    + ",\"path\":\"" + jsonSafe(request.getRequestURI()) + "\""
+                    + ",\"mensaje\":\"" + jsonSafe(message) + "\""
+                    + (details != null ? ",\"detalles\":\"" + jsonSafe(details.toString()) + "\"" : "")
+                    + "}";
+            auditoriaService.registrar(TenantContext.getUsuarioId(), TenantContext.getEmpresaId(),
+                    "API_ERROR", "Error API " + status + " en " + request.getRequestURI(),
+                    ClientIpResolver.resolve(request), request.getHeader("User-Agent"),
+                    "api_endpoint", request.getRequestURI(), null, detalle);
+        } catch (RuntimeException auditError) {
+            log.debug("[AUDIT] No se pudo registrar error API en auditoria_sistema: {}", auditError.getMessage());
+        }
+    }
+
+    private String jsonSafe(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ").replace("\r", " ");
     }
 }

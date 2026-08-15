@@ -4,11 +4,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 public interface PerfilUsuarioRepository extends JpaRepository<PerfilUsuario, Long> {
 
-    Optional<PerfilUsuario> findByUsuarioId(Long usuarioId);
+    Optional<PerfilUsuario> findByUsuarioId(UUID usuarioId);
 
-    boolean existsByUsuarioId(Long usuarioId);
+    boolean existsByUsuarioId(UUID usuarioId);
 }

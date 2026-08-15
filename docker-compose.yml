@@ -1,4 +1,5 @@
 services:
+  # Base legacy conservada exclusivamente para rollback y auditoria.
   postgres:
     image: postgres:16
     container_name: antifraude-db
@@ -14,5 +15,25 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  postgres-canonical:
+    image: postgres:16
+    container_name: regula-db-canonical
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+    ports:
+      - "${CANONICAL_DB_PORT:-5433}:5432"
+    volumes:
+      - canonical_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 volumes:
   pgdata:
+    name: sistema_antifraude_backend_pgdata
+  canonical_pgdata:
+    name: regula_pgdata_canonical

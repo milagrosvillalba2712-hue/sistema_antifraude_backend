@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 public record TransaccionRequest(
         @NotBlank String transactionUuid,
@@ -18,5 +18,9 @@ public record TransaccionRequest(
         @NotBlank String tipoTransaccion,
         String ipOrigen,
         String paisOrigen,
-        @NotNull LocalDateTime fechaTransaccion) {
+        String paisDestino,
+        @NotNull OffsetDateTime fechaTransaccion,
+        Long productoId,
+        Long personaRemitenteId,
+        Long personaBeneficiarioId) {
 }

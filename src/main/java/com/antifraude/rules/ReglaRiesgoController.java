@@ -34,16 +34,7 @@ public class ReglaRiesgoController {
                                                       Authentication auth, HttpServletRequest httpRequest) {
         log.info("[RULES] POST /api/reglas - Nombre: {} - IP: {}", request.nombre(), httpRequest.getRemoteAddr());
         Usuario usuario = usuarioService.buscarPorEmail(auth.getName());
-        ReglaRiesgo regla = ReglaRiesgo.builder()
-                .nombre(request.nombre())
-                .descripcion(request.descripcion())
-                .tipoRegla(request.tipoRegla())
-                .severidad(request.severidad())
-                .condicion(request.condicion())
-                .activa(request.activa() != null ? request.activa() : true)
-                .creadaPor(usuario)
-                .build();
-        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(reglaRiesgoService.crear(regla)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(reglaRiesgoService.crearDesdeRequest(request, usuario)));
     }
 
     @GetMapping
@@ -64,15 +55,7 @@ public class ReglaRiesgoController {
     public ResponseEntity<ReglaRiesgoResponse> actualizar(@PathVariable Long id,
                                                            @Valid @RequestBody ReglaRiesgoRequest request) {
         log.info("[RULES] PUT /api/reglas/{} - Nombre: {}", id, request.nombre());
-        ReglaRiesgo actualizada = ReglaRiesgo.builder()
-                .nombre(request.nombre())
-                .descripcion(request.descripcion())
-                .tipoRegla(request.tipoRegla())
-                .severidad(request.severidad())
-                .condicion(request.condicion())
-                .activa(request.activa() != null ? request.activa() : true)
-                .build();
-        return ResponseEntity.ok(toResponse(reglaRiesgoService.actualizar(id, actualizada)));
+        return ResponseEntity.ok(toResponse(reglaRiesgoService.actualizarDesdeRequest(id, request)));
     }
 
     @PostMapping("/{id}/toggle")
@@ -82,10 +65,56 @@ public class ReglaRiesgoController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/{id}/activar")
+    public ResponseEntity<Void> activar(@PathVariable Long id) {
+        log.info("[RULES] POST /api/reglas/{}/activar", id);
+        reglaRiesgoService.activar(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{id}/desactivar")
+    public ResponseEntity<Void> desactivar(@PathVariable Long id) {
+        log.info("[RULES] POST /api/reglas/{}/desactivar", id);
+        reglaRiesgoService.desactivar(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{id}/version")
+    public ResponseEntity<ReglaRiesgoResponse> crearVersion(@PathVariable Long id) {
+        log.info("[RULES] POST /api/reglas/{}/version", id);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(reglaRiesgoService.crearNuevaVersion(id)));
+    }
+
+    @GetMapping("/{id}/historial")
+    public ResponseEntity<List<ReglaRiesgoResponse>> historial(@PathVariable Long id) {
+        log.info("[RULES] GET /api/reglas/{}/historial", id);
+        List<ReglaRiesgoResponse> response = reglaRiesgoService.listarHistorial(id).stream().map(this::toResponse).toList();
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/escenario/{escenarioId}")
+    public ResponseEntity<List<ReglaRiesgoResponse>> listarPorEscenario(@PathVariable Long escenarioId) {
+        log.info("[RULES] GET /api/reglas/escenario/{}", escenarioId);
+        List<ReglaRiesgoResponse> response = reglaRiesgoService.listarPorEscenario(escenarioId).stream().map(this::toResponse).toList();
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/estado/{estado}")
+    public ResponseEntity<List<ReglaRiesgoResponse>> listarPorEstado(@PathVariable String estado) {
+        log.info("[RULES] GET /api/reglas/estado/{}", estado);
+        List<ReglaRiesgoResponse> response = reglaRiesgoService.listarPorEstado(estado).stream().map(this::toResponse).toList();
+        return ResponseEntity.ok(response);
+    }
+
     private ReglaRiesgoResponse toResponse(ReglaRiesgo r) {
         return new ReglaRiesgoResponse(
-                r.getId(), r.getNombre(), r.getDescripcion(), r.getTipoRegla(),
-                r.getSeveridad(), r.getCondicion(), r.getActiva(),
+                r.getId(),
+                r.getEscenario() != null ? r.getEscenario().getId() : null,
+                r.getEscenario() != null ? r.getEscenario().getNombre() : null,
+                r.getCodigo(),
+                r.getNombre(), r.getDescripcion(), r.getTipoRegla(),
+                r.getSeveridad(), r.getPrioridad(), r.getScoreBase(), r.getVersion(), r.getEstado(),
+                r.getCondicion(), r.getCondicionesJson(), r.getAccionesJson(), r.getActiva(),
                 r.getCreadaPor() != null ? r.getCreadaPor().getId() : null,
                 r.getFechaCreacion(), r.getFechaModificacion());
     }

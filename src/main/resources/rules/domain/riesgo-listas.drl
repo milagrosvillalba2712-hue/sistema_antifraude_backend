@@ -1,0 +1,33 @@
+package com.antifraude.drools;
+
+import com.antifraude.drools.RiskContext;
+import com.antifraude.drools.fact.ListaFact;
+
+global com.antifraude.drools.DroolsService.ScoreTracker scoreTracker;
+
+rule "Lista negra detectada"
+    when
+        $ctx : RiskContext()
+        $l : ListaFact(tipoLista == "NEGRA") from $ctx.getListasNegras()
+    then
+        scoreTracker.addScore(100);
+        System.out.println("[Drools] LISTA NEGRA detectada: " + $l.getNombreCompleto() + " - Lista: " + $l.getNombreLista());
+end
+
+rule "Lista gris detectada"
+    when
+        $ctx : RiskContext()
+        $l : ListaFact(tipoLista == "GRIS") from $ctx.getListasGrises()
+    then
+        scoreTracker.addScore(50);
+        System.out.println("[Drools] LISTA GRIS detectada: " + $l.getNombreCompleto() + " - Lista: " + $l.getNombreLista());
+end
+
+rule "Lista blanca detectada"
+    when
+        $ctx : RiskContext()
+        $l : ListaFact(tipoLista == "BLANCA") from $ctx.getListasBlancas()
+    then
+        scoreTracker.addScore(-30);
+        System.out.println("[Drools] LISTA BLANCA detectada: " + $l.getNombreCompleto() + " - Lista: " + $l.getNombreLista());
+end

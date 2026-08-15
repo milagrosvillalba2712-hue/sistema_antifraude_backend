@@ -1,77 +1,103 @@
 # AGENTS.md — sistema_antifraude_backend
 
-Spring Boot 3.2.0 + Java 17+ backend for a fraud prevention system. Monolithic modularized with Drools embedded.
-
-## Stack
-
-- **Java 17+** (env has JDK 25 — set `java.version` to 17 in pom.xml, Lombok 1.18.46+ required for JDK 25)
-- **Spring Boot 3.2.0**, Spring Data JPA, Spring Security, Spring Validation
-- **PostgreSQL 16**, Hibernate `ddl-auto: update` (schema management)
-- **Drools 8.44** (kie-container via `DroolsConfig`, rules in `resources/rules/*.drl`)
-- **JWT** (jjwt 0.12.3), **BCrypt**, **AES-256-GCM** (CryptoUtil in `config/`)
-- **SpringDoc OpenAPI** at `/swagger-ui.html`
-- **Lombok** — annotation processing configured in `maven-compiler-plugin` with `<arg>-proc:full</arg>` (required for JDK 23+)
+Spring Boot 3.2.0 + Java 17 backend for a fraud prevention system. Drools embedded with `RiskContext` architecture.
 
 ## Build & Run
 
 ```bash
-docker compose up -d          # starts PostgreSQL
-mvn clean compile             # Lombok + annotation processing enabled
-mvn spring-boot:run           # starts on :8080
+docker compose up -d          # starts PostgreSQL 16
+mvn clean compile
+mvn spring-boot:run           # :8080, all vars default to localhost/postgrespostgres
+mvn test                      # 18 checks including PostgreSQL 16 lifecycle tests
+mvn test -Dtest=AntifraudeApplicationTests
 ```
 
-## Package Structure
+## Package Map
 
 ```
 com.antifraude
-├── config/          # CorsConfig, DroolsConfig, DataInitializer
-├── security/        # JwtTokenProvider, JwtAuthFilter, SecurityConfig, CustomUserDetailsService
-├── auth/            # AuthController, AuthService (login, JWT generation)
-├── users/           # Usuario entity, Repository, Service, AdminController
-├── transactions/    # Transaccion + EstadisticasCliente entities, Repositories, Service, Controller
-├── alerts/          # Alerta + HistorialAsignacion + EstadisticaCargaAnalista entities, Repositories, Service, Controller
-├── rules/           # ReglaRiesgo entity, Repository, Service, Controller
-├── audit/           # Auditoria entity, Repository, Service (auto-logging)
-├── assignment/      # AssignmentEngine, WorkloadService, AssignmentScheduler, AssignmentController
-├── profile/         # PerfilUsuario, DisponibilidadUsuario, PerfilService, DisponibilidadService, schedulers
-├── kyc/             # KycController, KycService (external identity/PEP/sanctions check)
-├── reports/         # ReporteRos entity, Repository, Service, Controller (CSV export)
-├── dashboard/       # DashboardController, DashboardService (aggregated KPIs)
-├── external/        # ExternalApiClient (RestTemplate), ConsultaExterna entity
-├── drools/          # DroolsService (evaluate rules, generate alerts)
-├── exception/       # GlobalExceptionHandler + custom exceptions (Authentication, Authorization, Validation, ResourceNotFound, Business)
-└── dto/             # Request/Response records (LoginRequest, TransaccionRequest, etc.)
+├── common/entity/      30+ domain entities (Pais, Moneda, Canal, Producto, Persona, ...)
+├── common/repository/  27 JPA repos
+├── config/             CorsConfig, DroolsConfig, DataInitializer (seed), JpaAuditingConfig
+├── security/           SecurityConfig, JwtTokenProvider, JwtAuthFilter, handlers
+├── auth/               AuthController (POST /api/auth/login)
+├── users/              Usuario entity, Service, AdminController (/api/admin/users)
+├── transactions/       Transaccion + Controller (/api/transacciones)
+├── alerts/             Alerta + HistorialAsignacion + Controller (/api/alertas)
+├── assignment/         AssignmentEngine, scheduler, controller (/api/assignment)
+├── profile/            PerfilUsuario, DisponibilidadUsuario, controllers
+├── kyc/                KycController (POST /api/kyc/consultar)
+├── reports/            ReporteRos + Controller (GET /api/reportes/ros/{alertaId} → CSV)
+├── rules/              ReglaRiesgo + EjecucionRegla + Controller (/api/reglas)
+├── cases/              Caso entity, Service, Controller (/api/casos)
+├── dashboard/          DashboardController, DashboardService
+├── drools/             DroolsService, RiskContext, RiskResult, RiskContextBuilder, facts
+├── external/           ExternalApiClient (RestTemplate → localhost:3001)
+├── audit/              Auditoria entity, auto-logging
+├── motor/              MotorController (/api/motor/historial)
+├── escenarios/         EscenarioController (/api/escenarios)
+├── catalog/            CatalogoController (/api/catalogos/{paises,monedas,canales,productos})
+├── exception/          GlobalExceptionHandler
+└── dto/                Request/Response records
 ```
 
-## Key Conventions
+## Conventions
 
-- Entities use Lombok `@Data @NoArgsConstructor @AllArgsConstructor @Builder`
-- Services are `@Service @Transactional`, injected via constructor
-- Controllers use `@RestController` with `@RequestMapping("/api/{domain}")`
-- `/api/auth/**` is public; everything else requires JWT Bearer token
-- `ROLE_ADMINISTRADOR` required for `/api/admin/**`
-- Hibernate manages schema — `ddl-auto: update` (auto-DDL, no Flyway)
-- `application.yml` reads secrets from env vars (`DB_PASSWORD`, `JWT_SECRET`, `AES_SECRET`, `EXTERNAL_API_KEY`)
-- `ExternalApiClient` points to mock server at `http://localhost:3001`
+- **Entities**: `@Data @NoArgsConstructor @AllArgsConstructor @Builder` (Lombok), `-proc:full` in compiler plugin
+- **Services**: `@Service @Transactional`, constructor injection
+- **Controllers**: `@RestController @RequestMapping("/api/...")` — paths are Spanish (`/api/alertas`, `/api/reglas`, `/api/casos`, `/api/transacciones`, `/api/reportes`) except English: `/api/assignment`, `/api/profile`, `/api/availability`, `/api/auth`, `/api/admin/users`, `/api/dashboard`
+- **Security**: `hasRole("ADMINISTRADOR")` — DB stores role name (e.g. `ADMINISTRADOR`), Spring Security prepends `ROLE_`
+- **Schema**: Flyway is the only schema owner; canonical Java migrations live in `db.productmigration` and Hibernate runs with `ddl-auto: validate`.
+- **Seeds**: no Java startup seed/schema runner exists. Legacy SQL is historical input only; demo data must use an explicit demo-only Flyway location/profile.
+- **Env vars** (all with defaults): `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `AES_SECRET`, `EXTERNAL_API_KEY`
+- **Scheduling**: `@EnableScheduling` on main class — `AssignmentScheduler` (5min auto-assign, 1min rebalance) + `DisponibilidadScheduler` (1min availability)
 
-## Testing
+## Security
 
-```bash
-mvn test
-# Single test: mvn test -Dtest=AntifraudeApplicationTests
+| Role | Access |
+|------|--------|
+| `ADMINISTRADOR` | Everything |
+| `SUPERVISOR` | `/api/reglas/**`, `/api/simulador/**`, `/api/escenarios/**` |
+| `ANALISTA` | `/api/casos/**`, `/api/reportes/**` |
+| `AUDITOR` | `/api/auditoria/**` |
+
+`/api/auth/**`, `/swagger-ui/**`, `/swagger-ui.html`, `/api-docs/**` permitAll. `/api/admin/**` requires ADMINISTRADOR. All other paths require authentication. Lockout after 5 failed attempts (15 min).
+
+## Drools Architecture
+
+Drools receives a `RiskContext` pre-built by `RiskContextBuilder` (no BD/API access from rules):
+
+```
+Transaccion → RiskContextBuilder.build(tx) → RiskContext → KieSession.fireAllRules() → RiskResult
 ```
 
-## Migrations
+- DRL files in `resources/rules/domain/` (`riesgo-monto.drl`, `riesgo-pais.drl`, etc.) + fallback `fraud-rules.drl` (`salience -100`)
+- Two eval paths in `DroolsService`:
+  - `evaluar(RiskContext)` — new architecture, returns `RiskResult`
+  - `evaluarTransaccion(Transaccion)` — legacy, returns `BigDecimal` score
+- If no rules fire, hardcoded default score applied
+- Alerts generated automatically when score >= 70
 
-All in `src/main/resources/db/migration/`:
-- `V1__init.sql` — full schema (usuarios, transacciones, alertas, reglas_riesgo, auditoria, estadisticas_cliente, consultas_externas, reportes_ros)
-- `V2__seed.sql` — seed users (admin/analista, password: `password`)
-- `V3__add_new_tables.sql` — perfil_usuario, disponibilidad_usuario, historial_asignacion, estadistica_carga_analista, + fecha_asignacion on alertas
+## Notable Endpoints (non-obvious facts)
 
-New migration naming: `V{next_number}__{name}.sql`. Flyway disabled — Hibernate `ddl-auto: update` handles schema changes automatically.
+| Method | Path | Notes |
+|--------|------|-------|
+| POST | `/api/kyc/consultar` | POST with body, NOT `GET /api/kyc/{documento}` (README is wrong) |
+| GET | `/api/reportes/ros/{alertaId}` | Returns CSV (Content-Disposition attachment) |
+| POST | `/api/simulador/evaluar` | Evaluates without persisting |
+| PATCH | `/api/casos/{id}/estado?estado=X` | State change via query param |
+| PATCH | `/api/casos/{id}/asignar?analistaId=X` | Assign via query param |
+| GET | `/api/alertas/estado/{estado}` | Filter alerts by state (path param, not query) |
+| POST | `/api/alertas/{id}/asignar` | Assign; defaults to current user if body absent |
+| GET | `/api/availability` | English path (disponibilidad) |
+| POST | `/api/transacciones` | Creates + evaluates in one call |
 
-## Environment
+## Gotchas
 
-`.env` file at root with `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `AES_SECRET`, `EXTERNAL_API_KEY`.
-
-All vars have defaults in `application.yml`, so the app boots without `.env` using localhost PostgreSQL with `postgres/postgres` credentials. Change secrets for anything beyond local dev.
+- **README endpoints are wrong** — README lists non-existent paths; trust `@RequestMapping` annotations
+- **Mixed Spanish/English controller paths** — easy to guess wrong
+- **`common/entity/`** has 30+ entities (Pais, Moneda, Canal, etc.) migrated during refactoring
+- **`AES_SECRET`** configured in env but not used in code
+- **`ExternalApiClient`** points to mock server `localhost:3001`
+- **No `.env.example`** — `.env` is gitignored; production credentials must be supplied externally
+- **Demo seeds** only run with the `demo` profile from `db/demo`; normal/productive startup never loads them

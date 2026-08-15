@@ -2,32 +2,104 @@ server:
   port: 8080
 
 spring:
+  config:
+    import: optional:file:.env[.properties]
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:demo}
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:antifraude}
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
   jpa:
+    open-in-view: false
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
   flyway:
-    enabled: false
+    enabled: true
+    locations: classpath:db/productmigration
+    baseline-on-migrate: false
+
+  sql:
+    init:
+      mode: never
 
 app:
+  seed:
+    enabled: ${SEED_ENABLED:false}
+  auth:
+    link-base-url: ${AUTH_LINK_BASE_URL:http://localhost:5173}
+    require-email-verified: ${AUTH_REQUIRE_EMAIL_VERIFIED:false}
+  scheduler:
+    enabled: ${SCHEDULER_ENABLED:false}
+  licenses:
+    enforcement:
+      enabled: ${LICENSES_ENFORCEMENT_ENABLED:true}
+    control-plane:
+      url: ${LICENSES_CONTROL_PLANE_URL:}
+      api-key: ${LICENSES_CONTROL_PLANE_API_KEY:}
+    local:
+      scheduler:
+        enabled: ${LICENSES_LOCAL_SCHEDULER_ENABLED:false}
+  audit:
+    nivel: ${AUDIT_NIVEL:avanzada}
   jwt:
     secret: ${JWT_SECRET:jwt_secret_key_default_change_in_production}
     expiration-ms: 86400000
   aes:
     secret: ${AES_SECRET:aes_secret_key_default_change_in_production}
-  external-api:
-    base-url: http://localhost:3001
-    api-key: ${EXTERNAL_API_KEY:mock_api_key}
-    timeout: 5000
+  hmac:
+    secret: ${HMAC_SECRET:hmac_secret_key_default_change_in_production}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+  external:
+    tls:
+      trust-store: ${EXTERNAL_TRUSTSTORE:}
+      trust-store-password: ${EXTERNAL_TRUSTSTORE_PASSWORD:}
+    identificaciones:
+      url: ${IDENTIFICACIONES_API_URL:https://localhost:8443}
+      api-key: ${IDENTIFICACIONES_API_KEY:}
+    sanciones:
+      url: ${SANCIONES_API_URL:https://localhost:8443}
+      api-key: ${SANCIONES_API_KEY:}
+    pep:
+      url: ${PEP_API_URL:https://localhost:8443}
+      api-key: ${PEP_API_KEY:}
+
+resilience4j:
+  retry:
+    instances:
+      identificaciones: &externalRetry
+        max-attempts: 3
+        wait-duration: 250ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        randomization-factor: 0.5
+        ignore-exceptions:
+          - com.antifraude.external.NonRetryableExternalException
+      sanciones: *externalRetry
+      pep: *externalRetry
+  circuitbreaker:
+    instances:
+      identificaciones: &externalCircuit
+        sliding-window-size: 5
+        minimum-number-of-calls: 3
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 2s
+        permitted-number-of-calls-in-half-open-state: 1
+      sanciones: *externalCircuit
+      pep: *externalCircuit
+  bulkhead:
+    instances:
+      identificaciones: &externalBulkhead
+        max-concurrent-calls: 10
+        max-wait-duration: 0
+      sanciones: *externalBulkhead
+      pep: *externalBulkhead
 
 springdoc:
   api-docs:

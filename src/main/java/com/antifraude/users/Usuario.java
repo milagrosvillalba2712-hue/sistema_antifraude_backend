@@ -1,21 +1,26 @@
 package com.antifraude.users;
 
+import com.antifraude.common.entity.AuditableEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "usuarios")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Usuario {
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
+public class Usuario extends AuditableEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false, length = 150)
     private String nombre;
@@ -26,9 +31,6 @@ public class Usuario {
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
-    @Column(nullable = false, length = 30)
-    private String rol;
-
     @Column(nullable = false)
     @Builder.Default
     private Boolean activo = true;
@@ -37,7 +39,32 @@ public class Usuario {
     @Builder.Default
     private Integer intentosFallidos = 0;
 
-    @Column(name = "fecha_creacion", updatable = false)
+    @Column(name = "bloqueado_hasta")
+    private OffsetDateTime bloqueadoHasta;
+
+    @Column(name = "email_verificado")
     @Builder.Default
-    private LocalDateTime fechaCreacion = LocalDateTime.now();
+    private Boolean emailVerificado = false;
+
+    @Column(name = "contrasena_cambiada_en")
+    private OffsetDateTime contrasenaCambiadaEn;
+
+    @Transient
+    private UUID empresaId;
+
+    public boolean isBlocked() {
+        return bloqueadoHasta != null && OffsetDateTime.now().isBefore(bloqueadoHasta);
+    }
+
+    public void incrementFailedAttempts() {
+        this.intentosFallidos++;
+        if (this.intentosFallidos >= 5) {
+            this.bloqueadoHasta = OffsetDateTime.now().plusMinutes(15);
+        }
+    }
+
+    public void resetFailedAttempts() {
+        this.intentosFallidos = 0;
+        this.bloqueadoHasta = null;
+    }
 }

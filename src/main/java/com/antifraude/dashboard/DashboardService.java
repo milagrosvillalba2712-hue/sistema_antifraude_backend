@@ -26,8 +26,10 @@ public class DashboardService {
         log.debug("[DASHBOARD] Generando dashboard");
         long totalTransacciones = transaccionRepository.count();
         long transaccionesSospechosas = transaccionRepository.countByEstado("SOSPECHOSA");
-        long alertasPendientes = alertaRepository.countByEstado("PENDIENTE");
-        long alertasResueltas = alertaRepository.countByEstado("RESUELTA");
+        long alertasPendientes = alertaRepository.countByEstado("NUEVA")
+                + alertaRepository.countByEstado("ASIGNADA")
+                + alertaRepository.countByEstado("EN_REVISION");
+        long alertasResueltas = alertaRepository.countByEstado("CERRADA");
 
         Map<String, Long> transaccionesPorEstado = new HashMap<>();
         transaccionesPorEstado.put("APROBADA", transaccionRepository.countByEstado("APROBADA"));

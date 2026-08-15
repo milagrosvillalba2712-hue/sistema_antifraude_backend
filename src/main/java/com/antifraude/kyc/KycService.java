@@ -2,58 +2,67 @@ package com.antifraude.kyc;
 
 import com.antifraude.dto.KycRequest;
 import com.antifraude.dto.KycResponse;
-import com.antifraude.external.ConsultaExterna;
-import com.antifraude.external.ConsultaExternaRepository;
-import com.antifraude.external.ExternalApiClient;
 import com.antifraude.exception.BusinessException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.antifraude.external.*;
+import com.antifraude.licensing.ConsumoService;
+import com.antifraude.licensing.EnforcementService;
+import com.antifraude.security.tenant.TenantContext;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.Map;
+import java.util.Locale;
+import java.util.UUID;
 
 @Service
-@Transactional
 public class KycService {
+    private final IdentificacionesClient identities;
+    private final BcpSancionesClient sanctions;
+    private final SepreladPepClient pep;
+    private final ExternalAuditService audit;
+    private final EnforcementService enforcementService;
+    private final ConsumoService consumoService;
 
-    private static final Logger log = LoggerFactory.getLogger(KycService.class);
-
-    private final ExternalApiClient externalApiClient;
-    private final ConsultaExternaRepository consultaExternaRepository;
-
-    public KycService(ExternalApiClient externalApiClient, ConsultaExternaRepository consultaExternaRepository) {
-        this.externalApiClient = externalApiClient;
-        this.consultaExternaRepository = consultaExternaRepository;
+    public KycService(IdentificacionesClient identities, BcpSancionesClient sanctions,
+                      SepreladPepClient pep, ExternalAuditService audit,
+                      EnforcementService enforcementService, ConsumoService consumoService) {
+        this.identities=identities; this.sanctions=sanctions; this.pep=pep; this.audit=audit;
+        this.enforcementService = enforcementService;
+        this.consumoService = consumoService;
     }
 
-    public KycResponse consultar(KycRequest request, Long usuarioId) {
-        log.info("[KYC] Consultando {} - Documento: {} - UsuarioId: {}",
-                request.tipoConsulta(), request.identificadorDocumento(), usuarioId);
+    public KycResponse consultar(KycRequest request, UUID usuarioId) {
+        String type = request.tipoConsulta() == null ? "IDENTIDAD" : request.tipoConsulta().toUpperCase(Locale.ROOT);
+        UUID empresaId = TenantContext.getEmpresaId();
+        enforcementService.verificarSuscripcionVigente(empresaId);
+        enforcementService.verificarModulo(empresaId, "KYC");
+        enforcementService.verificarLimiteKyc(empresaId);
         try {
-            Map<String, Object> resultado = externalApiClient.consultar(request.tipoConsulta(), request.identificadorDocumento());
-            Boolean positivo = (Boolean) resultado.getOrDefault("coincidencia", false);
-
-            ConsultaExterna consulta = ConsultaExterna.builder()
-                    .identificadorDocumento(request.identificadorDocumento())
-                    .tipoConsulta(request.tipoConsulta())
-                    .resultado(positivo)
-                    .build();
-            consultaExternaRepository.save(consulta);
-
-            String mensaje = positivo
-                    ? "Se encontro una coincidencia en " + request.tipoConsulta()
-                    : "Sin coincidencias en " + request.tipoConsulta();
-
-            log.info("[KYC] Consulta completada - Documento: {} - Tipo: {} - Coincidencia: {}",
-                    request.identificadorDocumento(), request.tipoConsulta(), positivo);
-
-            return new KycResponse(request.identificadorDocumento(), request.tipoConsulta(), positivo, mensaje);
-        } catch (Exception e) {
-            log.error("[KYC] Error en consulta externa - Documento: {} - Tipo: {} - Error: {}",
-                    request.identificadorDocumento(), request.tipoConsulta(), e.getMessage());
-            throw new BusinessException("EXTERNAL_API_ERROR",
-                    "Error al consultar servicio externo: " + e.getMessage());
+            ProviderResult<?> result = switch (type) {
+                case "IDENTIDAD", "IDENTIFICACIONES" -> identities.consultar(request.identificadorDocumento());
+                case "SANCIONES", "BCP" -> sanctions.consultar(request.identificadorDocumento());
+                case "PEP", "PERSONA_EXPUESTA" -> pep.consultar(request.identificadorDocumento());
+                default -> throw new BusinessException("KYC_TYPE_INVALID", "Tipo de consulta KYC no soportado");
+            };
+            saveAudit(request, result.provider(), result.correlationId(), result.statusHttp(), result.durationMs(),
+                    result.attempts(), result.match(), "COMPLETADA", null);
+            consumoService.registrarConsultaKyc(empresaId);
+            return new KycResponse("***", type, result.match(),
+                    result.match() ? "Se encontró una coincidencia" : "Sin coincidencias");
+        } catch (NonRetryableExternalException exception) {
+            saveFailure(request, exception);
+            throw new BusinessException("EXTERNAL_API_REJECTED", "El proveedor rechazó la consulta");
+        } catch (ExternalProviderException exception) {
+            saveFailure(request, exception);
+            throw new BusinessException("EXTERNAL_API_ERROR", "El proveedor externo no está disponible");
         }
+    }
+
+    private void saveFailure(KycRequest request, ExternalProviderException exception) {
+        saveAudit(request, exception.provider(), exception.correlationId(), exception.statusHttp(), exception.durationMs(),
+                exception.attempts(), false, "ERROR", exception.category());
+    }
+
+    private void saveAudit(KycRequest request, String provider, String correlation, int status, long duration,
+                           int attempts, boolean match, String state, String category) {
+        audit.record(TenantContext.getEmpresaId(), request.identificadorDocumento(), request.tipoConsulta(), provider,
+                correlation, status, duration, attempts, match, state, category);
     }
 }

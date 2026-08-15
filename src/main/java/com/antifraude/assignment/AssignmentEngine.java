@@ -13,8 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -49,8 +50,7 @@ public class AssignmentEngine {
     public Usuario asignar(Alerta alerta) {
         log.info("[ASSIGNMENT] Iniciando asignacion para alerta ID: {}", alerta.getId());
 
-        List<Usuario> analistas = usuarioRepository.findAll().stream()
-                .filter(u -> "ANALISTA".equals(u.getRol()) && u.getActivo())
+        List<Usuario> analistas = usuarioRepository.findActivosByRolCodigo("ANALISTA").stream()
                 .filter(u -> disponibilidadService.estaDisponible(u.getId()))
                 .toList();
 
@@ -77,7 +77,7 @@ public class AssignmentEngine {
 
         alerta.setAsignadoA(analista);
         alerta.setEstado("ASIGNADA");
-        alerta.setFechaAsignacion(LocalDateTime.now());
+        alerta.setFechaAsignacion(OffsetDateTime.now());
         alertaRepository.save(alerta);
 
         HistorialAsignacion historial = HistorialAsignacion.builder()
@@ -97,7 +97,7 @@ public class AssignmentEngine {
         return alerta;
     }
 
-    public void rebalancearAnalista(Long usuarioId) {
+    public void rebalancearAnalista(UUID usuarioId) {
         log.info("[ASSIGNMENT] Rebalanceando alertas del usuario ID: {}", usuarioId);
         List<Alerta> alertas = alertaRepository.findByEstado("ASIGNADA").stream()
                 .filter(a -> a.getAsignadoA() != null && a.getAsignadoA().getId().equals(usuarioId))
@@ -109,7 +109,7 @@ public class AssignmentEngine {
                 if (!nuevoAnalista.getId().equals(usuarioId)) {
                     Usuario anterior = alerta.getAsignadoA();
                     alerta.setAsignadoA(nuevoAnalista);
-                    alerta.setFechaAsignacion(LocalDateTime.now());
+                    alerta.setFechaAsignacion(OffsetDateTime.now());
                     alertaRepository.save(alerta);
 
                     HistorialAsignacion historial = HistorialAsignacion.builder()
@@ -133,7 +133,7 @@ public class AssignmentEngine {
 
     public void rebalancearTodos() {
         log.info("[ASSIGNMENT] Rebalanceo global iniciado");
-        List<Alerta> pendientes = alertaRepository.findByEstado("PENDIENTE").stream()
+        List<Alerta> pendientes = alertaRepository.findByEstado("NUEVA").stream()
                 .filter(a -> a.getAsignadoA() == null)
                 .toList();
         for (Alerta alerta : pendientes) {
@@ -145,7 +145,7 @@ public class AssignmentEngine {
         }
     }
 
-    private void actualizarCarga(Long usuarioId) {
+    private void actualizarCarga(UUID usuarioId) {
         LocalDate hoy = LocalDate.now();
         EstadisticaCargaAnalista stats = cargaRepository.findByUsuarioIdAndFecha(usuarioId, hoy)
                 .orElse(EstadisticaCargaAnalista.builder()
@@ -154,14 +154,14 @@ public class AssignmentEngine {
                         .build());
 
         long asignadas = alertaRepository.countByAsignadoAIdAndEstadoIn(
-                usuarioId, List.of("PENDIENTE", "ASIGNADA", "INVESTIGANDO"));
+                usuarioId, List.of("NUEVA", "ASIGNADA", "EN_REVISION"));
         long resueltas = alertaRepository.countByAsignadoAIdAndEstadoIn(
-                usuarioId, List.of("RESUELTA", "DESCARTADA"));
+                usuarioId, List.of("CERRADA"));
 
         stats.setAlertasPendientes((int) asignadas);
         stats.setAlertasAsignadas(stats.getAlertasAsignadas() + 1);
         stats.setAlertasResueltas((int) resueltas);
-        stats.setUltimaActualizacion(LocalDateTime.now());
+        stats.setUltimaActualizacion(OffsetDateTime.now());
         cargaRepository.save(stats);
     }
 }

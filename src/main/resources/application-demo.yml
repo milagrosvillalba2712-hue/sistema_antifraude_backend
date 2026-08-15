@@ -1,0 +1,12 @@
+spring:
+  flyway:
+    locations:
+      - classpath:db/productmigration
+      - classpath:db/demo
+    user: ${FLYWAY_DB_USER}
+    password: ${FLYWAY_DB_PASSWORD}
+
+app:
+  seed:
+    enabled: true
+
