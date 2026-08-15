@@ -8,7 +8,7 @@ Spring Boot 3.2.0 + Java 17 backend for a fraud prevention system. Drools embedd
 docker compose up -d          # starts PostgreSQL 16
 mvn clean compile
 mvn spring-boot:run           # :8080, all vars default to localhost/postgrespostgres
-mvn test                      # 18 checks including PostgreSQL 16 lifecycle tests
+mvn test                      # 24 tests incl. PostgreSQL lifecycle, schema contract, crypto, Drools
 mvn test -Dtest=AntifraudeApplicationTests
 ```
 
@@ -18,7 +18,7 @@ mvn test -Dtest=AntifraudeApplicationTests
 com.antifraude
 ├── common/entity/      30+ domain entities (Pais, Moneda, Canal, Producto, Persona, ...)
 ├── common/repository/  27 JPA repos
-├── config/             CorsConfig, DroolsConfig, DataInitializer (seed), JpaAuditingConfig
+├── config/             ClientIpResolver, DroolsConfig, ForwardedHeaderConfig, JpaAuditingConfig (CORS lives in SecurityConfig)
 ├── security/           SecurityConfig, JwtTokenProvider, JwtAuthFilter, handlers
 ├── auth/               AuthController (POST /api/auth/login)
 ├── users/              Usuario entity, Service, AdminController (/api/admin/users)
@@ -32,7 +32,7 @@ com.antifraude
 ├── cases/              Caso entity, Service, Controller (/api/casos)
 ├── dashboard/          DashboardController, DashboardService
 ├── drools/             DroolsService, RiskContext, RiskResult, RiskContextBuilder, facts
-├── external/           ExternalApiClient (RestTemplate → localhost:3001)
+├── external/           ExternalClientsConfig + RestClient clients → https://localhost:8443 (mock TLS): IdentificacionesClient, BcpSancionesClient, SepreladPepClient, ExternalInvestigationClient, ProviderHttpClient
 ├── audit/              Auditoria entity, auto-logging
 ├── motor/              MotorController (/api/motor/historial)
 ├── escenarios/         EscenarioController (/api/escenarios)
@@ -49,7 +49,7 @@ com.antifraude
 - **Security**: `hasRole("ADMINISTRADOR")` — DB stores role name (e.g. `ADMINISTRADOR`), Spring Security prepends `ROLE_`
 - **Schema**: Flyway is the only schema owner; canonical Java migrations live in `db.productmigration` and Hibernate runs with `ddl-auto: validate`.
 - **Seeds**: no Java startup seed/schema runner exists. Legacy SQL is historical input only; demo data must use an explicit demo-only Flyway location/profile.
-- **Env vars** (all with defaults): `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `AES_SECRET`, `EXTERNAL_API_KEY`
+- **Env vars**: `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD`, `JWT_SECRET`, `AES_SECRET`, `HMAC_SECRET`, `EXTERNAL_TRUSTSTORE(_PASSWORD)`, `IDENTIFICACIONES_API_KEY`/`SANCIONES_API_KEY`/`PEP_API_KEY`, `LICENSES_CONTROL_PLANE_URL`/`LICENSES_CONTROL_PLANE_API_KEY` (no `APP_` prefix), `FLYWAY_DB_USER`/`FLYWAY_DB_PASSWORD`
 - **Scheduling**: `@EnableScheduling` on main class — `AssignmentScheduler` (5min auto-assign, 1min rebalance) + `DisponibilidadScheduler` (1min availability)
 
 ## Security
@@ -97,7 +97,7 @@ Transaccion → RiskContextBuilder.build(tx) → RiskContext → KieSession.fire
 - **README endpoints are wrong** — README lists non-existent paths; trust `@RequestMapping` annotations
 - **Mixed Spanish/English controller paths** — easy to guess wrong
 - **`common/entity/`** has 30+ entities (Pais, Moneda, Canal, etc.) migrated during refactoring
-- **`AES_SECRET`** configured in env but not used in code
-- **`ExternalApiClient`** points to mock server `localhost:3001`
-- **No `.env.example`** — `.env` is gitignored; production credentials must be supplied externally
+- **`AES_SECRET`** used by `AesGcmCryptoService`; `HMAC_SECRET` used by `LicenseCryptoService`/`HmacHashService`
+- **External clients** hit the mock at `https://localhost:8443` (TLS truststore pinned via `EXTERNAL_TRUSTSTORE`), NOT `localhost:3001`
+- **`.env.example` exists** (repo root); `.env` itself is gitignored — prod credentials must be supplied externally
 - **Demo seeds** only run with the `demo` profile from `db/demo`; normal/productive startup never loads them
