@@ -72,7 +72,7 @@ FROM (
     ('Alertas/casos', 'decision_caso', (SELECT count(*) FROM decision_caso)),
     ('Alertas/casos', 'reportes_ros', (SELECT count(*) FROM reportes_ros)),
     ('Auditoria/externos', 'servicio_externo', (SELECT count(*) FROM servicio_externo)),
-    ('Auditoria/externos', 'consultas_externas', (SELECT count(*) FROM consultas_externas)),
+    ('Auditoria/externos', 'api_evento', (SELECT count(*) FROM api_evento)),
     ('Auditoria/externos', 'auditoria_sistema', (SELECT count(*) FROM auditoria_sistema))
 ) AS t(grupo_funcional, tabla, total)
 ORDER BY grupo_funcional, tabla;
@@ -89,7 +89,7 @@ WITH expected(table_name) AS (
     ('cliente_snapshot_alerta'), ('consulta_kyc_alerta'), ('historial_asignacion'),
     ('estadistica_carga_analista'), ('caso'), ('caso_alerta'), ('actuacion'), ('comentario_caso'),
     ('evidencia'), ('evidencia_alerta'), ('historial_estado_caso'), ('resolucion_alerta'),
-    ('aprobacion_supervisor'), ('decision_caso'), ('reportes_ros'), ('consultas_externas'),
+    ('aprobacion_supervisor'), ('decision_caso'), ('reportes_ros'), ('api_evento'),
     ('auditoria_sistema')
 )
 SELECT
@@ -121,7 +121,7 @@ WITH expected(table_name) AS (
     ('estadistica_carga_analista'), ('caso'), ('caso_alerta'), ('actuacion'), ('comentario_caso'),
     ('evidencia'), ('evidencia_alerta'), ('historial_estado_caso'), ('resolucion_alerta'),
     ('aprobacion_supervisor'), ('decision_caso'), ('reportes_ros'), ('servicio_externo'),
-    ('consultas_externas')
+    ('api_evento')
 ),
 required_columns(column_name) AS (
     VALUES ('fecha_hora_creacion'), ('fecha_hora_modificacion'), ('usuario_creacion_id'), ('usuario_modificacion_id')

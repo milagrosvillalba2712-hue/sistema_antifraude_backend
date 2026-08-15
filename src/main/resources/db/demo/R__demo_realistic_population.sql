@@ -303,13 +303,12 @@ INSERT INTO servicio_externo(codigo,nombre,tipo_servicio,url_base,estado,configu
 ('PEP_MOCK','PEP Mock','PEP','https://localhost:8443','ACTIVO','{"demo":true}')
 ON CONFLICT(codigo) DO UPDATE SET estado=EXCLUDED.estado,url_base=EXCLUDED.url_base;
 
-INSERT INTO consultas_externas(empresa_id,servicio_externo_id,persona_id,estado,request_hash,tipo_consulta,resultado,proveedor,documento_hash,correlation_id,status_http,duracion_ms,intentos,resultado_funcional,categoria_error)
-SELECT '00000000-0000-0000-0000-000000000001',s.id,p.id,'COMPLETADA',hmac('request-demo-'||n,'regula-demo-hmac-key','sha256'),s.tipo_servicio,false,s.codigo,
-       encode(hmac('documento-demo-'||n,'regula-demo-hmac-key','sha256'),'hex'),'seed-ext-'||lpad(n::text,3,'0'),200,80+n*7,1,'SIN_COINCIDENCIAS',NULL
+INSERT INTO api_evento(empresa_id,origen,direccion,servicio,endpoint,metodo_http,status_http,mensaje,resultado,duracion_ms,correlation_id,referencia_entidad,referencia_id,detalle_json,fecha_evento,documento_hash,intentos,resultado_funcional,estado)
+SELECT '00000000-0000-0000-0000-000000000001','EXTERNA','SALIENTE',s.codigo,s.tipo_servicio,'GET',200,'Consulta externa simulada','EXITOSO',80+n*7,'seed-ext-'||lpad(n::text,3,'0'),'api_externa','seed-ext-'||lpad(n::text,3,'0'),jsonb_build_object('origenSeed','demo_realistic','piiReal',false),now() - ((12-n) * interval '1 hour'),
+       encode(hmac('documento-demo-'||n,'regula-demo-hmac-key','sha256'),'hex'),1,'SIN_COINCIDENCIAS','COMPLETADA'
 FROM generate_series(1,12)n
 JOIN servicio_externo s ON s.codigo=CASE WHEN n%3=0 THEN 'PEP_MOCK' WHEN n%3=1 THEN 'IDENTIFICACIONES_MOCK' ELSE 'SANCIONES_MOCK' END
-JOIN LATERAL(SELECT id FROM persona WHERE empresa_id='00000000-0000-0000-0000-000000000001' ORDER BY id OFFSET (n-1) LIMIT 1)p ON true
-WHERE NOT EXISTS(SELECT 1 FROM consultas_externas c WHERE c.correlation_id='seed-ext-'||lpad(n::text,3,'0'));
+WHERE NOT EXISTS(SELECT 1 FROM api_evento a WHERE a.correlation_id='seed-ext-'||lpad(n::text,3,'0'));
 
 INSERT INTO auditoria_sistema(empresa_id,usuario_id,accion,descripcion,entidad_afectada,entidad_id,valor_nuevo_json,direccion_ip,user_agent)
 SELECT '00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000101','SEED_REALISTA','Poblacion completa sintetica para pruebas','demo_population','REALISTIC_V1',jsonb_build_object('demo',true,'piiReal',false),'127.0.0.1','RegulaRealisticSeed/1'

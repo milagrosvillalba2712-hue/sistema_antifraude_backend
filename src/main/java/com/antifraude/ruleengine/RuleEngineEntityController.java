@@ -4,7 +4,6 @@ import com.antifraude.alerts.*;
 import com.antifraude.audit.AuditoriaService;
 import com.antifraude.audit.Auditoria;
 import com.antifraude.common.entity.*;
-import com.antifraude.external.ConsultaExterna;
 import com.antifraude.licensing.*;
 import com.antifraude.profile.DisponibilidadUsuario;
 import com.antifraude.profile.PerfilUsuario;
@@ -140,7 +139,7 @@ public class RuleEngineEntityController {
         Map<String, Class<?>> map = new LinkedHashMap<>();
         register(map, Accion.class, Actuacion.class, Alerta.class, Auditoria.class, CalendarioRiesgo.class,
                 Canal.class, Caso.class, CasoAlerta.class, ClienteObservado.class, ClientePEP.class,
-                ComentarioCaso.class, ConsultaExterna.class, ControlFrecuencia.class, ControlImporte.class,
+                ComentarioCaso.class, ControlFrecuencia.class, ControlImporte.class,
                 DisponibilidadUsuario.class, Documento.class, EjecucionRegla.class, ElementoLista.class,
                 EmpeOperador.class, Escenario.class, EstadisticaCargaAnalista.class, Evidencia.class,
                 HistorialAsignacion.class, HistorialEstadoCaso.class, HorarioLaboralUsuario.class, HorarioRiesgo.class,
