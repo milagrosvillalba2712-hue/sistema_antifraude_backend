@@ -526,8 +526,8 @@ VALUES
 ('ROS_REGULATORIO', 'ROS Regulatorio', 'REGULATORIO', 'https://api.demo.local/ros', 'NO_DISPONIBLE', '{"ambiente":"demo"}')
 ON CONFLICT (codigo) DO UPDATE SET estado = EXCLUDED.estado;
 
-INSERT INTO consultas_externas (empresa_id, servicio_externo_id, persona_id, alerta_id, estado, request_hash, respuesta_json, mensaje_error)
-SELECT a.empresa_id, se.id, cs.persona_id, a.id, 'API_NO_DISPONIBLE', hmac(a.codigo || se.codigo, 'regula-demo-hmac-key', 'sha256'), '{}', 'Servicio externo no disponible en ambiente demo'
+INSERT INTO api_evento (empresa_id, origen, direccion, servicio, endpoint, metodo_http, status_http, mensaje, resultado, categoria_error, correlation_id, referencia_entidad, referencia_id, detalle_json, estado)
+SELECT a.empresa_id, 'EXTERNA', 'SALIENTE', se.codigo, se.tipo_servicio, 'GET', 503, 'Servicio externo no disponible en ambiente demo', 'ERROR', 'CONEXION_O_RESPUESTA', 'seed-' || a.codigo || '-' || se.codigo, 'api_externa', a.id::text, '{}', 'ERROR'
 FROM alertas_antifraude a
 JOIN cliente_snapshot_alerta cs ON cs.alerta_id = a.id
 CROSS JOIN servicio_externo se

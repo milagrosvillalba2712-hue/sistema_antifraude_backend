@@ -5,15 +5,10 @@ import com.antifraude.audit.AuditoriaRepository;
 import com.antifraude.audit.AuditoriaService;
 import com.antifraude.config.ClientIpResolver;
 import com.antifraude.dto.ApiErrorDescriptor;
-import com.antifraude.exception.ApiErrorCatalog;
 import com.antifraude.exception.BusinessException;
-import com.antifraude.external.ConsultaExterna;
-import com.antifraude.external.ConsultaExternaRepository;
 import com.antifraude.security.tenant.TenantContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,8 +32,6 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class AdminEmpresaController {
 
-    private static final Logger log = LoggerFactory.getLogger(AdminEmpresaController.class);
-
     private final EmpresaRepository empresaRepository;
     private final SuscripcionRepository suscripcionRepository;
     private final PagoRepository pagoRepository;
@@ -48,7 +41,6 @@ public class AdminEmpresaController {
     private final ConsumoLicenciaLocalRepository consumoLocalRepository;
     private final EventoLicenciaLocalRepository eventoRepository;
     private final UsuarioEmpresaRepository usuarioEmpresaRepository;
-    private final ConsultaExternaRepository consultaExternaRepository;
     private final AuditoriaRepository auditoriaRepository;
     private final LicensingValidationService validationService;
     private final LicensingControlPlaneClient controlPlaneClient;
@@ -65,7 +57,6 @@ public class AdminEmpresaController {
                                   ConsumoLicenciaLocalRepository consumoLocalRepository,
                                   EventoLicenciaLocalRepository eventoRepository,
                                   UsuarioEmpresaRepository usuarioEmpresaRepository,
-                                  ConsultaExternaRepository consultaExternaRepository,
                                   AuditoriaRepository auditoriaRepository,
                                   LicensingValidationService validationService,
                                   LicensingControlPlaneClient controlPlaneClient,
@@ -81,7 +72,6 @@ public class AdminEmpresaController {
         this.consumoLocalRepository = consumoLocalRepository;
         this.eventoRepository = eventoRepository;
         this.usuarioEmpresaRepository = usuarioEmpresaRepository;
-        this.consultaExternaRepository = consultaExternaRepository;
         this.auditoriaRepository = auditoriaRepository;
         this.validationService = validationService;
         this.controlPlaneClient = controlPlaneClient;
@@ -103,7 +93,7 @@ public class AdminEmpresaController {
         UsoSuscripcion uso = usoSuscripcionRepository
                 .findFirstByEmpresaIdAndAnioAndMesOrderByIdDesc(empresaId, LocalDate.now().getYear(), LocalDate.now().getMonthValue())
                 .orElse(null);
-        List<ConsultaExterna> consultas = consultaExternaRepository.findTop50ByEmpresaIdOrderByFechaConsultaDesc(empresaId);
+        List<Map<String, Object>> consultas = observabilityService.ultimasConsultasExternas(empresaId, 50);
 
         return ResponseEntity.ok(mapOf(
                 "empresa", empresaDto(empresa),
@@ -186,7 +176,7 @@ public class AdminEmpresaController {
     @GetMapping("/apis")
     public ResponseEntity<Map<String, Object>> apis() {
         UUID empresaId = empresaActual();
-        List<ConsultaExterna> consultas = consultaExternaRepository.findTop50ByEmpresaIdOrderByFechaConsultaDesc(empresaId);
+        List<Map<String, Object>> consultas = observabilityService.ultimasConsultasExternas(empresaId, 50);
         return ResponseEntity.ok(mapOf(
                 "resumen", apiResumenDto(consultas),
                 "consultas", consultas.stream().map(this::consultaDto).toList()
@@ -195,24 +185,15 @@ public class AdminEmpresaController {
 
     @GetMapping("/errores")
     public ResponseEntity<Map<String, Object>> errores(@RequestParam(required = false) Integer status,
+                                                       @RequestParam(required = false) String origen,
                                                        @RequestParam(required = false) String desde,
                                                        @RequestParam(required = false) String hasta) {
         UUID empresaId = empresaActual();
-        List<ConsultaExterna> consultas;
-        try {
-            consultas = consultaExternaRepository.findTop50ByEmpresaIdOrderByFechaConsultaDesc(empresaId);
-        } catch (RuntimeException ex) {
-            log.warn("No se pudieron cargar consultas externas para el monitor de errores de la empresa {}", empresaId, ex);
-            consultas = List.of();
-        }
-        List<ApiErrorDescriptor> catalogo = ApiErrorCatalog.all();
-        List<ApiErrorDescriptor> internas = catalogo.stream()
-                .filter(error -> error.origen().startsWith("INTERNA:"))
+        List<ApiErrorDescriptor> catalogo = observabilityService.catalogoErrores();
+        List<Map<String, Object>> eventosRecientes = observabilityService.apiErrors(empresaId, status, origen, parseDate(desde), parseDate(hasta));
+        List<Map<String, Object>> eventosInternos = eventosRecientes.stream()
+                .filter(evento -> "INTERNA".equalsIgnoreCase(String.valueOf(evento.get("tipo"))))
                 .toList();
-        List<ApiErrorDescriptor> externas = catalogo.stream()
-                .filter(error -> error.origen().startsWith("EXTERNA:"))
-                .toList();
-        List<Map<String, Object>> eventosRecientes = observabilityService.apiErrors(empresaId, status, parseDate(desde), parseDate(hasta));
         List<Map<String, Object>> eventosExternos = eventosRecientes.stream()
                 .filter(evento -> "EXTERNA".equalsIgnoreCase(String.valueOf(evento.get("tipo"))))
                 .toList();
@@ -222,12 +203,14 @@ public class AdminEmpresaController {
                 .stream()
                 .sorted()
                 .toList();
+        List<String> origenes = observabilityService.origenesError(empresaId);
         return ResponseEntity.ok(mapOf(
                 "catalogo", catalogo,
-                "internas", internas,
-                "externas", externas,
+                "internas", eventosInternos,
+                "externas", eventosExternos,
                 "eventosExternos", eventosExternos,
                 "eventosRecientes", eventosRecientes,
+                "origenes", origenes,
                 "statusCodes", statusCodes
         ));
     }
@@ -260,20 +243,11 @@ public class AdminEmpresaController {
         UUID empresaId = empresaActual();
         PlanLicencia plan = suscripcionActiva(empresaId) != null ? suscripcionActiva(empresaId).getPlanLicencia() : null;
         Map<String, Object> paqueteControlPlane = controlPlaneClient.configurationPackage();
+        Map<String, Object> configuracionLocal = observabilityService.configuracionLocal(empresaId);
         return ResponseEntity.ok(mapOf(
                 "empresaId", empresaId,
-                "parametrosEditables", List.of(
-                        "Frecuencia de heartbeat",
-                        "Frecuencia de sincronizacion de catalogos",
-                        "Modo offline dentro de gracia",
-                        "Notificaciones administrativas",
-                        "Ventanas de mantenimiento"
-                ),
-                "jobs", List.of(
-                        mapOf("codigo", "LICENSE_HEARTBEAT", "descripcion", "Reporta vida de instalacion", "estado", "ACTIVO"),
-                        mapOf("codigo", "LICENSE_USAGE_SYNC", "descripcion", "Actualiza consumo local", "estado", "ACTIVO"),
-                        mapOf("codigo", "CATALOG_SYNC", "descripcion", "Sincroniza catalogos permitidos", "estado", "PENDIENTE_IMPLEMENTACION")
-                ),
+                "parametrosEditables", configuracionLocal.get("parametrosEditables"),
+                "jobs", configuracionLocal.get("jobs"),
                 "modulosPlan", plan != null ? plan.getModulosIncluidosJson() : null,
                 "paqueteControlPlane", paqueteControlPlane
         ));
@@ -460,51 +434,62 @@ public class AdminEmpresaController {
                 "comprobanteReferencia", p.getComprobanteReferencia(), "estado", p.getEstado());
     }
 
-    private Map<String, Object> consultaDto(ConsultaExterna c) {
-        return mapOf("id", c.getId(), "tipoConsulta", c.getTipoConsulta(), "proveedor", c.getProveedor(),
-                "statusHttp", c.getStatusHttp(), "duracionMs", c.getDuracionMs(), "intentos", c.getIntentos(),
-                "resultado", c.getResultado(), "resultadoFuncional", c.getResultadoFuncional(),
-                "categoriaError", c.getCategoriaError(), "estado", c.getEstado(), "fechaConsulta", c.getFechaConsulta(),
-                "correlationId", c.getCorrelationId());
+    private Map<String, Object> consultaDto(Map<String, Object> c) {
+        return mapOf("id", c.get("id"), "tipoConsulta", c.get("tipo_consulta"), "proveedor", c.get("proveedor"),
+                "statusHttp", c.get("status_http"), "duracionMs", c.get("duracion_ms"), "intentos", c.get("intentos"),
+                "resultado", c.get("resultado"), "resultadoFuncional", c.get("resultado_funcional"),
+                "categoriaError", c.get("categoria_error"), "estado", c.get("estado"),
+                "fechaConsulta", c.get("fecha_consulta"), "correlationId", c.get("correlation_id"));
     }
 
-    private Map<String, Object> consultaErrorDto(ConsultaExterna c) {
-        String codigo = c.getCategoriaError() != null && !c.getCategoriaError().isBlank()
-                ? c.getCategoriaError()
-                : "HTTP_" + c.getStatusHttp();
-        ApiErrorDescriptor descriptor = ApiErrorCatalog.find(c.getProveedor(), codigo)
-                .orElseGet(() -> ApiErrorCatalog.find(null, codigo)
-                        .orElse(new ApiErrorDescriptor(
-                                "EXTERNA:" + (c.getProveedor() != null ? c.getProveedor() : "PROVEEDOR"),
-                                c.getProveedor() != null ? c.getProveedor() : "PROVEEDOR",
-                                codigo,
-                                c.getStatusHttp() != null ? c.getStatusHttp() : 0,
-                                "Error reportado por API externa",
-                                "Evento registrado en consultas_externas.",
-                                "EXTERNA"
-                        )));
-        return mapOf("id", c.getId(),
+    private Map<String, Object> consultaErrorDto(Map<String, Object> c) {
+        String codigo = c.get("categoria_error") != null && !String.valueOf(c.get("categoria_error")).isBlank()
+                ? String.valueOf(c.get("categoria_error"))
+                : "HTTP_" + c.get("status_http");
+        String proveedor = c.get("proveedor") != null ? String.valueOf(c.get("proveedor")) : "PROVEEDOR";
+        ApiErrorDescriptor descriptor = observabilityService.catalogoErrores().stream()
+                .filter(error -> error.codigoError().equalsIgnoreCase(codigo))
+                .filter(error -> proveedor == null || error.api().equalsIgnoreCase(proveedor))
+                .findFirst()
+                .or(() -> observabilityService.catalogoErrores().stream()
+                        .filter(error -> error.codigoError().equalsIgnoreCase(codigo))
+                        .findFirst())
+                .orElse(new ApiErrorDescriptor(
+                        proveedor,
+                        "EXTERNA",
+                        proveedor,
+                        codigo,
+                        c.get("status_http") != null ? ((Number) c.get("status_http")).intValue() : 0,
+                        "Error reportado por API externa",
+                        "Evento registrado en api_evento.",
+                        "EXTERNA",
+                        c.get("fecha_consulta") != null ? (OffsetDateTime) c.get("fecha_consulta") : null
+                ));
+        return mapOf("id", c.get("id"),
                 "origen", descriptor.origen(),
+                "tipoOrigen", descriptor.tipoOrigen(),
                 "api", descriptor.api(),
                 "codigo_error", descriptor.codigoError(),
-                "status_code", c.getStatusHttp() != null ? c.getStatusHttp() : descriptor.statusCode(),
+                "status_code", c.get("status_http") != null ? c.get("status_http") : descriptor.statusCode(),
                 "mensaje", descriptor.mensaje(),
                 "detalles", descriptor.detalles(),
-                "tipoConsulta", c.getTipoConsulta(),
-                "proveedor", c.getProveedor(),
-                "estado", c.getEstado(),
-                "fechaConsulta", c.getFechaConsulta(),
-                "correlationId", c.getCorrelationId(),
-                "duracionMs", c.getDuracionMs(),
-                "intentos", c.getIntentos());
+                "tipoConsulta", c.get("tipo_consulta"),
+                "proveedor", proveedor,
+                "estado", c.get("estado"),
+                "fechaConsulta", c.get("fecha_consulta"),
+                "correlationId", c.get("correlation_id"),
+                "duracionMs", c.get("duracion_ms"),
+                "intentos", c.get("intentos"));
     }
 
-    private Map<String, Object> apiResumenDto(List<ConsultaExterna> consultas) {
+    private Map<String, Object> apiResumenDto(List<Map<String, Object>> consultas) {
         Map<String, Long> porEstado = consultas.stream()
-                .collect(Collectors.groupingBy(c -> c.getEstado() != null ? c.getEstado() : "SIN_ESTADO",
+                .collect(Collectors.groupingBy(c -> c.get("estado") != null ? String.valueOf(c.get("estado")) : "SIN_ESTADO",
                         LinkedHashMap::new, Collectors.counting()));
-        long errores = consultas.stream().filter(c -> c.getCategoriaError() != null && !c.getCategoriaError().isBlank()).count();
-        long exitosas = consultas.stream().filter(c -> Boolean.TRUE.equals(c.getResultado())).count();
+        long errores = consultas.stream().filter(c -> c.get("categoria_error") != null
+                && !String.valueOf(c.get("categoria_error")).isBlank()).count();
+        long exitosas = consultas.stream()
+                .filter(c -> "EXITOSO".equalsIgnoreCase(String.valueOf(c.get("resultado")))).count();
         return mapOf("total", consultas.size(), "exitosas", exitosas, "errores", errores, "porEstado", porEstado);
     }
 

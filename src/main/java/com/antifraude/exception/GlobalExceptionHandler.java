@@ -170,7 +170,7 @@ public class GlobalExceptionHandler {
         auditApiError(status, code, ex.getMessage(), request, detalles);
         return ResponseEntity.status(status)
                 .body(ErrorResponse.of(status, code, ex.getMessage(), request.getRequestURI(),
-                        "EXTERNA:" + ex.provider(), detalles));
+                        ex.provider(), detalles));
     }
 
     @ExceptionHandler(Exception.class)

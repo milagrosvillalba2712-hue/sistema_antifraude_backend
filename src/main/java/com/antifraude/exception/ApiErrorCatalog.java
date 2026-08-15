@@ -61,11 +61,11 @@ public final class ApiErrorCatalog {
 
     private static ApiErrorDescriptor internal(String api, String code, int status, String message,
                                                String detail, String category) {
-        return new ApiErrorDescriptor("INTERNA:" + api, api, code, status, message, detail, category);
+        return new ApiErrorDescriptor(api, "INTERNA", api, code, status, message, detail, category, null);
     }
 
     private static ApiErrorDescriptor external(String api, String code, int status, String message,
                                                String detail, String category) {
-        return new ApiErrorDescriptor("EXTERNA:" + api, api, code, status, message, detail, category);
+        return new ApiErrorDescriptor(api, "EXTERNA", api, code, status, message, detail, category, null);
     }
 }

@@ -125,7 +125,7 @@ public class LicenciaFilter extends OncePerRequestFilter {
                 code,
                 message,
                 path,
-                "INTERNA:LICENCIAMIENTO",
+                "LICENCIAMIENTO",
                 Map.of("filtro", "LicenciaFilter")
         ));
     }

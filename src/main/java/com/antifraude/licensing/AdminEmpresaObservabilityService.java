@@ -1,5 +1,6 @@
 package com.antifraude.licensing;
 
+import com.antifraude.dto.ApiErrorDescriptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -101,12 +102,6 @@ public class AdminEmpresaObservabilityService {
                   where empresa_id = ? and fecha_evento >= now() - interval '24 hours'
                   group by 1
                 ),
-                externas as (
-                  select date_trunc('hour', fecha_consulta) as bucket, count(*)::int as total
-                  from consultas_externas
-                  where empresa_id = ? and fecha_consulta >= now() - interval '24 hours'
-                  group by 1
-                ),
                 api as (
                   select date_trunc('hour', fecha_evento) as bucket,
                          count(*)::int as total,
@@ -120,28 +115,29 @@ public class AdminEmpresaObservabilityService {
                 select
                   h.bucket,
                   coalesce(a.total, 0) as auditoria,
-                  coalesce(e.total, 0) as consultas_externas,
+                  coalesce(api.externas, 0) as consultas_externas,
                   coalesce(api.internas, 0) as api_internas,
                   coalesce(api.externas, 0) as api_externas,
                   coalesce(api.errores, 0) as api_errores,
                   coalesce(api.total, 0) as api_total,
-                  coalesce(a.total, 0) + coalesce(e.total, 0) + coalesce(api.total, 0) as total
+                  coalesce(a.total, 0) + coalesce(api.total, 0) as total
                 from hours h
                 left join auditoria a on a.bucket = h.bucket
-                left join externas e on e.bucket = h.bucket
                 left join api on api.bucket = h.bucket
                 order by h.bucket
-                """, empresaId, empresaId, empresaId);
+                """, empresaId, empresaId);
     }
 
     private List<Map<String, Object>> errorHistory(UUID empresaId) {
-        return apiErrors(empresaId, null, null, null);
+        return apiErrors(empresaId, null, null, null, null);
     }
 
-    public List<Map<String, Object>> apiErrors(UUID empresaId, Integer statusHttp, OffsetDateTime desde, OffsetDateTime hasta) {
+    public List<Map<String, Object>> apiErrors(UUID empresaId, Integer statusHttp, String origen,
+                                               OffsetDateTime desde, OffsetDateTime hasta) {
         StringBuilder sql = new StringBuilder("""
                 with eventos as (
                   select
+                    id,
                     'api_evento' as fuente,
                     origen as tipo,
                     coalesce(codigo_error, 'HTTP_' || status_http, 'API_ERROR') as codigo,
@@ -155,23 +151,9 @@ public class AdminEmpresaObservabilityService {
                   from api_evento
                   where empresa_id = ?
                     and resultado = 'ERROR'
-                  union all
-                  select
-                    'consultas_externas' as fuente,
-                    'EXTERNA' as tipo,
-                    coalesce(categoria_error, 'HTTP_' || status_http, 'API_EXTERNA') as codigo,
-                    coalesce(categoria_error, estado, 'Error de API externa') as mensaje,
-                    proveedor as origen,
-                    tipo_consulta as endpoint,
-                    correlation_id as referencia,
-                    status_http,
-                    duracion_ms,
-                    fecha_consulta as fecha
-                  from consultas_externas
-                  where empresa_id = ?
-                    and (resultado = false or categoria_error is not null or status_http >= 400)
                 )
                 select
+                  id,
                   fuente,
                   tipo,
                   codigo,
@@ -187,10 +169,13 @@ public class AdminEmpresaObservabilityService {
                 """);
         java.util.List<Object> params = new java.util.ArrayList<>();
         params.add(empresaId);
-        params.add(empresaId);
         if (statusHttp != null) {
             sql.append(" and status_http = ?\n");
             params.add(statusHttp);
+        }
+        if (origen != null && !origen.isBlank()) {
+            sql.append(" and origen = ?\n");
+            params.add(origen);
         }
         if (desde != null) {
             sql.append(" and fecha >= ?\n");
@@ -207,8 +192,77 @@ public class AdminEmpresaObservabilityService {
         return jdbcTemplate.queryForList(sql.toString(), params.toArray());
     }
 
+    public List<String> origenesError(UUID empresaId) {
+        return jdbcTemplate.queryForList("""
+                select distinct servicio
+                from api_evento
+                where empresa_id = ? and resultado = 'ERROR'
+                order by servicio
+                """, String.class, empresaId);
+    }
+
     public List<Map<String, Object>> recentApiErrors(UUID empresaId) {
         return errorHistory(empresaId);
+    }
+
+    public List<Map<String, Object>> ultimasConsultasExternas(UUID empresaId, int limit) {
+        return jdbcTemplate.queryForList("""
+                select
+                  id,
+                  endpoint as tipo_consulta,
+                  servicio as proveedor,
+                  status_http as status_http,
+                  duracion_ms as duracion_ms,
+                  intentos,
+                  resultado,
+                  resultado_funcional as resultado_funcional,
+                  categoria_error as categoria_error,
+                  estado,
+                  correlation_id as correlation_id,
+                  fecha_evento as fecha_consulta
+                from api_evento
+                where empresa_id = ? and origen = 'EXTERNA'
+                order by fecha_evento desc
+                limit ?
+                """, empresaId, limit);
+    }
+
+    public Map<String, Object> configuracionLocal(UUID empresaId) {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+                select id, tipo, codigo, nombre, descripcion, estado, editable, orden, detalle_json as detalle
+                from admin_empresa_configuracion_local
+                where empresa_id = ?
+                  and estado <> 'ELIMINADO'
+                order by tipo, orden, codigo
+                """, empresaId);
+        return mapOf(
+                "parametrosEditables", rows.stream()
+                        .filter(row -> "PARAMETRO".equalsIgnoreCase(String.valueOf(row.get("tipo"))))
+                        .toList(),
+                "jobs", rows.stream()
+                        .filter(row -> "JOB".equalsIgnoreCase(String.valueOf(row.get("tipo"))))
+                        .toList()
+        );
+    }
+
+    public List<ApiErrorDescriptor> catalogoErrores() {
+        return jdbcTemplate.query("""
+                select origen, tipo_origen, api, codigo_error, status_code, mensaje, detalles, categoria,
+                       coalesce(fecha_hora_modificacion, fecha_hora_creacion) as fecha
+                from api_error_catalogo
+                where activo = true
+                order by origen, codigo_error
+                """, (rs, rowNum) -> new ApiErrorDescriptor(
+                rs.getString("origen"),
+                rs.getString("tipo_origen"),
+                rs.getString("api"),
+                rs.getString("codigo_error"),
+                rs.getInt("status_code"),
+                rs.getString("mensaje"),
+                rs.getString("detalles"),
+                rs.getString("categoria"),
+                rs.getObject("fecha", OffsetDateTime.class)
+        ));
     }
 
     private Map<String, Object> latestUsage(UUID empresaId) {

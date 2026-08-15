@@ -87,6 +87,6 @@ public record ErrorResponse(
     }
 
     private static String resolveOrigen(String path) {
-        return "INTERNA:" + resolveApi(path);
+        return resolveApi(path);
     }
 }
