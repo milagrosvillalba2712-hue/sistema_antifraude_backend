@@ -273,7 +273,7 @@ WHERE codigo LIKE '%\_MOCK' ESCAPE '\'
       FROM servicio_externo sandbox
       WHERE sandbox.codigo = replace(servicio_externo.codigo, '_MOCK', '_SANDBOX')
   );
-UPDATE consultas_externas SET correlation_id=replace(correlation_id,'seed-ext','scl-ext');
+UPDATE api_evento SET correlation_id=replace(correlation_id,'seed-ext','scl-ext') WHERE correlation_id LIKE 'seed-ext%';
 UPDATE auditoria_sistema SET accion=replace(accion,'DEMO','CONTROL'),
  descripcion=replace(replace(descripcion,'demo','control'),'sintética','ficticia'),
  entidad_afectada=replace(entidad_afectada,'demo','control'),entidad_id=replace(entidad_id,'DEMO','CONTROL'),
@@ -283,6 +283,16 @@ WHERE accion ILIKE '%demo%' OR descripcion ILIKE '%demo%' OR entidad_afectada IL
 -- Los registros de control nunca se presentan como sanciones/PEP oficiales.
 UPDATE cliente_pep SET cargo='Cargo ficticio de control',institucion='Institución ficticia',detalle_json=detalle_json-'demo';
 UPDATE cliente_observado SET motivo='Coincidencia en lista interna de control',observacion='No corresponde a una lista oficial';
+
+-- Unificación de nomenclatura: ADMIN_GENERAL, ADMIN_EMPRESA y GERENTE_SUPERVISOR se retiran
+-- del cliente (ADMIN_GENERAL queda únicamente en el Control Plane). Los roles productivos son
+-- ADMINISTRADOR, SUPERVISOR, ANALISTA y AUDITOR. Se desactivan afiliaciones, permisos y cuentas legacy.
+UPDATE usuario_empresa ue SET activo=false, estado='BAJA'
+FROM rol r WHERE ue.rol_id=r.id AND r.codigo IN ('ADMIN_GENERAL','ADMIN_EMPRESA','GERENTE_SUPERVISOR');
+DELETE FROM rol_permiso rp USING rol r WHERE rp.rol_id=r.id AND r.codigo IN ('ADMIN_GENERAL','ADMIN_EMPRESA','GERENTE_SUPERVISOR');
+UPDATE rol SET activo=false WHERE codigo IN ('ADMIN_GENERAL','ADMIN_EMPRESA','GERENTE_SUPERVISOR');
+UPDATE usuarios SET activo=false
+WHERE email IN ('ana.gimenez@regula.local','lucia.rios@regula.local','roberto.ayala@regula.local');
 
 INSERT INTO auditoria_sistema(empresa_id,usuario_id,accion,descripcion,entidad_afectada,entidad_id,valor_nuevo_json,direccion_ip,user_agent)
 SELECT '00000000-0000-0000-0000-000000000001',u.id,'BASELINE_INSTALACION',

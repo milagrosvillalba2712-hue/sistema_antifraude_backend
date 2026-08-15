@@ -43,11 +43,11 @@ SET email = EXCLUDED.email,
 INSERT INTO usuario_empresa(empresa_id,usuario_id,rol_id,estado,activo)
 SELECT '00000000-0000-0000-0000-000000000001', u.id, r.id, 'ACTIVO', true
 FROM (VALUES
-('administrador@santaclara.local','ADMIN_EMPRESA'),
-('supervisor@santaclara.local','GERENTE_SUPERVISOR'),
+('administrador@santaclara.local','ADMINISTRADOR'),
+('supervisor@santaclara.local','SUPERVISOR'),
 ('analista@santaclara.local','ANALISTA'),
 ('auditor@santaclara.local','AUDITOR'),
-('soporte.api@santaclara.local','ADMIN_EMPRESA')
+('soporte.api@santaclara.local','ADMINISTRADOR')
 ) v(email, rol_codigo)
 JOIN usuarios u ON u.email = v.email
 JOIN rol r ON r.codigo = v.rol_codigo
@@ -174,7 +174,7 @@ SELECT '00000000-0000-0000-0000-000000000001',
        'scl-req-' || lpad(n::text, 3, '0'),
        '127.0.0.1',
        'RegulaWeb/aceptacion',
-       CASE WHEN n % 4 = 0 THEN 'consultas_externas' ELSE 'api_endpoint' END,
+       CASE WHEN n % 4 = 0 THEN 'api_externa' ELSE 'api_endpoint' END,
        'SCL-EVENT-' || lpad(n::text, 3, '0'),
        jsonb_build_object('origenSeed','dashboard_admin_empresa','piiReal',false),
        now() - ((60 - n) * interval '5 minutes')
@@ -195,45 +195,51 @@ SET nombre = EXCLUDED.nombre,
     estado = EXCLUDED.estado,
     configuracion_json = EXCLUDED.configuracion_json;
 
-INSERT INTO consultas_externas(
-    empresa_id, servicio_externo_id, persona_id, estado, request_hash, tipo_consulta, resultado,
-    proveedor, documento_hash, correlation_id, status_http, duracion_ms, intentos,
-    resultado_funcional, categoria_error
+INSERT INTO api_evento(
+    empresa_id, origen, direccion, servicio, endpoint, metodo_http, status_http,
+    codigo_error, mensaje, resultado, categoria_error, duracion_ms, correlation_id,
+    referencia_entidad, referencia_id, detalle_json, fecha_evento,
+    documento_hash, intentos, resultado_funcional, estado
 )
 SELECT '00000000-0000-0000-0000-000000000001',
-       s.id,
-       p.id,
-       CASE WHEN n IN (4, 9, 14, 19, 24) THEN 'ERROR' ELSE 'COMPLETADA' END,
-       hmac('scl-request-' || n, 'regula-demo-hmac-key', 'sha256'),
+       'EXTERNA',
+       'SALIENTE',
+       s.codigo,
        CASE WHEN n % 4 = 0 THEN 'KYC_PERFIL'
             WHEN n % 4 = 1 THEN 'SCREENING_LISTAS'
             WHEN n % 4 = 2 THEN 'PEP'
             ELSE 'RIESGO_PAIS' END,
-       CASE WHEN n IN (4, 9, 14, 19, 24) THEN false ELSE (n % 7 = 0) END,
-       s.codigo,
-       encode(hmac('scl-documento-' || n, 'regula-demo-hmac-key', 'sha256'), 'hex'),
-       'scl-ext-' || lpad(n::text, 3, '0'),
+       'GET',
        CASE WHEN n IN (4, 19) THEN 503 WHEN n IN (9, 24) THEN 504 WHEN n = 14 THEN 429 ELSE 200 END,
-       CASE WHEN n IN (4, 9, 14, 19, 24) THEN 900 + (n * 8) ELSE 75 + (n * 6) END,
-       CASE WHEN n IN (9, 24) THEN 3 ELSE 1 END,
-       CASE WHEN n % 7 = 0 THEN 'COINCIDENCIA_REVISAR' ELSE 'SIN_COINCIDENCIA' END,
        CASE WHEN n IN (4, 19) THEN 'SERVICIO_NO_DISPONIBLE'
             WHEN n IN (9, 24) THEN 'TIMEOUT'
             WHEN n = 14 THEN 'RATE_LIMIT'
-            ELSE NULL END
+            ELSE NULL END,
+       CASE WHEN n IN (4, 19) THEN 'Proveedor externo no disponible en ventana de prueba'
+            WHEN n IN (9, 24) THEN 'Timeout al consultar proveedor externo'
+            WHEN n = 14 THEN 'Límite de consultas superado'
+            ELSE 'Solicitud procesada correctamente' END,
+       CASE WHEN n IN (4, 9, 14, 19, 24) THEN 'ERROR' ELSE 'EXITOSO' END,
+       CASE WHEN n IN (4, 19) THEN 'SERVICIO_NO_DISPONIBLE'
+            WHEN n IN (9, 24) THEN 'TIMEOUT'
+            WHEN n = 14 THEN 'RATE_LIMIT'
+            ELSE NULL END,
+       CASE WHEN n IN (4, 9, 14, 19, 24) THEN 900 + (n * 8) ELSE 75 + (n * 6) END,
+       'scl-ext-' || lpad(n::text, 3, '0'),
+       'api_externa',
+       'scl-ext-' || lpad(n::text, 3, '0'),
+       jsonb_build_object('origenSeed','dashboard_admin_empresa','piiReal',false),
+       now() - ((24 - n) * interval '7 minutes'),
+       encode(hmac('scl-documento-' || n, 'regula-demo-hmac-key', 'sha256'), 'hex'),
+       CASE WHEN n IN (9, 24) THEN 3 ELSE 1 END,
+       CASE WHEN n % 7 = 0 THEN 'COINCIDENCIA_REVISAR' ELSE 'SIN_COINCIDENCIA' END,
+       CASE WHEN n IN (4, 9, 14, 19, 24) THEN 'ERROR' ELSE 'COMPLETADA' END
 FROM generate_series(1, 24) n
 JOIN servicio_externo s ON s.codigo = CASE WHEN n % 3 = 0 THEN 'PEP_SANDBOX'
                                            WHEN n % 3 = 1 THEN 'IDENTIFICACIONES_SANDBOX'
                                            ELSE 'SANCIONES_SANDBOX' END
-LEFT JOIN LATERAL (
-    SELECT id FROM persona
-    WHERE empresa_id = '00000000-0000-0000-0000-000000000001'
-    ORDER BY id
-    OFFSET ((n - 1) % GREATEST((SELECT count(*) FROM persona WHERE empresa_id = '00000000-0000-0000-0000-000000000001'), 1))
-    LIMIT 1
-) p ON true
 WHERE NOT EXISTS (
-    SELECT 1 FROM consultas_externas c WHERE c.correlation_id = 'scl-ext-' || lpad(n::text, 3, '0')
+    SELECT 1 FROM api_evento a WHERE a.correlation_id = 'scl-ext-' || lpad(n::text, 3, '0')
 );
 
 INSERT INTO auditoria_sistema(empresa_id,usuario_id,accion,descripcion,entidad_afectada,entidad_id,valor_nuevo_json,direccion_ip,user_agent,fecha_evento)
@@ -252,7 +258,7 @@ FROM (VALUES
 (2,'CONSULTAR_DASHBOARD','Consulta de tablero Admin Empresa','admin_empresa','dashboard','administrador@santaclara.local'),
 (3,'CONSULTAR_ALERTAS','Revisión de alertas recientes','alertas_antifraude','listado','analista@santaclara.local'),
 (4,'REASIGNAR_ALERTA','Reasignación de alerta por disponibilidad operativa','historial_asignacion','ALT-SCL-001','supervisor@santaclara.local'),
-(5,'CONSULTAR_KYC','Consulta KYC mediante proveedor sandbox','consultas_externas','KYC_PERFIL','analista@santaclara.local'),
+(5,'CONSULTAR_KYC','Consulta KYC mediante proveedor sandbox','api_externa','KYC_PERFIL','analista@santaclara.local'),
 (6,'EXPORTAR_REPORTE','Generación de reporte operativo para revisión','reportes_ros','ROS-SCL-001','auditor@santaclara.local'),
 (7,'SINCRONIZAR_CATALOGOS','Ejecución de sincronización manual de catálogos','admin_empresa_configuracion_local','CATALOG_SYNC','soporte.api@santaclara.local'),
 (8,'VALIDAR_LICENCIA','Validación manual de licencia local','licencia_local','SCL-ASUNCION-01','administrador@santaclara.local')
