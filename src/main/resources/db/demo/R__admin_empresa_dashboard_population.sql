@@ -31,7 +31,8 @@ VALUES
 ('10000000-0000-0000-0000-000000000002','supervisor@santaclara.local','Miguel Benítez',crypt('Regula2026!', gen_salt('bf')),true,0,NULL),
 ('10000000-0000-0000-0000-000000000003','analista@santaclara.local','Laura Giménez',crypt('Regula2026!', gen_salt('bf')),true,0,NULL),
 ('10000000-0000-0000-0000-000000000004','auditor@santaclara.local','Rodrigo Caballero',crypt('Regula2026!', gen_salt('bf')),true,0,NULL),
-('10000000-0000-0000-0000-000000000005','soporte.api@santaclara.local','Sofía Duarte',crypt('Regula2026!', gen_salt('bf')),true,0,NULL)
+('10000000-0000-0000-0000-000000000005','soporte.api@santaclara.local','Sofía Duarte',crypt('Regula2026!', gen_salt('bf')),true,0,NULL),
+('00000000-0000-0000-0000-000000000099','system@santaclara.local','Sistema Automático',crypt(gen_random_uuid()::text, gen_salt('bf')),true,0,NULL)
 ON CONFLICT(id) DO UPDATE
 SET email = EXCLUDED.email,
     nombre = EXCLUDED.nombre,
@@ -47,7 +48,8 @@ FROM (VALUES
 ('supervisor@santaclara.local','SUPERVISOR'),
 ('analista@santaclara.local','ANALISTA'),
 ('auditor@santaclara.local','AUDITOR'),
-('soporte.api@santaclara.local','ADMINISTRADOR')
+('soporte.api@santaclara.local','ADMINISTRADOR'),
+('system@santaclara.local','ADMINISTRADOR')
 ) v(email, rol_codigo)
 JOIN usuarios u ON u.email = v.email
 JOIN rol r ON r.codigo = v.rol_codigo
@@ -119,11 +121,7 @@ VALUES
 ('00000000-0000-0000-0000-000000000001','PARAMETRO','SYNC_CATALOGOS_FRECUENCIA','Frecuencia De Sincronización De Catálogos','Define cada cuánto la instalación cliente solicita catálogos permitidos al Control Plane.','ACTIVO',true,10,'{"valorActual":"Cada 6 horas","recomendado":"Cada 6 a 12 horas","impacto":"Actualiza listas, países de riesgo y catálogos AML"}'),
 ('00000000-0000-0000-0000-000000000001','PARAMETRO','RETENCION_AUDITORIA','Retención De Auditoría Local','Tiempo durante el cual se conservan eventos funcionales y técnicos para revisión interna.','ACTIVO',true,20,'{"valorActual":"5 años","base":"Buenas prácticas AML y trazabilidad de soporte"}'),
 ('00000000-0000-0000-0000-000000000001','PARAMETRO','MODO_GRACIA_LICENCIA','Modo De Gracia De Licencia','Permite operar temporalmente si el Control Plane no responde y la licencia todavía está dentro del período permitido.','ACTIVO',false,30,'{"valorActual":"15 días","control":"Validación criptográfica local"}'),
-('00000000-0000-0000-0000-000000000001','PARAMETRO','ALERTA_API_EXTERNA','Umbral De Alerta Para APIs Externas','Dispara advertencia si una API externa supera el porcentaje permitido de errores.','ACTIVO',true,40,'{"valorActual":"10%","ventana":"1 hora"}'),
-('00000000-0000-0000-0000-000000000001','JOB','CATALOG_SYNC','Sincronización De Catálogos','Descarga manifiesto y versiones permitidas de catálogos AML desde el Control Plane.','ACTIVO',false,10,'{"frecuencia":"Cada 6 horas","ultimaEjecucion":"2026-08-13T08:00:00-03:00","ultimoResultado":"OK"}'),
-('00000000-0000-0000-0000-000000000001','JOB','LICENSE_USAGE_SYNC','Sincronización De Consumo','Reporta consumo mensual local para control de plan, auditoría y tablero administrativo.','ACTIVO',false,20,'{"frecuencia":"Cada 1 hora","ultimaEjecucion":"2026-08-13T08:10:00-03:00","ultimoResultado":"OK"}'),
-('00000000-0000-0000-0000-000000000001','JOB','EXTERNAL_API_HEALTH_CHECK','Verificación De APIs Externas','Consulta disponibilidad de proveedores sandbox: identificaciones, sanciones, PEP y servicios de soporte.','ACTIVO',false,30,'{"frecuencia":"Cada 10 minutos","ultimaEjecucion":"2026-08-13T08:15:00-03:00","ultimoResultado":"ADVERTENCIA","detalle":"Sanciones con latencia alta"}'),
-('00000000-0000-0000-0000-000000000001','JOB','AUDIT_RETENTION_CHECK','Control De Retención De Auditoría','Verifica volumen y antigüedad de eventos auditables conservados localmente.','ACTIVO',false,40,'{"frecuencia":"Diario","ultimaEjecucion":"2026-08-13T07:00:00-03:00","ultimoResultado":"OK"}')
+('00000000-0000-0000-0000-000000000001','PARAMETRO','ALERTA_API_EXTERNA','Umbral De Alerta Para APIs Externas','Dispara advertencia si una API externa supera el porcentaje permitido de errores.','ACTIVO',true,40,'{"valorActual":"10%","ventana":"1 hora"}')
 ON CONFLICT(empresa_id,tipo,codigo) DO UPDATE
 SET nombre = EXCLUDED.nombre,
     descripcion = EXCLUDED.descripcion,
@@ -131,6 +129,28 @@ SET nombre = EXCLUDED.nombre,
     editable = EXCLUDED.editable,
     orden = EXCLUDED.orden,
     detalle_json = EXCLUDED.detalle_json;
+
+-- Jobs configurables del agente on-premise. editable=true para administrarlos
+-- desde Configuracion Local. En el conflicto se conservan estado y los campos
+-- de ejecucion (ultimaEjecucion/proximaEjecucion/ultimoResultado/ultimoDetalle)
+-- para que la configuracion y el historial del administrador sobrevivan a cada
+-- arranque; solo se propagan los defaults de frecuencia.
+INSERT INTO admin_empresa_configuracion_local(empresa_id,tipo,codigo,nombre,descripcion,estado,editable,orden,detalle_json)
+VALUES
+('00000000-0000-0000-0000-000000000001','JOB','HEARTBEAT','Heartbeat Al Control Plane','Reporta latido de la instalacion al Control Plane y actualiza el ultimo heartbeat local.','ACTIVO',true,10,'{"frecuenciaValor":5,"frecuenciaUnidad":"MINUTOS","ultimaEjecucion":"2026-08-14T08:00:00-03:00","proximaEjecucion":"2026-08-15T00:00:00-03:00","ultimoResultado":"OK"}'),
+('00000000-0000-0000-0000-000000000001','JOB','VALIDACION_LICENCIA','Validación Y Renovación De Licencia','Valida el lease contra el Control Plane, renueva la licencia firmada si es posible y reevalúa la política local.','ACTIVO',true,20,'{"frecuenciaValor":1,"frecuenciaUnidad":"HORAS","ultimaEjecucion":"2026-08-14T08:00:00-03:00","proximaEjecucion":"2026-08-15T00:00:00-03:00","ultimoResultado":"OPERATIVO"}'),
+('00000000-0000-0000-0000-000000000001','JOB','LICENSE_USAGE_SYNC','Sincronización De Consumo','Reporta consumo mensual local al Control Plane para control de plan, auditoría y tablero administrativo.','ACTIVO',true,30,'{"frecuenciaValor":1,"frecuenciaUnidad":"HORAS","ultimaEjecucion":"2026-08-14T08:10:00-03:00","proximaEjecucion":"2026-08-15T00:00:00-03:00","ultimoResultado":"OK"}'),
+('00000000-0000-0000-0000-000000000001','JOB','CATALOG_SYNC','Sincronización De Catálogos','Descarga manifiesto y versiones permitidas de catálogos AML desde el Control Plane.','ACTIVO',true,40,'{"frecuenciaValor":6,"frecuenciaUnidad":"HORAS","ultimaEjecucion":"2026-08-14T08:00:00-03:00","proximaEjecucion":"2026-08-15T00:00:00-03:00","ultimoResultado":"OK"}'),
+('00000000-0000-0000-0000-000000000001','JOB','EXTERNAL_API_HEALTH_CHECK','Verificación De APIs Externas','Consulta disponibilidad de proveedores sandbox: identificaciones, sanciones, PEP y servicios de soporte.','ACTIVO',true,50,'{"frecuenciaValor":10,"frecuenciaUnidad":"MINUTOS","ultimaEjecucion":"2026-08-14T08:15:00-03:00","proximaEjecucion":"2026-08-15T00:00:00-03:00","ultimoResultado":"ADVERTENCIA","ultimoDetalle":"Sanciones con latencia alta"}'),
+('00000000-0000-0000-0000-000000000001','JOB','SUSCRIPCION_ESTADOS','Estados De Suscripción','Revisa vencimiento y renovación automática de suscripciones (POR_VENCER / VENCIDA / ACTIVA / CERRADA).','ACTIVO',true,60,'{"frecuenciaValor":1,"frecuenciaUnidad":"DIAS","hora":"03:30","ultimaEjecucion":"2026-08-14T03:30:00-03:00","proximaEjecucion":"2026-08-15T00:00:00-03:00","ultimoResultado":"OK"}'),
+('00000000-0000-0000-0000-000000000001','JOB','AUDIT_RETENTION_CHECK','Control De Retención De Auditoría','Verifica volumen y antigüedad de eventos auditables conservados localmente.','ACTIVO',true,70,'{"frecuenciaValor":1,"frecuenciaUnidad":"DIAS","hora":"07:00","ultimaEjecucion":"2026-08-14T07:00:00-03:00","proximaEjecucion":"2026-08-15T00:00:00-03:00","ultimoResultado":"OK"}')
+ON CONFLICT(empresa_id,tipo,codigo) DO UPDATE
+SET nombre = EXCLUDED.nombre,
+    descripcion = EXCLUDED.descripcion,
+    editable = EXCLUDED.editable,
+    orden = EXCLUDED.orden,
+    detalle_json = COALESCE(admin_empresa_configuracion_local.detalle_json, '{}'::jsonb)
+        || (EXCLUDED.detalle_json - 'ultimaEjecucion' - 'ultimoResultado' - 'proximaEjecucion' - 'ultimoDetalle');
 
 INSERT INTO api_evento(
     empresa_id, usuario_id, origen, direccion, servicio, endpoint, metodo_http, status_http,
