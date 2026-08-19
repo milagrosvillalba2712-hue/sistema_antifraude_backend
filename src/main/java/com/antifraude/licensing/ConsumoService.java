@@ -11,14 +11,11 @@ import java.util.UUID;
 public class ConsumoService {
 
     private final UsoSuscripcionRepository usoSuscripcionRepository;
-    private final ConsumoLicenciaLocalRepository consumoLicenciaLocalRepository;
     private final EmpresaRepository empresaRepository;
 
     public ConsumoService(UsoSuscripcionRepository usoSuscripcionRepository,
-                          ConsumoLicenciaLocalRepository consumoLicenciaLocalRepository,
                           EmpresaRepository empresaRepository) {
         this.usoSuscripcionRepository = usoSuscripcionRepository;
-        this.consumoLicenciaLocalRepository = consumoLicenciaLocalRepository;
         this.empresaRepository = empresaRepository;
     }
 
@@ -63,29 +60,6 @@ public class ConsumoService {
         UsoSuscripcion uso = usoActual(empresaId);
         uso.setReportesGenerados(uso.getReportesGenerados() + 1);
         usoSuscripcionRepository.save(uso);
-    }
-
-    public void registrarConsumoLocal(UUID instalacionId, TipoConsumoLocal tipo) {
-        YearMonth periodo = YearMonth.now();
-        ConsumoLicenciaLocal consumo = consumoLicenciaLocalRepository
-                .findByInstalacionIdAndAnioAndMes(instalacionId, periodo.getYear(), periodo.getMonthValue())
-                .orElseGet(() -> {
-                    ConsumoLicenciaLocal nuevo = new ConsumoLicenciaLocal();
-                    nuevo.setInstalacionId(instalacionId);
-                    nuevo.setAnio(periodo.getYear());
-                    nuevo.setMes(periodo.getMonthValue());
-                    return nuevo;
-                });
-        switch (tipo) {
-            case TRANSACCION -> consumo.setTransaccionesProcesadas(consumo.getTransaccionesProcesadas() + 1);
-            case KYC -> consumo.setConsultasKyc(consumo.getConsultasKyc() + 1);
-            case REPORTE -> consumo.setReportesGenerados(consumo.getReportesGenerados() + 1);
-        }
-        consumoLicenciaLocalRepository.save(consumo);
-    }
-
-    public enum TipoConsumoLocal {
-        TRANSACCION, KYC, REPORTE
     }
 
     private UsoSuscripcion nuevaUso(UUID empresaId, int anio, int mes) {

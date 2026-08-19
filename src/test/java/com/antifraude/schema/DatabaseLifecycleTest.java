@@ -40,9 +40,9 @@ class DatabaseLifecycleTest {
             assertThat(queryInt(postgres, "select count(*) from usuarios where email like '%@demo.regula.local' or email like '%@cliente.local'"))
                     .isZero();
             assertThat(queryInt(postgres, "select count(*) from usuarios where email like '%@santaclara.local'"))
-                    .isEqualTo(30);
+                    .isEqualTo(31);
             assertThat(queryInt(postgres, "select count(*) from usuario_empresa"))
-                    .isEqualTo(30);
+                    .isEqualTo(31);
             assertThat(queryInt(postgres, "select count(*) from transacciones where codigo like 'TX-CONTROL-%'"))
                     .isEqualTo(7);
             assertThat(queryInt(postgres, "select count(*) from alertas_antifraude where codigo like 'ALT-TX-CONTROL-%'"))
@@ -64,7 +64,7 @@ class DatabaseLifecycleTest {
             assertThat(queryInt(postgres, "select count(*) from api_error_catalogo"))
                     .isEqualTo(33);
             assertThat(queryInt(postgres, "select count(*) from admin_empresa_configuracion_local"))
-                    .isEqualTo(8);
+                    .isEqualTo(11);
         }
     }
 

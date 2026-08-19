@@ -87,6 +87,14 @@ public class AuthTokenService {
         }
     }
 
+    /** Busca un token por tipo y codigo sin consumirlo (para validacion publica). */
+    public AuthToken buscarPorTipoYCodigo(String tipo, String codigo) {
+        String hashValue = hash(codigo);
+        return authTokenRepository.findByTokenHash(hashValue)
+                .filter(t -> tipo.equals(t.getTipo()))
+                .orElse(null);
+    }
+
     private String emitir(UUID usuarioId, String tipo, UUID empresaId, Long rolId, String email, int minutosVida) {
         byte[] bytes = new byte[32];
         RANDOM.nextBytes(bytes);

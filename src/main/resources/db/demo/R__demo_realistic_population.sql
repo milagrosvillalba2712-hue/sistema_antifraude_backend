@@ -191,11 +191,6 @@ INSERT INTO licencia_local(id,instalacion_id,suscripcion_referencia,plan_codigo,
 VALUES('00000000-0000-0000-0000-000000009101','00000000-0000-0000-0000-000000009001','SUB-DEMO-2026','PROFESSIONAL',1,'ACTIVA',TIMESTAMPTZ '2026-08-05 20:00:00-03',TIMESTAMPTZ '2026-12-31 23:59:59-03',15,'["TRANSACCIONES","ALERTAS","KYC","CASOS","ROS"]','{"usuarios":50,"transaccionesMes":1000000,"consultasKycMes":20000}','eyJkZW1vIjp0cnVlLCJub1ZhbGlkYXJGaXJtYSI6dHJ1ZX0','DEMO_SIGNATURE_NOT_CRYPTOGRAPHIC','demo-key-2026',TIMESTAMPTZ '2026-08-05 21:00:00-03')
 ON CONFLICT(id) DO UPDATE SET suscripcion_referencia=EXCLUDED.suscripcion_referencia,plan_codigo=EXCLUDED.plan_codigo,estado=EXCLUDED.estado,emitida_en=EXCLUDED.emitida_en,vence_en=EXCLUDED.vence_en,ultima_validacion_en=EXCLUDED.ultima_validacion_en;
 
-INSERT INTO consumo_licencia_local(instalacion_id,anio,mes,usuarios_activos,transacciones_procesadas,consultas_kyc,alertas_generadas,reportes_generados) VALUES
-('00000000-0000-0000-0000-000000009001',2026,7,5,7000,140,35,3),
-('00000000-0000-0000-0000-000000009001',2026,8,5,8000,160,40,4)
-ON CONFLICT(instalacion_id,anio,mes) DO UPDATE SET transacciones_procesadas=EXCLUDED.transacciones_procesadas,consultas_kyc=EXCLUDED.consultas_kyc;
-
 INSERT INTO evento_licencia_local(instalacion_id,licencia_id,tipo_evento,resultado,correlation_id,detalle_sanitizado_json,fecha_evento)
 SELECT '00000000-0000-0000-0000-000000009001','00000000-0000-0000-0000-000000009101',v.tipo,v.resultado,v.correlation_id,'{"demo":true}',v.fecha
 FROM (VALUES

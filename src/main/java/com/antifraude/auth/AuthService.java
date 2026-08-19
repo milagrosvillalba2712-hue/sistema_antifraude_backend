@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -39,21 +40,27 @@ public class AuthService {
     private final PermissionService permissionService;
     private final LoginRateLimiter loginRateLimiter;
     private final AuthTokenService authTokenService;
-    private final AuthLinkSender authLinkSender;
+    private final EmailService emailService;
+    private final RecaptchaService recaptchaService;
     private final RolSistemaRepository rolSistemaRepository;
     private final EmpresaRepository empresaRepository;
     private final UsuarioEmpresaRepository usuarioEmpresaRepository;
     private final RlsContextService rlsContextService;
     private final boolean requireEmailVerified;
+    private final int maxFailedAttempts;
+    private final int lockoutMinutes;
 
     public AuthService(AuthenticationManager authenticationManager, JwtTokenProvider jwtTokenProvider,
                        UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder,
                        AuditoriaService auditoriaService, PermissionService permissionService,
                        LoginRateLimiter loginRateLimiter, AuthTokenService authTokenService,
-                       AuthLinkSender authLinkSender, RolSistemaRepository rolSistemaRepository,
+                       EmailService emailService, RecaptchaService recaptchaService,
+                       RolSistemaRepository rolSistemaRepository,
                        EmpresaRepository empresaRepository, UsuarioEmpresaRepository usuarioEmpresaRepository,
                        RlsContextService rlsContextService,
-                       @Value("${app.auth.require-email-verified:false}") boolean requireEmailVerified) {
+                       @Value("${app.auth.require-email-verified:false}") boolean requireEmailVerified,
+                       @Value("${app.auth.max-failed-attempts:3}") int maxFailedAttempts,
+                       @Value("${app.auth.lockout-minutes:15}") int lockoutMinutes) {
         this.authenticationManager = authenticationManager;
         this.jwtTokenProvider = jwtTokenProvider;
         this.usuarioRepository = usuarioRepository;
@@ -62,39 +69,84 @@ public class AuthService {
         this.permissionService = permissionService;
         this.loginRateLimiter = loginRateLimiter;
         this.authTokenService = authTokenService;
-        this.authLinkSender = authLinkSender;
+        this.emailService = emailService;
+        this.recaptchaService = recaptchaService;
         this.rolSistemaRepository = rolSistemaRepository;
         this.empresaRepository = empresaRepository;
         this.usuarioEmpresaRepository = usuarioEmpresaRepository;
         this.rlsContextService = rlsContextService;
         this.requireEmailVerified = requireEmailVerified;
+        this.maxFailedAttempts = maxFailedAttempts;
+        this.lockoutMinutes = lockoutMinutes;
     }
 
+    @Transactional
     public LoginResponse login(LoginRequest request, HttpServletRequest httpRequest) {
         String ip = httpRequest.getRemoteAddr();
         loginRateLimiter.verificar(ip);
+
+        Usuario usuario = usuarioRepository.findByEmail(request.email()).orElse(null);
+
+        if (usuario == null) {
+            log.warn("[AUTH] Intento de login con usuario inexistente: {} - IP: {}", request.email(), ip);
+            try {
+                auditoriaService.registrar(null, "LOGIN_FALLIDO",
+                        "Intento de login con usuario inexistente: " + request.email(),
+                        ip, "usuarios", null);
+            } catch (RuntimeException ignored) {
+            }
+            throw new AuthenticationErrorException("USER_NOT_FOUND", "Usuario no registrado");
+        }
+
+        if (Boolean.FALSE.equals(usuario.getActivo())) {
+            log.warn("[AUTH] Intento de login con cuenta deshabilitada: {} - IP: {}", request.email(), ip);
+            try {
+                auditoriaService.registrar(usuario.getId(), "LOGIN_FALLIDO",
+                        "Intento de login con cuenta deshabilitada", ip, "usuarios", usuario.getId());
+            } catch (RuntimeException ignored) {
+            }
+            throw new DisabledException("Cuenta deshabilitada: " + request.email());
+        }
+
+        if (usuario.isBlocked()) {
+            log.warn("[AUTH] Intento de login con cuenta bloqueada: {} - IP: {} - bloqueado hasta: {}",
+                    request.email(), ip, usuario.getBloqueadoHasta());
+            httpRequest.setAttribute("lockout_details", java.util.Map.of(
+                    "bloqueadoHasta", usuario.getBloqueadoHasta().toString(),
+                    "intentosFallidos", usuario.getIntentosFallidos(),
+                    "maxIntentos", maxFailedAttempts,
+                    "minutosRestantes", usuario.getLockoutMinutesRemaining()));
+            try {
+                auditoriaService.registrar(usuario.getId(), "LOGIN_FALLIDO",
+                        "Intento de login con cuenta bloqueada", ip, "usuarios", usuario.getId());
+            } catch (RuntimeException ignored) {
+            }
+            throw new LockedException("Cuenta bloqueada: " + request.email());
+        }
 
         try {
             log.debug("[AUTH] Autenticando usuario: {} - IP: {}", request.email(), ip);
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.email(), request.password()));
         } catch (BadCredentialsException e) {
-            log.warn("[AUTH] Credenciales incorrectas para {} - IP: {}", request.email(), ip);
-            incrementarIntentosFallidos(request.email());
-            throw e;
-        } catch (LockedException e) {
-            log.warn("[AUTH] Cuenta bloqueada para {} - IP: {}", request.email(), ip);
-            throw e;
-        } catch (DisabledException e) {
-            log.warn("[AUTH] Cuenta deshabilitada para {} - IP: {}", request.email(), ip);
+            log.warn("[AUTH] Contraseña incorrecta para {} - IP: {}", request.email(), ip);
+            usuario.incrementFailedAttempts(maxFailedAttempts, lockoutMinutes);
+            usuarioRepository.save(usuario);
+            log.warn("[AUTH] Intentos fallidos para {}: {}/{}", request.email(),
+                    usuario.getIntentosFallidos(), maxFailedAttempts);
+
+            httpRequest.setAttribute("bad_credentials_details", java.util.Map.of(
+                    "intentosFallidos", usuario.getIntentosFallidos(),
+                    "maxIntentos", maxFailedAttempts));
+
+            try {
+                auditoriaService.registrar(usuario.getId(), "LOGIN_FALLIDO",
+                        "Contraseña incorrecta - intentos: " + usuario.getIntentosFallidos() + "/" + maxFailedAttempts,
+                        ip, "usuarios", usuario.getId());
+            } catch (RuntimeException ignored) {
+            }
             throw e;
         }
-
-        Usuario usuario = usuarioRepository.findByEmail(request.email())
-                .orElseThrow(() -> {
-                    log.error("[AUTH] Usuario autenticado pero no encontrado en BD: {}", request.email());
-                    return new AuthenticationErrorException("Usuario no encontrado");
-                });
 
         usuario.resetFailedAttempts();
         usuarioRepository.save(usuario);
@@ -114,12 +166,24 @@ public class AuthService {
     }
 
     /**
-     * Registro regulado (opcion A): el codigo de invitacion es obligatorio y define
-     * empresa + rol. Respuesta generica para evitar enumeracion.
+     * Registro regulado: el codigo de invitacion es obligatorio y define
+     * empresa + rol. Incluye verificacion de captcha y aceptacion de T&C.
      */
     @Transactional
     public MensajeResponse registrar(RegisterRequest request, HttpServletRequest httpRequest) {
         loginRateLimiter.verificar(httpRequest.getRemoteAddr());
+
+        if (!request.aceptoTerminos()) {
+            throw new BusinessException("TERMINOS_NO_ACEPTADOS",
+                    "Debes aceptar los Terminos y Condiciones para registrarte");
+        }
+        if (!request.aceptoPrivacidad()) {
+            throw new BusinessException("PRIVACIDAD_NO_ACEPTADA",
+                    "Debes aceptar la Politica de Privacidad para registrarte");
+        }
+
+        recaptchaService.verificar(request.recaptchaToken(), "registro");
+
         if (usuarioRepository.existsByEmail(request.email())) {
             throw new BusinessException("EMAIL_YA_REGISTRADO",
                     "No se pudo completar el registro. Revisa los datos e intenta nuevamente");
@@ -130,7 +194,7 @@ public class AuthService {
             throw new BusinessException("EMAIL_INVITACION_NO_COINCIDE",
                     "El email no coincide con la invitacion emitida");
         }
-        PasswordPolicy.validar(request.password());
+        PasswordPolicy.validar(request.password(), request.email(), request.nombre());
 
         Usuario usuario = Usuario.builder()
                 .nombre(request.nombre())
@@ -139,17 +203,31 @@ public class AuthService {
                 .activo(true)
                 .emailVerificado(false)
                 .build();
+        if (request.fotoPerfilUrl() != null && !request.fotoPerfilUrl().isBlank()) {
+            // TODO: persistir foto de perfil cuando exista el campo en Usuario
+        }
         usuario = usuarioRepository.save(usuario);
 
         asignarRolPorInvitacion(usuario, invitacion);
 
         String codigoVerificacion = authTokenService.crearVerificacion(usuario.getId(), usuario.getEmail(), 60);
-        authLinkSender.enviarVerificacion(usuario.getEmail(), codigoVerificacion);
+        emailService.enviarVerificacion(usuario.getEmail(), codigoVerificacion);
+
+        Empresa empresa = invitacion.getEmpresaId() != null
+                ? empresaRepository.findById(invitacion.getEmpresaId()).orElse(null)
+                : null;
+        RolSistema rol = rolSistemaRepository.findById(invitacion.getRolId()).orElse(null);
+        if (empresa != null && rol != null) {
+            emailService.enviarBienvenida(usuario.getEmail(), usuario.getNombre(),
+                    rol.getNombre(), empresa.getNombre());
+        }
+
         auditoriaService.registrar(usuario.getId(), invitacion.getEmpresaId(), "REGISTRO_USUARIO",
-                "Usuario registrado por invitacion", httpRequest.getRemoteAddr(), null, "usuarios",
+                "Usuario registrado por invitacion con T&C aceptados", httpRequest.getRemoteAddr(), null, "usuarios",
                 usuario.getId(), null, null);
-        log.info("[AUTH] Registro por invitacion: {} - empresa: {}", usuario.getEmail(), invitacion.getEmpresaId());
-        return new MensajeResponse("Registro recibido. Revisa tu bandeja para verificar el email.");
+        log.info("[AUTH] Registro por invitacion: {} - empresa: {} - T&C: true - captcha: true",
+                usuario.getEmail(), invitacion.getEmpresaId());
+        return new MensajeResponse("Registro exitoso. Revisa tu bandeja para verificar el email.");
     }
 
     @Transactional
@@ -169,7 +247,7 @@ public class AuthService {
         usuarioRepository.findByEmail(request.email()).ifPresent(usuario -> {
             authTokenService.revocarPorUsuario(usuario.getId(), AuthToken.TIPO_RESET);
             String codigo = authTokenService.crearRecuperacion(usuario.getId(), usuario.getEmail(), 30);
-            authLinkSender.enviarRecuperacion(usuario.getEmail(), codigo);
+            emailService.enviarRecuperacion(usuario.getEmail(), codigo);
             auditoriaService.registrar(usuario.getId(), "SOLICITAR_RECUPERACION",
                     "Se solicito recuperacion de contrasena", httpRequest.getRemoteAddr(), "usuarios", usuario.getId());
         });
@@ -209,18 +287,40 @@ public class AuthService {
         return new MensajeResponse("Contrasena actualizada correctamente.");
     }
 
-    /** Emision de invitacion (admin): devuelve una sola vez el codigo en claro. */
-    @Transactional
+    /** Emision de invitacion (admin): devuelve una sola vez el codigo en claro y envia email. */
+    @Transactional(noRollbackFor = BusinessException.class)
     public InvitacionEmitida crearInvitacion(InvitacionRequest request, HttpServletRequest httpRequest) {
         RolSistema rol = rolSistemaRepository.findByCodigo(request.rol())
                 .orElseThrow(() -> new BusinessException("ROLE_NOT_FOUND", "Rol no encontrado: " + request.rol()));
         Empresa empresa = empresaRepository.findById(request.empresaId())
                 .orElseThrow(() -> new BusinessException("EMPRESA_NO_ENCONTRADA", "Empresa no encontrada"));
+
+        if (request.email() != null && !request.email().isBlank()) {
+            Optional<Usuario> existente = usuarioRepository.findByEmail(request.email());
+            if (existente.isPresent()) {
+                Usuario usuarioExistente = existente.get();
+                String rolesActuales = usuarioEmpresaRepository.findByUsuarioIdAndActivoTrue(usuarioExistente.getId())
+                        .stream()
+                        .map(ue -> ue.getRol().getNombre())
+                        .distinct()
+                        .reduce((a, b) -> a + ", " + b)
+                        .orElse("Sin rol asignado");
+                throw new BusinessException("EMAIL_YA_REGISTRADO",
+                        "El correo " + request.email() + " ya esta registrado con el rol: " + rolesActuales);
+            }
+        }
+
         String codigo = authTokenService.crearInvitacion(empresa.getId(), rol.getId(), request.email(), 7 * 24 * 60);
+
+        if (request.email() != null && !request.email().isBlank()) {
+            emailService.enviarInvitacion(request.email(), codigo, rol.getNombre(), empresa.getNombre());
+        }
+
         auditoriaService.registrar(TenantContext.getUsuarioId(), empresa.getId(), "CREAR_INVITACION",
                 "Invitacion emitida para rol " + rol.getCodigo(), httpRequest.getRemoteAddr(), null,
                 "auth_token", empresa.getId(), null, null);
-        log.info("[AUTH] Invitacion emitida: empresa {} - rol {}", empresa.getId(), rol.getCodigo());
+        log.info("[AUTH] Invitacion emitida: empresa {} - rol {} - email enviado: {}",
+                empresa.getId(), rol.getCodigo(), request.email() != null);
         return new InvitacionEmitida(request.email(), rol.getCodigo(), empresa.getId(), empresa.getNombre(), codigo);
     }
 
@@ -257,11 +357,32 @@ public class AuthService {
         log.info("[AUTH] Usuario registrado exitosamente: {}", usuario.getEmail());
     }
 
-    private void incrementarIntentosFallidos(String email) {
-        usuarioRepository.findByEmail(email).ifPresent(usuario -> {
-            usuario.incrementFailedAttempts();
-            usuarioRepository.save(usuario);
-            log.warn("[AUTH] Intentos fallidos para {}: {}/5", email, usuario.getIntentosFallidos());
-        });
+    /** Valida si un codigo de invitacion es valido y retorna info basica (sin consumir). */
+    public java.util.Map<String, Object> validarInvitacion(String codigo) {
+        AuthToken token = authTokenService.buscarPorTipoYCodigo(AuthToken.TIPO_INVITACION, codigo);
+        if (token == null || token.getUsadoEn() != null) {
+            return java.util.Map.of("valido", false, "mensaje", "Codigo de invitacion invalido o ya utilizado");
+        }
+        if (token.getExpiraEn() != null && token.getExpiraEn().isBefore(java.time.OffsetDateTime.now())) {
+            return java.util.Map.of("valido", false, "mensaje", "El codigo de invitacion ha expirado");
+        }
+
+        String rolNombre = null;
+        String empresaNombre = null;
+        if (token.getRolId() != null) {
+            rolNombre = rolSistemaRepository.findById(token.getRolId())
+                    .map(r -> r.getNombre()).orElse(null);
+        }
+        if (token.getEmpresaId() != null) {
+            empresaNombre = empresaRepository.findById(token.getEmpresaId())
+                    .map(e -> e.getNombre()).orElse(null);
+        }
+
+        return java.util.Map.of(
+                "valido", true,
+                "email", token.getEmail() != null ? token.getEmail() : "",
+                "rol", rolNombre != null ? rolNombre : "",
+                "empresa", empresaNombre != null ? empresaNombre : ""
+        );
     }
 }

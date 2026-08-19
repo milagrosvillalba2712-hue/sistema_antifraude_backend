@@ -97,29 +97,34 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AuthenticationErrorException.class)
     public ResponseEntity<ErrorResponse> handleAuthentication(AuthenticationErrorException ex,
                                                               HttpServletRequest request) {
-        log.warn("[AUTH] Fallo de autenticacion: {} - IP: {} - Ruta: {}",
-                ex.getMessage(), request.getRemoteAddr(), request.getRequestURI());
+        String code = ex.getCode() != null ? ex.getCode() : "AUTHENTICATION_ERROR";
+        log.warn("[AUTH] Fallo de autenticacion [{}]: {} - IP: {} - Ruta: {}",
+                code, ex.getMessage(), request.getRemoteAddr(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(error(HttpStatus.UNAUTHORIZED, "AUTHENTICATION_ERROR", ex.getMessage(), request, null));
+                .body(error(HttpStatus.UNAUTHORIZED, code, ex.getMessage(), request, null));
     }
 
+    @SuppressWarnings("unchecked")
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex,
                                                               HttpServletRequest request) {
-        log.warn("[AUTH] Credenciales invalidas para IP: {} - Ruta: {}",
+        log.warn("[AUTH] Contraseña incorrecta - IP: {} - Ruta: {}",
                 request.getRemoteAddr(), request.getRequestURI());
+        Map<String, Object> detalles = (Map<String, Object>) request.getAttribute("bad_credentials_details");
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(error(HttpStatus.UNAUTHORIZED, "BAD_CREDENTIALS", "Email o password incorrectos", request, null));
+                .body(error(HttpStatus.UNAUTHORIZED, "BAD_PASSWORD", "Contraseña incorrecta", request, detalles));
     }
 
+    @SuppressWarnings("unchecked")
     @ExceptionHandler(LockedException.class)
     public ResponseEntity<ErrorResponse> handleLocked(LockedException ex,
                                                       HttpServletRequest request) {
         log.warn("[AUTH] Cuenta bloqueada: {} - IP: {} - Ruta: {}",
                 ex.getMessage(), request.getRemoteAddr(), request.getRequestURI());
+        Map<String, Object> detalles = (Map<String, Object>) request.getAttribute("lockout_details");
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(error(HttpStatus.FORBIDDEN, "ACCOUNT_LOCKED",
-                        "La cuenta ha sido bloqueada por exceso de intentos fallidos", request, null));
+                        "La cuenta ha sido bloqueada por exceso de intentos fallidos", request, detalles));
     }
 
     @ExceptionHandler(DisabledException.class)

@@ -22,8 +22,8 @@ ALTER TABLE admin_empresa_configuracion_local FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS tenant_isolation_admin_empresa_configuracion_local ON admin_empresa_configuracion_local;
 CREATE POLICY tenant_isolation_admin_empresa_configuracion_local ON admin_empresa_configuracion_local
-    USING (empresa_id = current_setting('app.current_empresa_id', true)::uuid)
-    WITH CHECK (empresa_id = current_setting('app.current_empresa_id', true)::uuid);
+    USING (empresa_id = nullif(current_setting('app.current_empresa_id', true), '')::uuid)
+    WITH CHECK (empresa_id = nullif(current_setting('app.current_empresa_id', true), '')::uuid);
 
 DROP TRIGGER IF EXISTS trg_audit_admin_empresa_configuracion_local ON admin_empresa_configuracion_local;
 CREATE TRIGGER trg_audit_admin_empresa_configuracion_local

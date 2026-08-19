@@ -11,7 +11,7 @@ $minimums=[ordered]@{
   empresa=1; usuarios=28; usuario_empresa=28; rol=7; permiso=25; rol_permiso=25
   perfil_usuario=28; disponibilidad_usuario=14; horario_laboral_usuario=15
   plan_licencia=3; plan_plan_precios_rol=12; suscripcion=1; contrato=1; pago=1; uso_suscripcion=8
-  instalacion_local=1; licencia_local=1; consumo_licencia_local=2; evento_licencia_local=2
+  instalacion_local=1; licencia_local=1; evento_licencia_local=2
   pais=7; moneda=4; nivel_riesgo=4; tipo_documento=3; tipo_transaccion=17
   canal_transaccion=12; producto=5; banco_emisor=5; procesadora_tarjeta=3; empe_operador=4
   persona=67; documento=67; perfil_cliente=67; cliente_pep=2; cliente_observado=3

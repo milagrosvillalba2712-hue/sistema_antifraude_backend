@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -39,7 +40,6 @@ public class AdminEmpresaController {
     private final UsoSuscripcionRepository usoSuscripcionRepository;
     private final InstalacionLocalRepository instalacionRepository;
     private final LicenciaLocalRepository licenciaRepository;
-    private final ConsumoLicenciaLocalRepository consumoLocalRepository;
     private final EventoLicenciaLocalRepository eventoRepository;
     private final UsuarioEmpresaRepository usuarioEmpresaRepository;
     private final AuditoriaRepository auditoriaRepository;
@@ -57,7 +57,6 @@ public class AdminEmpresaController {
                                   UsoSuscripcionRepository usoSuscripcionRepository,
                                   InstalacionLocalRepository instalacionRepository,
                                   LicenciaLocalRepository licenciaRepository,
-                                  ConsumoLicenciaLocalRepository consumoLocalRepository,
                                   EventoLicenciaLocalRepository eventoRepository,
                                   UsuarioEmpresaRepository usuarioEmpresaRepository,
                                   AuditoriaRepository auditoriaRepository,
@@ -71,7 +70,6 @@ public class AdminEmpresaController {
         this.usoSuscripcionRepository = usoSuscripcionRepository;
         this.instalacionRepository = instalacionRepository;
         this.licenciaRepository = licenciaRepository;
-        this.consumoLocalRepository = consumoLocalRepository;
         this.eventoRepository = eventoRepository;
         this.usuarioEmpresaRepository = usuarioEmpresaRepository;
         this.auditoriaRepository = auditoriaRepository;
@@ -150,16 +148,16 @@ public class AdminEmpresaController {
     @GetMapping("/consumo")
     public ResponseEntity<Map<String, Object>> consumo() {
         UUID empresaId = empresaActual();
-        InstalacionLocal instalacion = instalacionRepository.findTopByEmpresaIdOrderByActivadaEnDesc(empresaId)
-                .orElse(null);
-        List<ConsumoLicenciaLocal> consumoLocal = instalacion == null
-                ? List.of()
-                : consumoLocalRepository.findTop12ByInstalacionIdOrderByAnioDescMesDesc(instalacion.getId());
+        Suscripcion suscripcionActiva = suscripcionActiva(empresaId);
+
+        // Uso_suscripcion filtrado por suscripción activa (evita duplicados)
+        List<UsoSuscripcion> usoSuscripcion = suscripcionActiva != null
+            ? usoSuscripcionRepository.findBySuscripcionIdOrderByAnioDescMesDesc(suscripcionActiva.getId())
+            : List.of();
+        
         return ResponseEntity.ok(mapOf(
-                "usoSuscripcion", usoSuscripcionRepository.findByEmpresaIdOrderByAnioDescMesDesc(empresaId).stream()
-                        .map(this::usoDto).toList(),
-                "consumoLocal", consumoLocal.stream().map(this::consumoLocalDto).toList(),
-                "limites", planDto(suscripcionActiva(empresaId) != null ? suscripcionActiva(empresaId).getPlanLicencia() : null)
+                "usoSuscripcion", usoSuscripcion.stream().map(this::usoDto).toList(),
+                "limites", planDto(suscripcionActiva != null ? suscripcionActiva.getPlanLicencia() : null)
         ));
     }
 
@@ -371,13 +369,6 @@ public class AdminEmpresaController {
                 "usuariosActivos", u.getUsuariosActivos(), "transaccionesProcesadas", u.getTransaccionesProcesadas(),
                 "consultasKyc", u.getConsultasKyc(), "alertasGeneradas", u.getAlertasGeneradas(),
                 "reportesGenerados", u.getReportesGenerados());
-    }
-
-    private Map<String, Object> consumoLocalDto(ConsumoLicenciaLocal c) {
-        return mapOf("id", c.getId(), "anio", c.getAnio(), "mes", c.getMes(),
-                "usuariosActivos", c.getUsuariosActivos(), "transaccionesProcesadas", c.getTransaccionesProcesadas(),
-                "consultasKyc", c.getConsultasKyc(), "alertasGeneradas", c.getAlertasGeneradas(),
-                "reportesGenerados", c.getReportesGenerados(), "fechaHoraModificacion", c.getFechaHoraModificacion());
     }
 
     private Map<String, Object> pagoDto(Pago p) {

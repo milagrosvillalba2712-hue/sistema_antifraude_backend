@@ -1,12 +1,18 @@
 package com.antifraude.exception;
 
-public class AuthenticationErrorException extends RuntimeException {
+import lombok.Getter;
 
-    public AuthenticationErrorException(String message) {
+@Getter
+public class AuthenticationErrorException extends RuntimeException {
+    private final String code;
+
+    public AuthenticationErrorException(String code, String message) {
         super(message);
+        this.code = code;
     }
 
-    public AuthenticationErrorException(String message, Throwable cause) {
+    public AuthenticationErrorException(String code, String message, Throwable cause) {
         super(message, cause);
+        this.code = code;
     }
 }

@@ -60,4 +60,16 @@ public class PlanLicencia extends AuditableEntity {
 
     @Builder.Default
     private Boolean activo = true;
+
+    @Column(name = "limite_administradores")
+    private Integer limiteAdministradores;
+
+    @Column(name = "limite_supervisores")
+    private Integer limiteSupervisores;
+
+    @Column(name = "limite_analistas")
+    private Integer limiteAnalistas;
+
+    @Column(name = "limite_auditores")
+    private Integer limiteAuditores;
 }

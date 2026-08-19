@@ -23,6 +23,8 @@
         <resilience4j.version>2.2.0</resilience4j.version>
 
         <lombok.version>1.18.46</lombok.version>
+        <mockito.version>5.20.0</mockito.version>
+        <byte-buddy.version>1.17.7</byte-buddy.version>
     </properties>
     <dependencies>
         <dependency>
@@ -48,6 +50,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
         <dependency>
             <groupId>io.github.resilience4j</groupId>

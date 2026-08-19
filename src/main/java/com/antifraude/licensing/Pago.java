@@ -53,8 +53,18 @@ public class Pago extends AuditableEntity {
     @Builder.Default
     private EstadoPago estado = EstadoPago.PENDIENTE;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "solicitud_roles_id")
+    private SolicitudRoles solicitudRoles;
+
+    @Column(name = "concepto", length = 120)
+    private String concepto;
+
+    @Column(name = "referencia_externa", length = 200)
+    private String referenciaExterna;
+
     public enum EstadoPago {
-        PENDIENTE, PAGADO, CONFIRMADO, VENCIDO, ANULADO
+        PENDIENTE, PROGRAMADO, PAGADO, CONFIRMADO, VENCIDO, ANULADO
     }
 
     public String getReferencia() {

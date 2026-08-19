@@ -12,4 +12,6 @@ public interface UsoSuscripcionRepository extends JpaRepository<UsoSuscripcion, 
     Optional<UsoSuscripcion> findByEmpresaIdAndAnioAndMes(UUID empresaId, int anio, int mes);
 
     Optional<UsoSuscripcion> findFirstByEmpresaIdAndAnioAndMesOrderByIdDesc(UUID empresaId, int anio, int mes);
+
+    List<UsoSuscripcion> findBySuscripcionIdOrderByAnioDescMesDesc(Long suscripcionId);
 }

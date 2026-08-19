@@ -4,23 +4,17 @@ import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.OffsetDateTime;
 
 @Data
 @NoArgsConstructor
 @MappedSuperclass
-@EntityListeners(AuditingEntityListener.class)
 public abstract class AuditableEntity {
 
-    @CreatedDate
     @Column(name = "fecha_hora_creacion", updatable = false)
     private OffsetDateTime fechaHoraCreacion;
 
-    @LastModifiedDate
     @Column(name = "fecha_hora_modificacion")
     private OffsetDateTime fechaHoraModificacion;
 
@@ -31,4 +25,15 @@ public abstract class AuditableEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_modificacion_id")
     private Usuario usuarioModificacion;
+
+    @PrePersist
+    protected void onCreate() {
+        if (fechaHoraCreacion == null) fechaHoraCreacion = OffsetDateTime.now();
+        fechaHoraModificacion = OffsetDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        fechaHoraModificacion = OffsetDateTime.now();
+    }
 }
