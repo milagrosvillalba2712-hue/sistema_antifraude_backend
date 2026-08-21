@@ -48,7 +48,7 @@ La arquitectura satisface el modelo acordado: cada cliente on-premise utiliza su
 |---|---|---|
 | Organización, acceso y RBAC | `empresa`, `usuarios`, `usuario_empresa`, `rol`, `permiso`, `rol_permiso`, `perfil_usuario`, `disponibilidad_usuario`, `horario_laboral_usuario` | Cliente local, usuarios, roles, permisos y capacidad operativa |
 | Planes y relación comercial local | `plan_licencia`, `suscripcion`, `contrato`, `pago`, `uso_suscripcion` | Plan contratado, vigencia, referencia contractual/pago y uso mensual |
-| Instalación y lease | `instalacion_local`, `licencia_local`, `consumo_licencia_local`, `evento_licencia_local` | Identidad criptográfica, lease firmado, límites agregados y auditoría sanitizada |
+| Instalación y lease | `instalacion_local`, `licencia_local`, `evento_licencia_local` | Identidad criptográfica, lease firmado y auditoría sanitizada (el consumo mensual vive en `uso_suscripcion`) |
 | Personas y KYC | `persona`, `documento`, `perfil_cliente`, `cliente_pep`, `cliente_observado`, `consulta_kyc_alerta`, `consultas_externas` | Identidad local, documentos cifrados/hasheados, perfil y resultados KYC |
 | Catálogos | `pais`, `moneda`, `nivel_riesgo`, `tipo_documento`, `tipo_transaccion`, `canal_transaccion`, `producto`, `banco_emisor`, `procesadora_tarjeta`, `empe_operador` | Dimensiones de referencia y ecosistema financiero paraguayo |
 | Transacciones y evaluación | `transacciones`, `transacciones_default`, `evaluaciones_riesgo`, `ejecucion_reglas`, `transaccion_detalle_snapshot` | Hecho particionado, resultados, ejecución y evidencia inmutable |

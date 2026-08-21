@@ -53,4 +53,10 @@ public class AuthController {
         String email = authentication.getName();
         return ResponseEntity.ok(authService.cambiarPassword(email, request, httpRequest));
     }
+
+    /** Endpoint publico para validar si un codigo de invitacion es valido. */
+    @GetMapping("/invitacion/validar")
+    public ResponseEntity<?> validarInvitacion(@RequestParam String codigo) {
+        return ResponseEntity.ok(authService.validarInvitacion(codigo));
+    }
 }

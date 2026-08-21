@@ -1,6 +1,9 @@
 package com.antifraude.licensing;
 
+import com.antifraude.audit.AuditoriaService;
 import com.antifraude.dto.ApiErrorDescriptor;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,9 +21,13 @@ import java.util.UUID;
 public class AdminEmpresaObservabilityService {
 
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
+    private final AuditoriaService auditoriaService;
 
-    public AdminEmpresaObservabilityService(JdbcTemplate jdbcTemplate) {
+    public AdminEmpresaObservabilityService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper, AuditoriaService auditoriaService) {
         this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
+        this.auditoriaService = auditoriaService;
     }
 
     public Map<String, Object> overview(UUID empresaId) {
@@ -229,20 +236,68 @@ public class AdminEmpresaObservabilityService {
 
     public Map<String, Object> configuracionLocal(UUID empresaId) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
-                select id, tipo, codigo, nombre, descripcion, estado, editable, orden, detalle_json as detalle
+                select id, tipo, codigo, nombre, descripcion, estado, editable, orden, detalle_json::text as detalle
                 from admin_empresa_configuracion_local
                 where empresa_id = ?
                   and estado <> 'ELIMINADO'
                 order by tipo, orden, codigo
                 """, empresaId);
+        List<Map<String, Object>> normalizedRows = rows.stream()
+                .map(this::normalizarConfiguracionLocal)
+                .toList();
         return mapOf(
-                "parametrosEditables", rows.stream()
+                "parametrosEditables", normalizedRows.stream()
                         .filter(row -> "PARAMETRO".equalsIgnoreCase(String.valueOf(row.get("tipo"))))
                         .toList(),
-                "jobs", rows.stream()
+                "jobs", normalizedRows.stream()
                         .filter(row -> "JOB".equalsIgnoreCase(String.valueOf(row.get("tipo"))))
                         .toList()
         );
+    }
+
+    @Transactional
+    public Map<String, Object> actualizarParametro(UUID empresaId, String codigo, Map<String, Object> nuevoDetalle, UUID usuarioId, String ip, String userAgent) {
+        String sql = """
+                update admin_empresa_configuracion_local
+                set detalle_json = detalle_json || ?::jsonb,
+                    fecha_hora_modificacion = now()
+                where empresa_id = ?
+                  and codigo = ?
+                  and tipo = 'PARAMETRO'
+                  and editable = true
+                  and estado <> 'ELIMINADO'
+                returning id, tipo, codigo, nombre, descripcion, estado, editable, orden, detalle_json::text as detalle
+                """;
+        Map<String, Object> row = jdbcTemplate.queryForMap(sql, toJson(nuevoDetalle), empresaId, codigo);
+        Map<String, Object> normalized = normalizarConfiguracionLocal(row);
+
+        auditoriaService.registrar(usuarioId, empresaId, "ACTUALIZAR_PARAMETRO_CONFIGURACION",
+                "Actualizacion de parametro " + codigo + " desde Admin Empresa",
+                ip, userAgent,
+                "admin_empresa_configuracion_local", (UUID) row.get("id"), null, toJson(nuevoDetalle));
+
+        return normalized;
+    }
+
+    private String toJson(Map<String, Object> map) {
+        try {
+            return objectMapper.writeValueAsString(map);
+        } catch (Exception e) {
+            throw new RuntimeException("Error serializando JSON", e);
+        }
+    }
+
+    private Map<String, Object> normalizarConfiguracionLocal(Map<String, Object> row) {
+        Map<String, Object> normalized = new LinkedHashMap<>(row);
+        Object detalle = row.get("detalle");
+        if (detalle instanceof String json && !json.isBlank()) {
+            try {
+                normalized.put("detalle", objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {}));
+            } catch (Exception exception) {
+                normalized.put("detalle", Map.of());
+            }
+        }
+        return normalized;
     }
 
     public List<ApiErrorDescriptor> catalogoErrores() {

@@ -9,6 +9,9 @@ import com.antifraude.common.repository.SujetoRiesgoAliasRepository;
 import com.antifraude.common.repository.SujetoRiesgoDocumentoRepository;
 import com.antifraude.common.repository.SujetoRiesgoRepository;
 import com.antifraude.drools.fact.CoincidenciaListaFact;
+import com.antifraude.lists.ElementoListaControlCliente;
+import com.antifraude.lists.ListaControlCliente;
+import com.antifraude.lists.ListaControlService;
 import com.antifraude.transactions.Transaccion;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +20,8 @@ import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class ListScreeningService {
@@ -25,15 +30,18 @@ public class ListScreeningService {
     private final SujetoRiesgoAliasRepository sujetoRiesgoAliasRepository;
     private final SujetoRiesgoDocumentoRepository sujetoRiesgoDocumentoRepository;
     private final PaisRiesgoRepository paisRiesgoRepository;
+    private final ListaControlService listaControlService;
 
     public ListScreeningService(SujetoRiesgoRepository sujetoRiesgoRepository,
                                 SujetoRiesgoAliasRepository sujetoRiesgoAliasRepository,
                                 SujetoRiesgoDocumentoRepository sujetoRiesgoDocumentoRepository,
-                                PaisRiesgoRepository paisRiesgoRepository) {
+                                PaisRiesgoRepository paisRiesgoRepository,
+                                ListaControlService listaControlService) {
         this.sujetoRiesgoRepository = sujetoRiesgoRepository;
         this.sujetoRiesgoAliasRepository = sujetoRiesgoAliasRepository;
         this.sujetoRiesgoDocumentoRepository = sujetoRiesgoDocumentoRepository;
         this.paisRiesgoRepository = paisRiesgoRepository;
+        this.listaControlService = listaControlService;
     }
 
     public List<CoincidenciaListaFact> screen(Transaccion transaccion) {
@@ -50,6 +58,7 @@ public class ListScreeningService {
                 "ORIGEN", "PAIS");
         addCountryRisk(matches, transaccion.getPaisDestinoRef() != null ? transaccion.getPaisDestinoRef().getCodigoIso() : null,
                 "DESTINO", "PAIS");
+        addClientControlListMatches(matches, transaccion);
         return matches;
     }
 
@@ -97,6 +106,30 @@ public class ListScreeningService {
                 .forEach(p -> matches.add(matchFromCountry(p, parte, campo, code)));
     }
 
+    private void addClientControlListMatches(List<CoincidenciaListaFact> matches, Transaccion transaccion) {
+        UUID empresaId = transaccion.getEmpresa() != null ? transaccion.getEmpresa().getId() : null;
+        if (empresaId == null) {
+            return;
+        }
+        addClientControlValue(matches, empresaId, ElementoListaControlCliente.TipoIdentificadorControl.NOMBRE,
+                transaccion.getPersonaRemitente() != null ? transaccion.getPersonaRemitente().getNombreCompleto() : transaccion.getNombreRemitente());
+        addClientControlValue(matches, empresaId, ElementoListaControlCliente.TipoIdentificadorControl.NOMBRE,
+                transaccion.getPersonaBeneficiario() != null ? transaccion.getPersonaBeneficiario().getNombreCompleto() : transaccion.getNombreBeneficiario());
+        addClientControlValue(matches, empresaId, ElementoListaControlCliente.TipoIdentificadorControl.DOCUMENTO, transaccion.getIdentificadorDocumento());
+        addClientControlValue(matches, empresaId, ElementoListaControlCliente.TipoIdentificadorControl.CUENTA, transaccion.getCuentaOrigen());
+        addClientControlValue(matches, empresaId, ElementoListaControlCliente.TipoIdentificadorControl.CUENTA, transaccion.getCuentaDestino());
+    }
+
+    private void addClientControlValue(List<CoincidenciaListaFact> matches,
+                                       UUID empresaId,
+                                       ElementoListaControlCliente.TipoIdentificadorControl type,
+                                       String value) {
+        if (value != null && !value.isBlank()) {
+            listaControlService.buscarCoincidencias(empresaId, Map.of(type, value))
+                    .forEach(e -> matches.add(matchFromClientControl(e)));
+        }
+    }
+
     private CoincidenciaListaFact matchFromSubject(SujetoRiesgo sujeto, String parte, String campo, String value) {
         CoincidenciaListaFact fact = baseSubjectMatch(sujeto, parte, campo, value);
         fact.setDescripcion("Coincidencia exacta por " + campo.toLowerCase(Locale.ROOT)
@@ -129,6 +162,24 @@ public class ListScreeningService {
         fact.setSeveridad(paisRiesgo.getNivelRiesgo() != null ? paisRiesgo.getNivelRiesgo().getNombre() : "Alta");
         fact.setScoreMatch(BigDecimal.valueOf(100));
         fact.setDescripcion(paisRiesgo.getMotivo());
+        return fact;
+    }
+
+    private CoincidenciaListaFact matchFromClientControl(ElementoListaControlCliente elemento) {
+        ListaControlCliente lista = elemento.getLista();
+        CoincidenciaListaFact fact = new CoincidenciaListaFact();
+        fact.setListaCodigo(lista != null ? lista.getCodigo() : "LISTA_CLIENTE");
+        fact.setFuenteCodigo("CLIENTE");
+        fact.setCategoria(lista != null ? lista.getTipoLista().name() : "LISTA_CLIENTE");
+        fact.setTipoSujeto(elemento.getTipoEntidad().name());
+        fact.setSeveridad(elemento.getSeveridad());
+        fact.setParteTransaccion("CLIENTE");
+        fact.setCampoEvaluado(elemento.getTipoIdentificador().name());
+        fact.setValorEvaluado(elemento.getValorOriginal());
+        fact.setNombreSujeto(elemento.getNombreMostrado() != null ? elemento.getNombreMostrado() : elemento.getValorOriginal());
+        fact.setScoreMatch(BigDecimal.valueOf(lista != null && lista.getTipoLista() == ListaControlCliente.TipoListaControl.WHITELIST ? 100 : 100));
+        fact.setDescripcion((lista != null ? lista.getTipoLista().name() : "LISTA") + " propia del cliente: "
+                + (elemento.getMotivo() != null ? elemento.getMotivo() : "coincidencia exacta"));
         return fact;
     }
 

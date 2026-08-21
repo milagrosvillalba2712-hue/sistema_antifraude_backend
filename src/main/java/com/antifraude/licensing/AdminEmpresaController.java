@@ -7,17 +7,20 @@ import com.antifraude.config.ClientIpResolver;
 import com.antifraude.dto.ApiErrorDescriptor;
 import com.antifraude.exception.BusinessException;
 import com.antifraude.security.tenant.TenantContext;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Duration;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
@@ -38,15 +41,16 @@ public class AdminEmpresaController {
     private final UsoSuscripcionRepository usoSuscripcionRepository;
     private final InstalacionLocalRepository instalacionRepository;
     private final LicenciaLocalRepository licenciaRepository;
-    private final ConsumoLicenciaLocalRepository consumoLocalRepository;
     private final EventoLicenciaLocalRepository eventoRepository;
     private final UsuarioEmpresaRepository usuarioEmpresaRepository;
     private final AuditoriaRepository auditoriaRepository;
-    private final LicensingValidationService validationService;
     private final LicensingControlPlaneClient controlPlaneClient;
+    private final LicensingOnlineService onlineService;
     private final AuditoriaService auditoriaService;
-    private final ObjectMapper objectMapper;
     private final AdminEmpresaObservabilityService observabilityService;
+
+    @Value("${app.licenses.jobs.enabled:true}")
+    private boolean jobsHabilitados;
 
     public AdminEmpresaController(EmpresaRepository empresaRepository,
                                   SuscripcionRepository suscripcionRepository,
@@ -54,14 +58,12 @@ public class AdminEmpresaController {
                                   UsoSuscripcionRepository usoSuscripcionRepository,
                                   InstalacionLocalRepository instalacionRepository,
                                   LicenciaLocalRepository licenciaRepository,
-                                  ConsumoLicenciaLocalRepository consumoLocalRepository,
                                   EventoLicenciaLocalRepository eventoRepository,
                                   UsuarioEmpresaRepository usuarioEmpresaRepository,
                                   AuditoriaRepository auditoriaRepository,
-                                  LicensingValidationService validationService,
                                   LicensingControlPlaneClient controlPlaneClient,
+                                  LicensingOnlineService onlineService,
                                   AuditoriaService auditoriaService,
-                                  ObjectMapper objectMapper,
                                   AdminEmpresaObservabilityService observabilityService) {
         this.empresaRepository = empresaRepository;
         this.suscripcionRepository = suscripcionRepository;
@@ -69,14 +71,12 @@ public class AdminEmpresaController {
         this.usoSuscripcionRepository = usoSuscripcionRepository;
         this.instalacionRepository = instalacionRepository;
         this.licenciaRepository = licenciaRepository;
-        this.consumoLocalRepository = consumoLocalRepository;
         this.eventoRepository = eventoRepository;
         this.usuarioEmpresaRepository = usuarioEmpresaRepository;
         this.auditoriaRepository = auditoriaRepository;
-        this.validationService = validationService;
         this.controlPlaneClient = controlPlaneClient;
+        this.onlineService = onlineService;
         this.auditoriaService = auditoriaService;
-        this.objectMapper = objectMapper;
         this.observabilityService = observabilityService;
     }
 
@@ -129,12 +129,7 @@ public class AdminEmpresaController {
         InstalacionLocal instalacion = instalacionRepository.findTopByEmpresaIdOrderByActivadaEnDesc(empresaId)
                 .orElseThrow(() -> new BusinessException("INSTALACION_NO_ENCONTRADA",
                         "No existe una instalacion local para validar"));
-        Map<String, Object> controlPlane = controlPlaneClient.validarLease(instalacion.getId(), instalacion.getFingerprintHash());
-        boolean online = Boolean.TRUE.equals(controlPlane.get("online"));
-        if (online && controlPlane.get("leaseToken") != null) {
-            renovarLeaseFirmado(instalacion, controlPlane, controlPlaneClient.jwks());
-        }
-        LicensingValidationService.ResultadoValidacion resultado = validationService.validar(instalacion.getId(), online);
+        LicensingOnlineService.ResultadoValidacionOnline resultado = onlineService.validarYRenovar(instalacion);
         auditoriaService.registrar(TenantContext.getUsuarioId(), empresaId, "VALIDAR_LICENCIA_ADMIN_EMPRESA",
                 "Validacion manual de licencia desde Admin Empresa", ClientIpResolver.resolve(request),
                 request.getHeader("User-Agent"), "instalacion_local", instalacion.getId(), null, null);
@@ -146,7 +141,7 @@ public class AdminEmpresaController {
                 "detalle", resultado.detalle(),
                 "firmaValida", resultado.firmaValida(),
                 "online", resultado.online(),
-                "controlPlane", controlPlane,
+                "controlPlane", resultado.controlPlane(),
                 "venceEn", resultado.venceEn()
         ));
     }
@@ -154,16 +149,16 @@ public class AdminEmpresaController {
     @GetMapping("/consumo")
     public ResponseEntity<Map<String, Object>> consumo() {
         UUID empresaId = empresaActual();
-        InstalacionLocal instalacion = instalacionRepository.findTopByEmpresaIdOrderByActivadaEnDesc(empresaId)
-                .orElse(null);
-        List<ConsumoLicenciaLocal> consumoLocal = instalacion == null
-                ? List.of()
-                : consumoLocalRepository.findTop12ByInstalacionIdOrderByAnioDescMesDesc(instalacion.getId());
+        Suscripcion suscripcionActiva = suscripcionActiva(empresaId);
+
+        // Uso_suscripcion filtrado por suscripción activa (evita duplicados)
+        List<UsoSuscripcion> usoSuscripcion = suscripcionActiva != null
+            ? usoSuscripcionRepository.findBySuscripcionIdOrderByAnioDescMesDesc(suscripcionActiva.getId())
+            : List.of();
+        
         return ResponseEntity.ok(mapOf(
-                "usoSuscripcion", usoSuscripcionRepository.findByEmpresaIdOrderByAnioDescMesDesc(empresaId).stream()
-                        .map(this::usoDto).toList(),
-                "consumoLocal", consumoLocal.stream().map(this::consumoLocalDto).toList(),
-                "limites", planDto(suscripcionActiva(empresaId) != null ? suscripcionActiva(empresaId).getPlanLicencia() : null)
+                "usoSuscripcion", usoSuscripcion.stream().map(this::usoDto).toList(),
+                "limites", planDto(suscripcionActiva != null ? suscripcionActiva.getPlanLicencia() : null)
         ));
     }
 
@@ -171,6 +166,85 @@ public class AdminEmpresaController {
     public ResponseEntity<List<Map<String, Object>>> pagos() {
         UUID empresaId = empresaActual();
         return ResponseEntity.ok(pagoRepository.findByEmpresaId(empresaId).stream().map(this::pagoDto).toList());
+    }
+
+    @PostMapping("/pagos/stripe-checkout")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> iniciarPagoStripe(@RequestBody(required = false) Map<String, Object> body,
+                                                                 HttpServletRequest request) {
+        UUID empresaId = empresaActual();
+        Empresa empresa = empresaRepository.findById(empresaId)
+                .orElseThrow(() -> new BusinessException("EMPRESA_NO_ENCONTRADA", "Empresa no encontrada"));
+        Suscripcion suscripcion = suscripcionActiva(empresaId);
+        Long suscripcionId = suscripcion != null ? suscripcion.getId() : null;
+        String successUrl = body != null && body.get("successUrl") != null ? String.valueOf(body.get("successUrl")) : null;
+        String cancelUrl = body != null && body.get("cancelUrl") != null ? String.valueOf(body.get("cancelUrl")) : null;
+        Pago pago = Pago.builder()
+                .empresa(empresa)
+                .suscripcion(suscripcion)
+                .codigo("PAY-LIC-" + System.currentTimeMillis())
+                .monto(suscripcion != null && suscripcion.getPlanLicencia() != null && suscripcion.getPlanLicencia().getPrecioAnual() != null
+                        ? suscripcion.getPlanLicencia().getPrecioAnual()
+                        : BigDecimal.ZERO)
+                .metodoPago("STRIPE_CHECKOUT")
+                .concepto("Pago de licencia anual Regula")
+                .estado(Pago.EstadoPago.PENDIENTE)
+                .build();
+        pagoRepository.save(pago);
+
+        Map<String, Object> checkout = controlPlaneClient.createStripeCheckout(empresaId, suscripcionId, successUrl, cancelUrl);
+        String sessionId = String.valueOf(checkout.getOrDefault("stripeCheckoutSessionId", ""));
+        if (!sessionId.isBlank() && !"null".equalsIgnoreCase(sessionId)) {
+            pago.setReferenciaExterna(sessionId);
+            pagoRepository.save(pago);
+        }
+        auditoriaService.registrar(TenantContext.getUsuarioId(), empresaId, "INICIAR_PAGO_STRIPE",
+                "Solicitud de sesion Stripe Checkout para pago de licencia",
+                ClientIpResolver.resolve(request), request.getHeader("User-Agent"),
+                "pago", pago.getId(), null, "{\"online\":" + Boolean.TRUE.equals(checkout.get("online")) + "}");
+        Map<String, Object> response = new LinkedHashMap<>(checkout);
+        response.put("pagoId", pago.getId());
+        response.put("estadoPagoLocal", pago.getEstado());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/pagos/stripe-confirmar")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> confirmarPagoStripe(@RequestBody ConfirmarStripeRequest body,
+                                                                   HttpServletRequest request) {
+        UUID empresaId = empresaActual();
+        if (body == null || body.sessionId() == null || body.sessionId().isBlank()) {
+            throw new BusinessException("STRIPE_SESSION_REQUERIDA", "Debe indicar la sesion de Stripe");
+        }
+        Map<String, Object> checkout = controlPlaneClient.getStripeCheckoutSession(body.sessionId());
+        Pago pago = pagoRepository.findByReferenciaExterna(body.sessionId())
+                .orElseThrow(() -> new BusinessException("PAGO_NO_ENCONTRADO", "No se encontro pago local para la sesion Stripe"));
+        if (!empresaId.equals(pago.getEmpresa().getId())) {
+            throw new BusinessException("PAGO_EMPRESA_INVALIDA", "El pago no corresponde a la empresa autenticada");
+        }
+
+        String estadoStripe = String.valueOf(checkout.getOrDefault("estado", "PENDIENTE"));
+        if ("CONFIRMADO".equalsIgnoreCase(estadoStripe) || "PAGADO".equalsIgnoreCase(estadoStripe)) {
+            pago.setEstado(Pago.EstadoPago.PAGADO);
+            pago.setFechaPago(OffsetDateTime.now());
+            pago.setComprobanteReferencia(body.sessionId());
+            pagoRepository.save(pago);
+            auditoriaService.registrar(TenantContext.getUsuarioId(), empresaId, "CONFIRMAR_PAGO_STRIPE",
+                    "Pago Stripe confirmado para licencia",
+                    ClientIpResolver.resolve(request), request.getHeader("User-Agent"),
+                    "pago", pago.getId(), null, "{\"sessionId\":\"" + body.sessionId() + "\"}");
+            return ResponseEntity.ok(mapOf(
+                    "pagoId", pago.getId(),
+                    "estado", pago.getEstado(),
+                    "mensaje", "Pago confirmado. La licencia queda registrada como pagada."
+            ));
+        }
+        return ResponseEntity.ok(mapOf(
+                "pagoId", pago.getId(),
+                "estado", pago.getEstado(),
+                "estadoStripe", estadoStripe,
+                "mensaje", "Stripe aun no confirmo el pago."
+        ));
     }
 
     @GetMapping("/apis")
@@ -246,11 +320,26 @@ public class AdminEmpresaController {
         Map<String, Object> configuracionLocal = observabilityService.configuracionLocal(empresaId);
         return ResponseEntity.ok(mapOf(
                 "empresaId", empresaId,
+                "jobsHabilitados", jobsHabilitados,
                 "parametrosEditables", configuracionLocal.get("parametrosEditables"),
                 "jobs", configuracionLocal.get("jobs"),
                 "modulosPlan", plan != null ? plan.getModulosIncluidosJson() : null,
                 "paqueteControlPlane", paqueteControlPlane
         ));
+    }
+
+    @PatchMapping("/configuracion/parametros/{codigo}")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> actualizarParametro(
+            @PathVariable String codigo,
+            @RequestBody Map<String, Object> nuevoDetalle,
+            HttpServletRequest request) {
+        UUID empresaId = empresaActual();
+        UUID usuarioId = TenantContext.getUsuarioId();
+        String ip = ClientIpResolver.resolve(request);
+        String userAgent = request.getHeader("User-Agent");
+        Map<String, Object> resultado = observabilityService.actualizarParametro(empresaId, codigo, nuevoDetalle, usuarioId, ip, userAgent);
+        return ResponseEntity.ok(mapOf("parametro", resultado));
     }
 
     @PostMapping("/catalogos/sincronizar")
@@ -277,65 +366,6 @@ public class AdminEmpresaController {
         UUID empresaId = empresaActual();
         return ResponseEntity.ok(auditoriaRepository.findTop50ByEmpresaIdOrderByFechaEventoDesc(empresaId)
                 .stream().map(this::auditoriaDto).toList());
-    }
-
-    private void renovarLeaseFirmado(InstalacionLocal instalacion, Map<String, Object> controlPlane,
-                                     Map<String, Object> jwks) {
-        String leaseToken = String.valueOf(controlPlane.get("leaseToken"));
-        String[] parts = leaseToken.split("\\.");
-        if (parts.length != 3 || !Boolean.TRUE.equals(jwks.get("online"))) {
-            return;
-        }
-        LicenciaLocal licencia = licenciaVigente(instalacion);
-        if (licencia == null) {
-            licencia = LicenciaLocal.builder()
-                    .instalacion(instalacion)
-                    .suscripcionReferencia("CONTROL_PLANE")
-                    .planVersion(1)
-                    .emitidaEn(OffsetDateTime.now())
-                    .estado(LicensingLocalService.LICENCIA_ACTIVA)
-                    .modulosJson("[]")
-                    .limitesJson("{}")
-                    .build();
-        }
-        OffsetDateTime venceEn = OffsetDateTime.parse(String.valueOf(controlPlane.get("vence")));
-        OffsetDateTime graceUntil = OffsetDateTime.parse(String.valueOf(controlPlane.get("graceUntil")));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> leasePayload = controlPlane.get("leasePayload") instanceof Map<?, ?> map
-                ? (Map<String, Object>) map
-                : Map.of();
-
-        licencia.setPlanCodigo(String.valueOf(controlPlane.getOrDefault("plan", licencia.getPlanCodigo())));
-        licencia.setEstado(LicensingLocalService.LICENCIA_ACTIVA);
-        licencia.setEmitidaEn(OffsetDateTime.now());
-        licencia.setVenceEn(venceEn);
-        licencia.setDiasGracia((int) Math.max(0, Duration.between(venceEn, graceUntil).toDays()));
-        licencia.setModulosJson(safeJson(leasePayload.getOrDefault("modules", List.of())));
-        licencia.setLimitesJson(safeJson(mapOf(
-                "usuarios", leasePayload.get("maxUsers"),
-                "transaccionesMensuales", leasePayload.get("maxTransactionsMonth"),
-                "consultasKycMensuales", leasePayload.get("maxKycMonth"),
-                "reportesMensuales", leasePayload.get("maxReportsMonth"),
-                "reglas", leasePayload.get("maxRules")
-        )));
-        licencia.setLeasePayload(parts[0] + "." + parts[1]);
-        licencia.setLeaseFirma(parts[2]);
-        licencia.setKidFirma(String.valueOf(controlPlane.get("kid")));
-        licencia.setUltimaValidacionEn(OffsetDateTime.now());
-        licenciaRepository.save(licencia);
-
-        instalacion.setClavePublicaPem(safeJson(jwks));
-        instalacion.setUltimoHeartbeatEn(OffsetDateTime.now());
-        instalacionRepository.save(instalacion);
-
-        eventoRepository.save(EventoLicenciaLocal.builder()
-                .instalacionId(instalacion.getId())
-                .licenciaId(licencia.getId())
-                .tipoEvento("RENOVACION_CONTROL_PLANE_RS256")
-                .resultado("OK")
-                .correlationId(LicenseCryptoService.generarCorrelationId(instalacion.getId()))
-                .detalleSanitizadoJson(mapOf("kid", licencia.getKidFirma(), "venceEn", licencia.getVenceEn()))
-                .build());
     }
 
     private UUID empresaActual() {
@@ -421,18 +451,13 @@ public class AdminEmpresaController {
                 "reportesGenerados", u.getReportesGenerados());
     }
 
-    private Map<String, Object> consumoLocalDto(ConsumoLicenciaLocal c) {
-        return mapOf("id", c.getId(), "anio", c.getAnio(), "mes", c.getMes(),
-                "usuariosActivos", c.getUsuariosActivos(), "transaccionesProcesadas", c.getTransaccionesProcesadas(),
-                "consultasKyc", c.getConsultasKyc(), "alertasGeneradas", c.getAlertasGeneradas(),
-                "reportesGenerados", c.getReportesGenerados(), "fechaHoraModificacion", c.getFechaHoraModificacion());
-    }
-
     private Map<String, Object> pagoDto(Pago p) {
         return mapOf("id", p.getId(), "codigo", p.getCodigo(), "monto", p.getMonto(), "moneda", p.getMoneda(),
                 "fechaPago", p.getFechaPago(), "metodoPago", p.getMetodoPago(),
                 "comprobanteReferencia", p.getComprobanteReferencia(), "estado", p.getEstado());
     }
+
+    public record ConfirmarStripeRequest(String sessionId) {}
 
     private Map<String, Object> consultaDto(Map<String, Object> c) {
         return mapOf("id", c.get("id"), "tipoConsulta", c.get("tipo_consulta"), "proveedor", c.get("proveedor"),
@@ -511,14 +536,6 @@ public class AdminEmpresaController {
         return mapOf("id", a.getId(), "usuarioId", a.getUsuarioId(), "accion", a.getAccion(),
                 "descripcion", a.getDescripcion(), "entidadAfectada", a.getEntidadAfectada(),
                 "entidadId", a.getEntidadId(), "direccionIp", a.getDireccionIp(), "fechaEvento", a.getFechaEvento());
-    }
-
-    private String safeJson(Object value) {
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (Exception e) {
-            return "{}";
-        }
     }
 
     private OffsetDateTime parseDate(String value) {

@@ -75,13 +75,18 @@ class AntifraudeApplicationTests {
     @Test
     void baselineCanonicaTieneMigracionesActualesUnicas() {
         Integer total = jdbcTemplate.queryForObject("select count(*) from flyway_schema_history where success", Integer.class);
+        Integer ultimaVersion = jdbcTemplate.queryForObject("""
+                select max(version::int) from flyway_schema_history
+                where success and version ~ '^[0-9]+$'
+                """, Integer.class);
         Integer duplicadas = jdbcTemplate.queryForObject("""
                 select count(*) from (
                     select version from flyway_schema_history
                     where version is not null group by version having count(*) > 1
                 ) d
                 """, Integer.class);
-        assertThat(total).isEqualTo(22);
+        assertThat(total).isGreaterThanOrEqualTo(28);
+        assertThat(ultimaVersion).isEqualTo(28);
         assertThat(duplicadas).isZero();
     }
 
@@ -124,15 +129,15 @@ class AntifraudeApplicationTests {
         Integer tablas = jdbcTemplate.queryForObject("""
                 select count(*) from information_schema.tables
                 where table_schema='public' and table_name in
-                ('instalacion_local','licencia_local','consumo_licencia_local','evento_licencia_local')
+                ('instalacion_local','licencia_local','evento_licencia_local')
                 """, Integer.class);
         Integer columnasProhibidas = jdbcTemplate.queryForObject("""
                 select count(*) from information_schema.columns
                 where table_schema='public'
-                  and table_name in ('instalacion_local','licencia_local','consumo_licencia_local','evento_licencia_local')
+                  and table_name in ('instalacion_local','licencia_local','evento_licencia_local')
                   and column_name in ('documento','numero_documento','transaccion_id','alerta_id','caso_id')
                 """, Integer.class);
-        assertThat(tablas).isEqualTo(4);
+        assertThat(tablas).isEqualTo(3);
         assertThat(columnasProhibidas).isZero();
     }
 

@@ -10,6 +10,7 @@ import org.springframework.web.client.RestClient;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.math.BigDecimal;
 
 /**
  * Cliente opcional del control plane central. Cuando no hay URL configurada
@@ -27,8 +28,8 @@ public class LicensingControlPlaneClient {
     private final String apiKey;
     private final boolean habilitado;
 
-    public LicensingControlPlaneClient(@Value("${app.licenses.control-plane.url:}") String url,
-                                       @Value("${app.licenses.control-plane.api-key:}") String apiKey) {
+    public LicensingControlPlaneClient(@Value("${app.licenses.control-plane.url:${LICENSES_CONTROL_PLANE_URL:}}") String url,
+                                       @Value("${app.licenses.control-plane.api-key:${LICENSES_CONTROL_PLANE_API_KEY:}}") String apiKey) {
         this.apiKey = apiKey;
         this.habilitado = StringUtils.hasText(url);
         this.restClient = habilitado ? RestClient.builder().baseUrl(url).build() : null;
@@ -151,6 +152,91 @@ public class LicensingControlPlaneClient {
         } catch (RuntimeException exception) {
             log.info("[LICENCIA] Reporte de uso hacia Control Plane no disponible - {}", exception.getClass().getSimpleName());
             return offlinePayload("USAGE");
+        }
+    }
+
+    public Map<String, Object> createStripeCheckout(UUID empresaId, Long suscripcionId, String successUrl, String cancelUrl) {
+        if (!habilitado || restClient == null || empresaId == null) {
+            return offlinePayload("STRIPE_CHECKOUT");
+        }
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("empresaId", empresaId.toString());
+            if (suscripcionId != null) {
+                payload.put("suscripcionId", suscripcionId);
+            }
+            if (StringUtils.hasText(successUrl)) {
+                payload.put("successUrl", successUrl);
+            }
+            if (StringUtils.hasText(cancelUrl)) {
+                payload.put("cancelUrl", cancelUrl);
+            }
+            Map<?, ?> response = restClient.post()
+                    .uri("/api/v1/billing/checkout-session")
+                    .header("X-API-Key", apiKey)
+                    .body(payload)
+                    .retrieve()
+                    .body(Map.class);
+            return sanitizeMap(response);
+        } catch (RuntimeException exception) {
+            log.info("[LICENCIA] No se pudo crear Checkout Stripe - {}", exception.getClass().getSimpleName());
+            return offlinePayload("STRIPE_CHECKOUT");
+        }
+    }
+
+    public Map<String, Object> createStripeOneTimeCheckout(UUID empresaId,
+                                                           BigDecimal monto,
+                                                           String moneda,
+                                                           String concepto,
+                                                           String referenciaExterna,
+                                                           Map<String, Object> metadata,
+                                                           String successUrl,
+                                                           String cancelUrl) {
+        if (!habilitado || restClient == null || empresaId == null) {
+            return offlinePayload("STRIPE_CHECKOUT_ONE_TIME");
+        }
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("empresaId", empresaId.toString());
+            payload.put("tipo", "USUARIOS_ADICIONALES");
+            payload.put("monto", monto);
+            payload.put("moneda", moneda);
+            payload.put("concepto", concepto);
+            payload.put("referenciaExterna", referenciaExterna);
+            payload.put("metadata", metadata != null ? metadata : Map.of());
+            if (StringUtils.hasText(successUrl)) {
+                payload.put("successUrl", successUrl);
+            }
+            if (StringUtils.hasText(cancelUrl)) {
+                payload.put("cancelUrl", cancelUrl);
+            }
+            Map<?, ?> response = restClient.post()
+                    .uri("/api/v1/billing/checkout-session")
+                    .header("X-API-Key", apiKey)
+                    .body(payload)
+                    .retrieve()
+                    .body(Map.class);
+            return sanitizeMap(response);
+        } catch (RuntimeException exception) {
+            log.info("[LICENCIA] No se pudo crear Checkout Stripe one-time - {}", exception.getClass().getSimpleName());
+            return offlinePayload("STRIPE_CHECKOUT_ONE_TIME");
+        }
+    }
+
+    public Map<String, Object> getStripeCheckoutSession(String sessionId) {
+        if (!habilitado || restClient == null || !StringUtils.hasText(sessionId)) {
+            return offlinePayload("STRIPE_CHECKOUT_STATUS");
+        }
+        try {
+            Map<?, ?> response = restClient.get()
+                    .uri("/api/v1/billing/checkout-session/{sessionId}", sessionId)
+                    .header("X-API-Key", apiKey)
+                    .retrieve()
+                    .body(Map.class);
+            return sanitizeMap(response);
+        } catch (RuntimeException exception) {
+            log.info("[LICENCIA] No se pudo consultar Checkout Stripe - {}", exception.getClass().getSimpleName());
+            return offlinePayload("STRIPE_CHECKOUT_STATUS");
         }
     }
 

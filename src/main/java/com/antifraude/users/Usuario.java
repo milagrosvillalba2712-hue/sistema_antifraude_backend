@@ -56,11 +56,17 @@ public class Usuario extends AuditableEntity {
         return bloqueadoHasta != null && OffsetDateTime.now().isBefore(bloqueadoHasta);
     }
 
-    public void incrementFailedAttempts() {
+    public void incrementFailedAttempts(int maxAttempts, int lockoutMinutes) {
         this.intentosFallidos++;
-        if (this.intentosFallidos >= 5) {
-            this.bloqueadoHasta = OffsetDateTime.now().plusMinutes(15);
+        if (this.intentosFallidos >= maxAttempts) {
+            this.bloqueadoHasta = OffsetDateTime.now().plusMinutes(lockoutMinutes);
         }
+    }
+
+    public long getLockoutMinutesRemaining() {
+        if (bloqueadoHasta == null) return 0;
+        long minutes = java.time.Duration.between(OffsetDateTime.now(), bloqueadoHasta).toMinutes();
+        return Math.max(0, minutes);
     }
 
     public void resetFailedAttempts() {

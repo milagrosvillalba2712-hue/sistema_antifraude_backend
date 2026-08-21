@@ -19,4 +19,15 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
     @Query("select distinct ue.usuario from UsuarioEmpresa ue " +
             "where ue.rol.codigo = :rolCodigo and ue.activo = true and ue.usuario.activo = true")
     List<Usuario> findActivosByRolCodigo(@Param("rolCodigo") String rolCodigo);
+
+    @Query("select distinct ue.usuario from UsuarioEmpresa ue " +
+            "where ue.rol.codigo in :rolCodigos and ue.activo = true and ue.usuario.activo = true " +
+            "order by ue.usuario.nombre asc")
+    List<Usuario> findActivosByRolCodigoIn(@Param("rolCodigos") List<String> rolCodigos);
+
+    @Query("select count(ue) > 0 from UsuarioEmpresa ue " +
+            "where ue.usuario.id = :usuarioId and ue.rol.codigo in :rolCodigos " +
+            "and ue.activo = true and ue.usuario.activo = true")
+    boolean existsActivoByUsuarioIdAndRolCodigoIn(@Param("usuarioId") UUID usuarioId,
+                                                  @Param("rolCodigos") List<String> rolCodigos);
 }

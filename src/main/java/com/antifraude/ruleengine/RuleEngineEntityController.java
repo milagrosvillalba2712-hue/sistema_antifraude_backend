@@ -5,6 +5,9 @@ import com.antifraude.audit.AuditoriaService;
 import com.antifraude.audit.Auditoria;
 import com.antifraude.common.entity.*;
 import com.antifraude.licensing.*;
+import com.antifraude.lists.ElementoListaControlCliente;
+import com.antifraude.lists.ImportacionListaControlCliente;
+import com.antifraude.lists.ListaControlCliente;
 import com.antifraude.profile.DisponibilidadUsuario;
 import com.antifraude.profile.PerfilUsuario;
 import com.antifraude.reports.ReporteRos;
@@ -151,7 +154,8 @@ public class RuleEngineEntityController {
                 UsoSuscripcion.class, RolSistema.class, PermisoSistema.class, RolPermiso.class, UsuarioEmpresa.class,
                 ResolucionAlerta.class, ConsultaKycAlerta.class, DecisionCaso.class, AprobacionSupervisor.class,
                 FuenteDatosRiesgo.class, SujetoRiesgo.class, SujetoRiesgoAlias.class, SujetoRiesgoDocumento.class,
-                SujetoRiesgoRelacion.class, CoincidenciaListaAlerta.class);
+                SujetoRiesgoRelacion.class, CoincidenciaListaAlerta.class, ListaControlCliente.class,
+                ElementoListaControlCliente.class, ImportacionListaControlCliente.class);
         return map;
     }
 

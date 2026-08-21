@@ -50,6 +50,8 @@ import java.util.UUID;
 public class AlertaService {
 
     private static final Logger log = LoggerFactory.getLogger(AlertaService.class);
+    private static final List<String> ROLES_REASIGNACION_ALERTAS = List.of("ANALISTA", "SUPERVISOR");
+    private static final List<String> ROLES_SUPERVISION_ALERTAS = List.of("SUPERVISOR", "ADMINISTRADOR");
 
     private final AlertaRepository alertaRepository;
     private final HistorialAsignacionRepository historialRepository;
@@ -230,8 +232,10 @@ public class AlertaService {
         if ("CERRADA".equals(alerta.getEstado())) {
             throw new BusinessException("ALERTA_CERRADA", "No se puede reasignar una alerta cerrada");
         }
-        if (alerta.getAsignadoA() == null || !alerta.getAsignadoA().getId().equals(origen.getId())) {
-            throw new BusinessException("UNAUTHORIZED", "Solo el analista asignado puede reasignar esta alerta");
+        boolean esAsignadoActual = alerta.getAsignadoA() != null && alerta.getAsignadoA().getId().equals(origen.getId());
+        boolean puedeSupervisar = usuarioRepository.existsActivoByUsuarioIdAndRolCodigoIn(origen.getId(), ROLES_SUPERVISION_ALERTAS);
+        if (!esAsignadoActual && !puedeSupervisar) {
+            throw new BusinessException("UNAUTHORIZED", "Solo el usuario asignado o un supervisor puede reasignar esta alerta");
         }
 
         if (nuevoAnalistaId == null) {
@@ -242,6 +246,10 @@ public class AlertaService {
         }
         Usuario nuevoAnalista = usuarioRepository.findById(nuevoAnalistaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario", "id", nuevoAnalistaId));
+        if (!usuarioRepository.existsActivoByUsuarioIdAndRolCodigoIn(nuevoAnalistaId, ROLES_REASIGNACION_ALERTAS)) {
+            throw new BusinessException("USUARIO_DESTINO_INVALIDO",
+                    "Solo se puede reasignar a usuarios activos con rol Analista o Supervisor");
+        }
         List<DisponibilidadUsuario> estados = disponibilidadRepository.findActivasAhora(nuevoAnalistaId, OffsetDateTime.now());
         String estadoDestino = estados.isEmpty() ? "DISPONIBLE" : estados.get(0).getTipoEstado();
         if (!List.of("DISPONIBLE", "CAPACITACION").contains(estadoDestino)) {
@@ -298,7 +306,7 @@ public class AlertaService {
 
     @Transactional(readOnly = true)
     public List<AnalistaDisponibleResponse> listarAnalistasDisponibles() {
-        List<Usuario> analistas = usuarioRepository.findActivosByRolCodigo("ANALISTA");
+        List<Usuario> analistas = usuarioRepository.findActivosByRolCodigoIn(ROLES_REASIGNACION_ALERTAS);
         return analistas.stream().map(usuario -> {
             List<DisponibilidadUsuario> estados = disponibilidadRepository.findActivasAhora(usuario.getId(), OffsetDateTime.now());
             String estado = estados.isEmpty() ? "DISPONIBLE" : estados.get(0).getTipoEstado();

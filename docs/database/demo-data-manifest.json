@@ -14,7 +14,6 @@
   "expectedEmptyUntilRuntime": [
     "instalacion_local",
     "licencia_local",
-    "consumo_licencia_local",
     "evento_licencia_local",
     "consultas_externas"
   ],

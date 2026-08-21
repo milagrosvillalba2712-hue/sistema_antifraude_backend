@@ -30,11 +30,11 @@ DROP POLICY IF EXISTS tenant_isolation_api_evento ON api_evento;
 CREATE POLICY tenant_isolation_api_evento ON api_evento
     USING (
         empresa_id IS NULL
-        OR empresa_id = current_setting('app.current_empresa_id', true)::uuid
+        OR empresa_id = nullif(current_setting('app.current_empresa_id', true), '')::uuid
     )
     WITH CHECK (
         empresa_id IS NULL
-        OR empresa_id = current_setting('app.current_empresa_id', true)::uuid
+        OR empresa_id = nullif(current_setting('app.current_empresa_id', true), '')::uuid
     );
 
 CREATE INDEX IF NOT EXISTS ix_api_evento_empresa_fecha
