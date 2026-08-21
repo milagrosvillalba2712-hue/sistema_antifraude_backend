@@ -10,10 +10,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -30,6 +32,7 @@ public class SolicitudRolesController {
     private final PagoRepository pagoRepository;
     private final UsuarioRepository usuarioRepository;
     private final AuditoriaService auditoriaService;
+    private final LicensingControlPlaneClient controlPlaneClient;
 
     public SolicitudRolesController(SolicitudRolesRepository solicitudRolesRepository,
                                      PlanLicenciaRepository planLicenciaRepository,
@@ -37,7 +40,8 @@ public class SolicitudRolesController {
                                      RolesAdquiridosRepository rolesAdquiridosRepository,
                                      PagoRepository pagoRepository,
                                      UsuarioRepository usuarioRepository,
-                                     AuditoriaService auditoriaService) {
+                                     AuditoriaService auditoriaService,
+                                     LicensingControlPlaneClient controlPlaneClient) {
         this.solicitudRolesRepository = solicitudRolesRepository;
         this.planLicenciaRepository = planLicenciaRepository;
         this.usuarioEmpresaRepository = usuarioEmpresaRepository;
@@ -45,6 +49,7 @@ public class SolicitudRolesController {
         this.pagoRepository = pagoRepository;
         this.usuarioRepository = usuarioRepository;
         this.auditoriaService = auditoriaService;
+        this.controlPlaneClient = controlPlaneClient;
     }
 
     /** Verifica si la empresa puede crear un usuario del rol indicado. */
@@ -86,8 +91,8 @@ public class SolicitudRolesController {
         Empresa empresa = new Empresa();
         empresa.setId(empresaId);
 
-        var precioRol = planLicenciaRepository.findPrecioRol(rolCodigoToId(request.rolCodigo()), empresaId);
-        BigDecimal precioUnitario = precioRol != null ? precioRol : BigDecimal.valueOf(400);
+        List<BigDecimal> preciosRol = planLicenciaRepository.findPreciosRol(rolCodigoToId(request.rolCodigo()), empresaId);
+        BigDecimal precioUnitario = preciosRol.isEmpty() ? BigDecimal.valueOf(400) : preciosRol.get(0);
         BigDecimal precioTotal = precioUnitario.multiply(BigDecimal.valueOf(request.cantidad()));
 
         SolicitudRoles solicitud = SolicitudRoles.builder()
@@ -116,12 +121,13 @@ public class SolicitudRolesController {
         ));
     }
 
-    /** Simula el pago de una solicitud (pasarela simulada). */
+    /** Inicia el pago real de una solicitud con Stripe Checkout. */
     @PostMapping("/{solicitudId}/pagar")
     @PreAuthorize("hasAuthority('USUARIOS_CREAR')")
-    public ResponseEntity<?> simularPago(@PathVariable Long solicitudId,
-                                         @RequestBody PagoSimRequest request,
-                                         HttpServletRequest httpRequest) {
+    @Transactional
+    public ResponseEntity<?> iniciarPagoStripe(@PathVariable Long solicitudId,
+                                               @RequestBody(required = false) PagoRequest request,
+                                               HttpServletRequest httpRequest) {
         SolicitudRoles solicitud = solicitudRolesRepository.findById(solicitudId)
                 .orElseThrow(() -> new BusinessException("SOLICITUD_NO_ENCONTRADA", "Solicitud no encontrada"));
 
@@ -135,41 +141,113 @@ public class SolicitudRolesController {
                 .empresa(solicitud.getEmpresa())
                 .codigo("PAGO-SOL-" + solicitudId + "-" + System.currentTimeMillis())
                 .monto(solicitud.getPrecioTotal())
-                .metodoPago("SIMULADO")
+                .metodoPago("STRIPE_CHECKOUT")
                 .concepto("Roles adicionales: " + solicitud.getRolSolicitado() + " x" + solicitud.getCantidad())
-                .referenciaExterna(request.referenciaExterna() != null ? request.referenciaExterna() : "SIM-" + System.currentTimeMillis())
                 .solicitudRoles(solicitud)
-                .estado(Pago.EstadoPago.PAGADO)
-                .fechaPago(OffsetDateTime.now())
+                .estado(Pago.EstadoPago.PENDIENTE)
                 .build();
         pagoRepository.save(pago);
 
-        solicitud.setEstado("PAGADA");
-        solicitudRolesRepository.save(solicitud);
+        String defaultSuccess = "http://localhost:5173/users?rolesPayment=success";
+        String defaultCancel = "http://localhost:5173/users?rolesPayment=cancel";
+        Map<String, Object> checkout = controlPlaneClient.createStripeOneTimeCheckout(
+                empresaId,
+                solicitud.getPrecioTotal(),
+                "USD",
+                pago.getConcepto(),
+                String.valueOf(pago.getId()),
+                Map.of(
+                        "solicitudRolesId", solicitud.getId(),
+                        "rolSolicitado", solicitud.getRolSolicitado(),
+                        "cantidad", solicitud.getCantidad()
+                ),
+                request != null && request.successUrl() != null ? request.successUrl() : defaultSuccess,
+                request != null && request.cancelUrl() != null ? request.cancelUrl() : defaultCancel
+        );
 
-        RolesAdquiridos rolAdquirido = RolesAdquiridos.builder()
-                .empresa(solicitud.getEmpresa())
-                .solicitudRoles(solicitud)
-                .rolCodigo(solicitud.getRolSolicitado())
-                .cantidad(solicitud.getCantidad())
-                .build();
-        rolesAdquiridosRepository.save(rolAdquirido);
+        String sessionId = String.valueOf(checkout.getOrDefault("stripeCheckoutSessionId", ""));
+        if (!sessionId.isBlank()) {
+            pago.setReferenciaExterna(sessionId);
+            pagoRepository.save(pago);
+        }
 
-        auditoriaService.registrar(TenantContext.getUsuarioId(), empresaId, "PAGO_SIMULADO",
-                "Pago simulado por solicitud " + solicitudId + ": " + solicitud.getPrecioTotal(),
+        auditoriaService.registrar(TenantContext.getUsuarioId(), empresaId, "INICIAR_PAGO_STRIPE",
+                "Inicio de pago Stripe por solicitud " + solicitudId + ": " + solicitud.getPrecioTotal(),
                 httpRequest.getRemoteAddr(), null, "pago", null, null, null);
 
-        log.info("[PAGO] Solicitud {} pagada (simulado): {} {}",
-                solicitudId, solicitud.getPrecioTotal(), "PYG");
+        log.info("[PAGO] Checkout Stripe creado para solicitud {}: {}",
+                solicitudId, checkout.get("estado"));
 
         return ResponseEntity.ok(Map.of(
                 "pagoId", pago.getId(),
                 "solicitudId", solicitudId,
                 "monto", solicitud.getPrecioTotal(),
-                "metodo", "SIMULADO",
-                "estado", "PAGADO",
-                "mensaje", "Pago procesado. Los roles ya estan disponibles para invitacion."
+                "metodo", "STRIPE_CHECKOUT",
+                "estado", pago.getEstado(),
+                "online", checkout.getOrDefault("online", false),
+                "checkoutUrl", checkout.get("checkoutUrl"),
+                "stripeCheckoutSessionId", checkout.get("stripeCheckoutSessionId"),
+                "mensaje", checkout.getOrDefault("mensaje", "Sesion de pago creada en Stripe Checkout.")
         ));
+    }
+
+    @PostMapping("/stripe-confirmar")
+    @PreAuthorize("hasAuthority('USUARIOS_CREAR')")
+    @Transactional
+    public ResponseEntity<?> confirmarPagoStripe(@RequestBody ConfirmarStripeRequest request,
+                                                 HttpServletRequest httpRequest) {
+        if (request == null || request.sessionId() == null || request.sessionId().isBlank()) {
+            throw new BusinessException("STRIPE_SESSION_REQUERIDA", "Debe indicar la sesion de Stripe");
+        }
+        UUID empresaId = TenantContext.getEmpresaId();
+        Map<String, Object> checkout = controlPlaneClient.getStripeCheckoutSession(request.sessionId());
+        String estadoStripe = String.valueOf(checkout.getOrDefault("estado", "PENDIENTE"));
+
+        Pago pago = pagoRepository.findByReferenciaExterna(request.sessionId())
+                .orElseThrow(() -> new BusinessException("PAGO_NO_ENCONTRADO", "No se encontro pago local para la sesion Stripe"));
+        if (!empresaId.equals(pago.getEmpresa().getId())) {
+            throw new BusinessException("PAGO_EMPRESA_INVALIDA", "El pago no corresponde a la empresa autenticada");
+        }
+
+        if ("CONFIRMADO".equals(estadoStripe)) {
+            activarSolicitudPagada(pago);
+            auditoriaService.registrar(TenantContext.getUsuarioId(), empresaId, "PAGO_STRIPE_CONFIRMADO",
+                    "Pago Stripe confirmado para solicitud " + pago.getSolicitudRoles().getId(),
+                    httpRequest.getRemoteAddr(), null, "pago", pago.getId(), null, null);
+            return ResponseEntity.ok(Map.of(
+                    "pagoId", pago.getId(),
+                    "solicitudId", pago.getSolicitudRoles().getId(),
+                    "estado", "PAGADO",
+                    "mensaje", "Pago confirmado. Los roles ya estan disponibles para invitacion."
+            ));
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "pagoId", pago.getId(),
+                "solicitudId", pago.getSolicitudRoles().getId(),
+                "estado", estadoStripe,
+                "mensaje", "Stripe aun no confirmo el pago."
+        ));
+    }
+
+    private void activarSolicitudPagada(Pago pago) {
+        SolicitudRoles solicitud = pago.getSolicitudRoles();
+        if (!"PAGADA".equals(solicitud.getEstado())) {
+            pago.setEstado(Pago.EstadoPago.PAGADO);
+            pago.setFechaPago(OffsetDateTime.now());
+            pagoRepository.save(pago);
+
+            solicitud.setEstado("PAGADA");
+            solicitudRolesRepository.save(solicitud);
+
+            RolesAdquiridos rolAdquirido = RolesAdquiridos.builder()
+                    .empresa(solicitud.getEmpresa())
+                    .solicitudRoles(solicitud)
+                    .rolCodigo(solicitud.getRolSolicitado())
+                    .cantidad(solicitud.getCantidad())
+                    .build();
+            rolesAdquiridosRepository.save(rolAdquirido);
+        }
     }
 
     private PlanLicencia obtenerPlanActual(UUID empresaId) {
@@ -193,5 +271,6 @@ public class SolicitudRolesController {
     }
 
     public record SolicitudRequest(String rolCodigo, int cantidad, String observacion) {}
-    public record PagoSimRequest(String referenciaExterna) {}
+    public record PagoRequest(String successUrl, String cancelUrl) {}
+    public record ConfirmarStripeRequest(String sessionId) {}
 }

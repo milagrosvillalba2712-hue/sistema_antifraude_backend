@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,6 +22,6 @@ public interface PlanLicenciaRepository extends JpaRepository<PlanLicencia, Long
            "JOIN PlanLicencia pl ON ppr.planLicencia = pl " +
            "JOIN Suscripcion s ON s.planLicencia = pl " +
            "WHERE s.empresa.id = :empresaId AND ppr.rol.codigo = :rolCodigo AND ppr.activo = true " +
-           "AND s.estado = 'ACTIVA'")
-    BigDecimal findPrecioRol(@Param("rolCodigo") String rolCodigo, @Param("empresaId") UUID empresaId);
+           "AND s.estado = 'ACTIVA' ORDER BY s.fechaFin DESC, ppr.precioAnual ASC")
+    List<BigDecimal> findPreciosRol(@Param("rolCodigo") String rolCodigo, @Param("empresaId") UUID empresaId);
 }

@@ -75,13 +75,18 @@ class AntifraudeApplicationTests {
     @Test
     void baselineCanonicaTieneMigracionesActualesUnicas() {
         Integer total = jdbcTemplate.queryForObject("select count(*) from flyway_schema_history where success", Integer.class);
+        Integer ultimaVersion = jdbcTemplate.queryForObject("""
+                select max(version::int) from flyway_schema_history
+                where success and version ~ '^[0-9]+$'
+                """, Integer.class);
         Integer duplicadas = jdbcTemplate.queryForObject("""
                 select count(*) from (
                     select version from flyway_schema_history
                     where version is not null group by version having count(*) > 1
                 ) d
                 """, Integer.class);
-        assertThat(total).isEqualTo(25);
+        assertThat(total).isGreaterThanOrEqualTo(26);
+        assertThat(ultimaVersion).isEqualTo(26);
         assertThat(duplicadas).isZero();
     }
 

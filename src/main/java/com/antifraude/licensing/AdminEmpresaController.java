@@ -167,6 +167,23 @@ public class AdminEmpresaController {
         return ResponseEntity.ok(pagoRepository.findByEmpresaId(empresaId).stream().map(this::pagoDto).toList());
     }
 
+    @PostMapping("/pagos/stripe-checkout")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> iniciarPagoStripe(@RequestBody(required = false) Map<String, Object> body,
+                                                                 HttpServletRequest request) {
+        UUID empresaId = empresaActual();
+        Suscripcion suscripcion = suscripcionActiva(empresaId);
+        Long suscripcionId = suscripcion != null ? suscripcion.getId() : null;
+        String successUrl = body != null && body.get("successUrl") != null ? String.valueOf(body.get("successUrl")) : null;
+        String cancelUrl = body != null && body.get("cancelUrl") != null ? String.valueOf(body.get("cancelUrl")) : null;
+        Map<String, Object> checkout = controlPlaneClient.createStripeCheckout(empresaId, null, successUrl, cancelUrl);
+        auditoriaService.registrar(TenantContext.getUsuarioId(), empresaId, "INICIAR_PAGO_STRIPE",
+                "Solicitud de sesion Stripe Checkout para pago de licencia",
+                ClientIpResolver.resolve(request), request.getHeader("User-Agent"),
+                "pago", suscripcionId, null, "{\"online\":" + Boolean.TRUE.equals(checkout.get("online")) + "}");
+        return ResponseEntity.ok(checkout);
+    }
+
     @GetMapping("/apis")
     public ResponseEntity<Map<String, Object>> apis() {
         UUID empresaId = empresaActual();
