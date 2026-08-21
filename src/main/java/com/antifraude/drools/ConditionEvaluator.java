@@ -144,6 +144,8 @@ public class ConditionEvaluator {
         facts.put("paisorigenmonitoreado", context.isPaisOrigenMonitoreado());
         facts.put("paisdestinomonitoreado", context.isPaisDestinoMonitoreado());
         facts.put("tipolista", listValues(context, "categoria"));
+        facts.put("enlistanegra", listValues(context, "categoria").contains("BLACKLIST"));
+        facts.put("enlistablanca", listValues(context, "categoria").contains("WHITELIST"));
         facts.put("fuentelista", listValues(context, "fuente"));
         facts.put("severidadlista", listValues(context, "severidad"));
         facts.put("horario", !context.getHorariosRiesgo().isEmpty());
