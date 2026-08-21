@@ -244,18 +244,20 @@ public class AuthService {
     @Transactional
     public MensajeResponse solicitarRecuperacion(ForgotPasswordRequest request, HttpServletRequest httpRequest) {
         loginRateLimiter.verificar(httpRequest.getRemoteAddr());
-        usuarioRepository.findByEmail(request.email()).ifPresent(usuario -> {
-            authTokenService.revocarPorUsuario(usuario.getId(), AuthToken.TIPO_RESET);
-            String codigo = authTokenService.crearRecuperacion(usuario.getId(), usuario.getEmail(), 30);
-            emailService.enviarRecuperacion(usuario.getEmail(), codigo);
-            auditoriaService.registrar(usuario.getId(), "SOLICITAR_RECUPERACION",
-                    "Se solicito recuperacion de contrasena", httpRequest.getRemoteAddr(), "usuarios", usuario.getId());
-        });
-        return new MensajeResponse("Si el email existe, recibiras un enlace para restablecer tu contrasena.");
+        Usuario usuario = usuarioRepository.findByEmail(request.email())
+                .orElseThrow(() -> new BusinessException("EMAIL_NO_REGISTRADO",
+                        "El correo ingresado no existe en la base de datos"));
+        authTokenService.revocarPorUsuario(usuario.getId(), AuthToken.TIPO_RESET);
+        String codigo = authTokenService.crearRecuperacion(usuario.getId(), usuario.getEmail(), 30);
+        emailService.enviarRecuperacion(usuario.getEmail(), codigo);
+        auditoriaService.registrar(usuario.getId(), "SOLICITAR_RECUPERACION",
+                "Se solicito recuperacion de contrasena", httpRequest.getRemoteAddr(), "usuarios", usuario.getId());
+        return new MensajeResponse("Correo verificado. Enviamos un enlace para restablecer tu contrasena.");
     }
 
     @Transactional
     public MensajeResponse restablecerPassword(ResetPasswordRequest request) {
+        recaptchaService.verificar(request.recaptchaToken(), "reset_password");
         PasswordPolicy.validar(request.nuevaPassword());
         AuthToken token = authTokenService.consumir(AuthToken.TIPO_RESET, request.codigo());
         Usuario usuario = usuarioRepository.findById(token.getUsuarioId())

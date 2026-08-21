@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
@@ -172,16 +173,78 @@ public class AdminEmpresaController {
     public ResponseEntity<Map<String, Object>> iniciarPagoStripe(@RequestBody(required = false) Map<String, Object> body,
                                                                  HttpServletRequest request) {
         UUID empresaId = empresaActual();
+        Empresa empresa = empresaRepository.findById(empresaId)
+                .orElseThrow(() -> new BusinessException("EMPRESA_NO_ENCONTRADA", "Empresa no encontrada"));
         Suscripcion suscripcion = suscripcionActiva(empresaId);
         Long suscripcionId = suscripcion != null ? suscripcion.getId() : null;
         String successUrl = body != null && body.get("successUrl") != null ? String.valueOf(body.get("successUrl")) : null;
         String cancelUrl = body != null && body.get("cancelUrl") != null ? String.valueOf(body.get("cancelUrl")) : null;
-        Map<String, Object> checkout = controlPlaneClient.createStripeCheckout(empresaId, null, successUrl, cancelUrl);
+        Pago pago = Pago.builder()
+                .empresa(empresa)
+                .suscripcion(suscripcion)
+                .codigo("PAY-LIC-" + System.currentTimeMillis())
+                .monto(suscripcion != null && suscripcion.getPlanLicencia() != null && suscripcion.getPlanLicencia().getPrecioAnual() != null
+                        ? suscripcion.getPlanLicencia().getPrecioAnual()
+                        : BigDecimal.ZERO)
+                .metodoPago("STRIPE_CHECKOUT")
+                .concepto("Pago de licencia anual Regula")
+                .estado(Pago.EstadoPago.PENDIENTE)
+                .build();
+        pagoRepository.save(pago);
+
+        Map<String, Object> checkout = controlPlaneClient.createStripeCheckout(empresaId, suscripcionId, successUrl, cancelUrl);
+        String sessionId = String.valueOf(checkout.getOrDefault("stripeCheckoutSessionId", ""));
+        if (!sessionId.isBlank() && !"null".equalsIgnoreCase(sessionId)) {
+            pago.setReferenciaExterna(sessionId);
+            pagoRepository.save(pago);
+        }
         auditoriaService.registrar(TenantContext.getUsuarioId(), empresaId, "INICIAR_PAGO_STRIPE",
                 "Solicitud de sesion Stripe Checkout para pago de licencia",
                 ClientIpResolver.resolve(request), request.getHeader("User-Agent"),
-                "pago", suscripcionId, null, "{\"online\":" + Boolean.TRUE.equals(checkout.get("online")) + "}");
-        return ResponseEntity.ok(checkout);
+                "pago", pago.getId(), null, "{\"online\":" + Boolean.TRUE.equals(checkout.get("online")) + "}");
+        Map<String, Object> response = new LinkedHashMap<>(checkout);
+        response.put("pagoId", pago.getId());
+        response.put("estadoPagoLocal", pago.getEstado());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/pagos/stripe-confirmar")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> confirmarPagoStripe(@RequestBody ConfirmarStripeRequest body,
+                                                                   HttpServletRequest request) {
+        UUID empresaId = empresaActual();
+        if (body == null || body.sessionId() == null || body.sessionId().isBlank()) {
+            throw new BusinessException("STRIPE_SESSION_REQUERIDA", "Debe indicar la sesion de Stripe");
+        }
+        Map<String, Object> checkout = controlPlaneClient.getStripeCheckoutSession(body.sessionId());
+        Pago pago = pagoRepository.findByReferenciaExterna(body.sessionId())
+                .orElseThrow(() -> new BusinessException("PAGO_NO_ENCONTRADO", "No se encontro pago local para la sesion Stripe"));
+        if (!empresaId.equals(pago.getEmpresa().getId())) {
+            throw new BusinessException("PAGO_EMPRESA_INVALIDA", "El pago no corresponde a la empresa autenticada");
+        }
+
+        String estadoStripe = String.valueOf(checkout.getOrDefault("estado", "PENDIENTE"));
+        if ("CONFIRMADO".equalsIgnoreCase(estadoStripe) || "PAGADO".equalsIgnoreCase(estadoStripe)) {
+            pago.setEstado(Pago.EstadoPago.PAGADO);
+            pago.setFechaPago(OffsetDateTime.now());
+            pago.setComprobanteReferencia(body.sessionId());
+            pagoRepository.save(pago);
+            auditoriaService.registrar(TenantContext.getUsuarioId(), empresaId, "CONFIRMAR_PAGO_STRIPE",
+                    "Pago Stripe confirmado para licencia",
+                    ClientIpResolver.resolve(request), request.getHeader("User-Agent"),
+                    "pago", pago.getId(), null, "{\"sessionId\":\"" + body.sessionId() + "\"}");
+            return ResponseEntity.ok(mapOf(
+                    "pagoId", pago.getId(),
+                    "estado", pago.getEstado(),
+                    "mensaje", "Pago confirmado. La licencia queda registrada como pagada."
+            ));
+        }
+        return ResponseEntity.ok(mapOf(
+                "pagoId", pago.getId(),
+                "estado", pago.getEstado(),
+                "estadoStripe", estadoStripe,
+                "mensaje", "Stripe aun no confirmo el pago."
+        ));
     }
 
     @GetMapping("/apis")
@@ -393,6 +456,8 @@ public class AdminEmpresaController {
                 "fechaPago", p.getFechaPago(), "metodoPago", p.getMetodoPago(),
                 "comprobanteReferencia", p.getComprobanteReferencia(), "estado", p.getEstado());
     }
+
+    public record ConfirmarStripeRequest(String sessionId) {}
 
     private Map<String, Object> consultaDto(Map<String, Object> c) {
         return mapOf("id", c.get("id"), "tipoConsulta", c.get("tipo_consulta"), "proveedor", c.get("proveedor"),
