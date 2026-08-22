@@ -168,6 +168,13 @@ public class AdminEmpresaController {
         return ResponseEntity.ok(pagoRepository.findByEmpresaId(empresaId).stream().map(this::pagoDto).toList());
     }
 
+    @GetMapping("/recibos")
+    public ResponseEntity<Map<String, Object>> recibos() {
+        UUID empresaId = empresaActual();
+        Map<String, Object> recibos = controlPlaneClient.receipts(empresaId);
+        return ResponseEntity.ok(recibos);
+    }
+
     @PostMapping("/pagos/stripe-checkout")
     @Transactional
     public ResponseEntity<Map<String, Object>> iniciarPagoStripe(@RequestBody(required = false) Map<String, Object> body,

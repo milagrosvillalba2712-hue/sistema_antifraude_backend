@@ -240,6 +240,28 @@ public class LicensingControlPlaneClient {
         }
     }
 
+    public Map<String, Object> receipts(UUID empresaId) {
+        if (!habilitado || restClient == null || empresaId == null) {
+            return offlinePayload("RECEIPTS");
+        }
+        try {
+            Object response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/api/admin/receipts")
+                            .queryParam("empresaId", empresaId.toString())
+                            .build())
+                    .header("X-API-Key", apiKey)
+                    .retrieve()
+                    .body(Object.class);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("online", true);
+            result.put("items", response);
+            return result;
+        } catch (RuntimeException exception) {
+            log.info("[LICENCIA] No se pudieron obtener recibos - {}", exception.getClass().getSimpleName());
+            return offlinePayload("RECEIPTS");
+        }
+    }
+
     private Map<String, Object> offlinePayload(String operation) {
         return Map.of(
                 "online", false,
