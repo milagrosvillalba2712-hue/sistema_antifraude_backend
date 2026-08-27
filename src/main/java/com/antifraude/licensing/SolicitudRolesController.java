@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -166,7 +167,7 @@ public class SolicitudRolesController {
         );
 
         String sessionId = String.valueOf(checkout.getOrDefault("stripeCheckoutSessionId", ""));
-        if (!sessionId.isBlank()) {
+        if (StringUtils.hasText(sessionId) && !"null".equalsIgnoreCase(sessionId)) {
             pago.setReferenciaExterna(sessionId);
             pagoRepository.save(pago);
         }
@@ -178,28 +179,31 @@ public class SolicitudRolesController {
         log.info("[PAGO] Checkout Stripe creado para solicitud {}: {}",
                 solicitudId, checkout.get("estado"));
 
-        return ResponseEntity.ok(Map.of(
-                "pagoId", pago.getId(),
-                "solicitudId", solicitudId,
-                "monto", solicitud.getPrecioTotal(),
-                "metodo", "STRIPE_CHECKOUT",
-                "estado", pago.getEstado(),
-                "online", checkout.getOrDefault("online", false),
-                "checkoutUrl", checkout.get("checkoutUrl"),
-                "stripeCheckoutSessionId", checkout.get("stripeCheckoutSessionId"),
-                "mensaje", checkout.getOrDefault("mensaje", "Sesion de pago creada en Stripe Checkout.")
-        ));
+        java.util.LinkedHashMap<String, Object> response = new java.util.LinkedHashMap<>();
+        response.put("pagoId", pago.getId());
+        response.put("solicitudId", solicitudId);
+        response.put("monto", solicitud.getPrecioTotal());
+        response.put("metodo", "STRIPE_CHECKOUT");
+        response.put("estado", pago.getEstado());
+        response.put("online", checkout.getOrDefault("online", false));
+        response.put("checkoutUrl", checkout.getOrDefault("checkoutUrl", ""));
+        response.put("stripeCheckoutSessionId", checkout.getOrDefault("stripeCheckoutSessionId", ""));
+        response.put("mensaje", checkout.getOrDefault("mensaje", "Sesion de pago creada en Stripe Checkout."));
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/stripe-confirmar")
     @PreAuthorize("hasAuthority('USUARIOS_CREAR')")
     @Transactional
     public ResponseEntity<?> confirmarPagoStripe(@RequestBody ConfirmarStripeRequest request,
-                                                 HttpServletRequest httpRequest) {
+                                                  HttpServletRequest httpRequest) {
         if (request == null || request.sessionId() == null || request.sessionId().isBlank()) {
             throw new BusinessException("STRIPE_SESSION_REQUERIDA", "Debe indicar la sesion de Stripe");
         }
         UUID empresaId = TenantContext.getEmpresaId();
+        if (empresaId == null) {
+            throw new BusinessException("EMPRESA_NO_IDENTIFICADA", "No se pudo identificar la empresa");
+        }
         Map<String, Object> checkout = controlPlaneClient.getStripeCheckoutSession(request.sessionId());
         String estadoStripe = String.valueOf(checkout.getOrDefault("estado", "PENDIENTE"));
 
@@ -207,6 +211,9 @@ public class SolicitudRolesController {
                 .orElseThrow(() -> new BusinessException("PAGO_NO_ENCONTRADO", "No se encontro pago local para la sesion Stripe"));
         if (!empresaId.equals(pago.getEmpresa().getId())) {
             throw new BusinessException("PAGO_EMPRESA_INVALIDA", "El pago no corresponde a la empresa autenticada");
+        }
+        if (pago.getSolicitudRoles() == null) {
+            throw new BusinessException("PAGO_TIPO_INCORRECTO", "Este pago no corresponde a una solicitud de roles");
         }
 
         if ("CONFIRMADO".equals(estadoStripe)) {

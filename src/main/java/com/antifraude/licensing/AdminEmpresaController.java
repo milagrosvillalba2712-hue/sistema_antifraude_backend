@@ -199,7 +199,7 @@ public class AdminEmpresaController {
                 .build();
         pagoRepository.save(pago);
 
-        Map<String, Object> checkout = controlPlaneClient.createStripeCheckout(empresaId, suscripcionId, successUrl, cancelUrl);
+        Map<String, Object> checkout = controlPlaneClient.createStripeCheckout(empresaId, null, successUrl, cancelUrl);
         String sessionId = String.valueOf(checkout.getOrDefault("stripeCheckoutSessionId", ""));
         if (!sessionId.isBlank() && !"null".equalsIgnoreCase(sessionId)) {
             pago.setReferenciaExterna(sessionId);

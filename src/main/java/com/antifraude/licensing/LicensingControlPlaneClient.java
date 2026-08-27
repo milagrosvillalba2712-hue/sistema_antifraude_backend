@@ -3,6 +3,7 @@ package com.antifraude.licensing;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
@@ -29,10 +30,11 @@ public class LicensingControlPlaneClient {
     private final boolean habilitado;
 
     public LicensingControlPlaneClient(@Value("${app.licenses.control-plane.url:${LICENSES_CONTROL_PLANE_URL:}}") String url,
-                                       @Value("${app.licenses.control-plane.api-key:${LICENSES_CONTROL_PLANE_API_KEY:}}") String apiKey) {
+                                       @Value("${app.licenses.control-plane.api-key:${LICENSES_CONTROL_PLANE_API_KEY:}}") String apiKey,
+                                       RestClient.Builder builder) {
         this.apiKey = apiKey;
         this.habilitado = StringUtils.hasText(url);
-        this.restClient = habilitado ? RestClient.builder().baseUrl(url).build() : null;
+        this.restClient = habilitado ? builder.baseUrl(url).build() : null;
     }
 
     public RespuestaControlPlane validar(UUID instalacionId, String fingerprintHash) {
@@ -50,6 +52,7 @@ public class LicensingControlPlaneClient {
         try {
             Map<?, ?> response = restClient.post()
                     .uri("/api/v1/licencias/validar")
+                    .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
                     .body(Map.of("instalacionId", instalacionId.toString(), "fingerprintHash", fingerprintHash))
                     .retrieve()
@@ -124,6 +127,7 @@ public class LicensingControlPlaneClient {
         try {
             Map<?, ?> response = restClient.post()
                     .uri("/api/v1/telemetry/heartbeat")
+                    .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
                     .body(Map.of("instalacionId", instalacionId.toString()))
                     .retrieve()
@@ -144,6 +148,7 @@ public class LicensingControlPlaneClient {
             payload.put("instalacionId", instalacionId.toString());
             Map<?, ?> response = restClient.post()
                     .uri("/api/v1/telemetry/usage")
+                    .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
                     .body(payload)
                     .retrieve()
@@ -171,15 +176,19 @@ public class LicensingControlPlaneClient {
             if (StringUtils.hasText(cancelUrl)) {
                 payload.put("cancelUrl", cancelUrl);
             }
+            log.info("[LICENCIA] Creando checkout Stripe - URL={}/api/v1/billing/checkout-session, apiKey={}, payload={}",
+                    restClient != null ? "configured" : "null", apiKey, payload);
             Map<?, ?> response = restClient.post()
                     .uri("/api/v1/billing/checkout-session")
+                    .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
                     .body(payload)
                     .retrieve()
                     .body(Map.class);
+            log.info("[LICENCIA] Checkout Stripe respuesta: {}", response);
             return sanitizeMap(response);
         } catch (RuntimeException exception) {
-            log.info("[LICENCIA] No se pudo crear Checkout Stripe - {}", exception.getClass().getSimpleName());
+            log.error("[LICENCIA] No se pudo crear Checkout Stripe - {} - message: {}", exception.getClass().getSimpleName(), exception.getMessage(), exception);
             return offlinePayload("STRIPE_CHECKOUT");
         }
     }
@@ -212,6 +221,7 @@ public class LicensingControlPlaneClient {
             }
             Map<?, ?> response = restClient.post()
                     .uri("/api/v1/billing/checkout-session")
+                    .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
                     .body(payload)
                     .retrieve()
