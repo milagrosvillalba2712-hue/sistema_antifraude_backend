@@ -74,8 +74,9 @@ Transaccion → RiskContextBuilder.build(tx) → RiskContext → KieSession.fire
 
 - DRL files in `resources/rules/domain/` (`riesgo-monto.drl`, `riesgo-pais.drl`, etc.) + fallback `fraud-rules.drl` (`salience -100`)
 - Two eval paths in `DroolsService`:
-  - `evaluar(RiskContext)` — new architecture, returns `RiskResult`
-  - `evaluarTransaccion(Transaccion)` — legacy, returns `BigDecimal` score
+  - `evaluar(RiskContext)` — new architecture, returns `RiskResult`. **Pure evaluation: no persistence side-effects** (safe for `/api/simulador/evaluar`, which uses a transient `Transaccion`). `EjecucionRegla` audit rows are skipped when `transaccion.getId() == null` (simulator).
+  - `evaluarTransaccion(Transaccion)` — legacy, returns `BigDecimal` score; still creates alerts internally
+- **Alert creation is the caller's job, not `evaluar`'s**: `TransaccionService.procesarTransaccion` calls `droolsService.crearAlertasDesdeResultado(...)` (public, guarded to persisted txs) when `result.requiereAccionInmediata()`. This avoids the old bug where the simulator tried to persist `Alerta`/`EjecucionRegla` referencing a transient `Transaccion` (`TransientPropertyValueException` → `InvalidDataAccessApiUsageException`/500), and the request-wide `TenantTransactionFilter` tx getting marked rollback-only → `UnexpectedRollbackException`.
 - `evaluar` captures fired **DRL static rules** via an `AgendaEventListener` (rule name + score delta from `ScoreTracker`) and merges them with guided DB rules into `RiskResult.reglasDisparadas`; each carries `origen` = `"DROOLS"` | `"CONFIGURABLE"`
 - List scoring in `riesgo-listas.drl` scales by `ListaFact.scoreConfianza` (0–100); `RiskContextBuilder` sets `ListaFact.tipoLista` to the bucket `"NEGRA"/"GRIS"/"BLANCA"` so the rules fire
 - **Fuzzy name screening**: `ListScreeningService` does exact match first, then `NameSimilarity` (bigramas+Levenshtein) over active subjects/aliases and client-control NOMBRE elements (whitelist excluded); threshold/flag via `app.screening.name-fuzzy-threshold` (default 70) / `app.screening.name-fuzzy-enabled`
@@ -106,3 +107,5 @@ Transaccion → RiskContextBuilder.build(tx) → RiskContext → KieSession.fire
 - **External clients** hit the mock at `https://localhost:8443` (TLS truststore pinned via `EXTERNAL_TRUSTSTORE`), NOT `localhost:3001`
 - **`.env.example` exists** (repo root); `.env` itself is gitignored — prod credentials must be supplied externally
 - **Demo seeds** only run with the `demo` profile from `db/demo`; normal/productive startup never loads them
+- **Request-wide transaction**: `TenantTransactionFilter` wraps every authenticated request in a `TransactionTemplate` so `SET LOCAL app.current_empresa_id` (RLS) survives. Consequence: any exception that bubbles through a `@Transactional` service marks the shared tx rollback-only and the filter's commit throws `UnexpectedRollbackException` (turning an intended 400 into a 500). Mitigations: `TransaccionService` uses `@Transactional(noRollbackFor = BusinessException.class)`; caught non-blocking persistence (e.g. rule-exec audit) must not reference transient entities.
+- **Demo roles** (Santaclara): active users resolve via `usuario_empresa` → modern roles `ADMINISTRADOR`/`SUPERVISOR`/`ANALISTA`/`AUDITOR`. Legacy roles `ADMIN_EMPRESA`/`GERENTE_SUPERVISOR`/`ADMIN_GENERAL` are deactivated (`rol.activo=false`, 0 permisos). Note RLS hides `usuario_empresa` rows unless `app.current_empresa_id` GUC is set.

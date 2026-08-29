@@ -97,9 +97,8 @@ public class DroolsService {
                     context.getTransaccionFact().getTransactionUuid(), score, nivel);
 
             if (requiereAlerta) {
-                log.warn("[DROOLS] Riesgo accionable detectado - UUID: {} - Score: {} - Generando alertas",
+                log.warn("[DROOLS] Riesgo accionable detectado - UUID: {} - Score: {}",
                         context.getTransaccionFact().getTransactionUuid(), score);
-                crearAlertasDesdeResultado(context.getTransaccion(), reglasDisparadas, score, nivel);
             }
 
             return new RiskResult(score, nivel, reglasDisparadas, requiereAlerta, null,
@@ -161,7 +160,8 @@ public class DroolsService {
 
     private void registrarEjecucion(RiskContext context, ReglaRiesgo regla, boolean cumplida, BigDecimal score, Long tiempoMs) {
         try {
-            if (context.getTransaccion() == null || regla == null) {
+            if (context.getTransaccion() == null || regla == null
+                    || context.getTransaccion().getId() == null) {
                 return;
             }
             EjecucionRegla ejecucion = EjecucionRegla.builder()
@@ -184,9 +184,9 @@ public class DroolsService {
         }
     }
 
-    private void crearAlertasDesdeResultado(Transaccion transaccion, List<RiskResult.ReglaDisparada> reglasDisparadas, BigDecimal score, String nivel) {
-        if (transaccion == null) {
-            log.warn("[DROOLS] No se genero alerta porque la transaccion es nula");
+    public void crearAlertasDesdeResultado(Transaccion transaccion, List<RiskResult.ReglaDisparada> reglasDisparadas, BigDecimal score, String nivel) {
+        if (transaccion == null || transaccion.getId() == null) {
+            log.warn("[DROOLS] No se genero alerta porque la transaccion es nula o no persistida");
             return;
         }
         transaccion.setScoreRiesgo(score);

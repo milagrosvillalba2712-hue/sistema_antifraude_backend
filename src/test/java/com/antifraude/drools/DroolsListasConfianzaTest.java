@@ -139,27 +139,33 @@ class DroolsListasConfianzaTest {
     }
 
     @Test
-    void scoreAltoConSoloReglasDroolsNoFallaEnAlertas() {
+    void scoreAltoConSoloReglasDroolsNoPersisteAlertasEnEvaluar() {
         ReglaRiesgoService reglaRiesgoService = mock(ReglaRiesgoService.class);
         when(reglaRiesgoService.listarActivas()).thenReturn(List.of());
         AlertaService alertaService = mock(AlertaService.class);
+        EjecucionReglaRepository ejecucionRepository = mock(EjecucionReglaRepository.class);
         DroolsService service = new DroolsService(container, reglaRiesgoService, alertaService,
-                mock(EjecucionReglaRepository.class), mock(ConditionEvaluator.class), configService());
+                ejecucionRepository, mock(ConditionEvaluator.class), configService());
 
         RiskContext ctx = contextoBase();
         ListaFact negra = new ListaFact();
         negra.setTipoLista("NEGRA");
         negra.setScoreConfianza(BigDecimal.valueOf(100));
         ctx.getListasNegras().add(negra);
-        // Transaccion sin persistir: crea alerta general (regla null) sin lookup por id.
+        // Transaccion sin persistir (simulador): evaluar no debe persistir alertas ni ejecuciones.
         ctx.setTransaccion(new com.antifraude.transactions.Transaccion());
 
         RiskResult result = service.evaluar(ctx);
 
         assertThat(result.scoreTotal()).isGreaterThanOrEqualTo(new BigDecimal("70"));
-        // Debe generar exactamente una alerta general (regla = null), sin buscar por id nulo.
-        org.mockito.Mockito.verify(alertaService).crearAlerta(org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyString());
+        // La creacion de alertas es responsabilidad del flujo real (transaccion persistida),
+        // no de la evaluacion pura: evaluar no debe invocar servicios de persistencia.
+        org.mockito.Mockito.verify(alertaService, org.mockito.Mockito.never())
+                .crearAlerta(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verify(ejecucionRepository, org.mockito.Mockito.never())
+                .save(org.mockito.ArgumentMatchers.any());
     }
 
     private RiskContext contextoBase() {

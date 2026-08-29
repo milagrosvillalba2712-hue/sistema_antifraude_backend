@@ -33,7 +33,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 @Service
-@Transactional
+@Transactional(noRollbackFor = BusinessException.class)
 public class TransaccionService {
 
     private static final Logger log = LoggerFactory.getLogger(TransaccionService.class);
@@ -206,6 +206,11 @@ public class TransaccionService {
         String nivel = result.nivelRiesgo();
         if (nivel != null) {
             transaccion.setNivelRiesgo(nivelRiesgoRepository.findByCodigo(nivel).orElse(null));
+        }
+
+        if (result.requiereAccionInmediata()) {
+            droolsService.crearAlertasDesdeResultado(transaccion, result.reglasDisparadas(),
+                    result.scoreTotal(), result.nivelRiesgo());
         }
 
         String estado;
