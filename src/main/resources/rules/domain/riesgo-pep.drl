@@ -10,6 +10,6 @@ rule "PEP detectado"
         $ctx : RiskContext()
         $p : PeptFact() from $ctx.getRegistrosPEP()
     then
-        scoreTracker.addScore(40);
+        scoreTracker.addScore($ctx.getConfig().getPepScore());
         System.out.println("[Drools] PEP detectado: " + $p.getNombreCompleto() + " - Cargo: " + $p.getCargo());
 end

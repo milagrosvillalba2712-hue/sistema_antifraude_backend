@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface SujetoRiesgoAliasRepository extends JpaRepository<SujetoRiesgoAlias, Long> {
     List<SujetoRiesgoAlias> findByAliasNormalizadoAndActivoTrue(String aliasNormalizado);
+
+    List<SujetoRiesgoAlias> findByActivoTrue();
 }

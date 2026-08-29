@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -27,7 +28,9 @@ public class RiskContextBuilder {
     private final CalendarioRiesgoRepository calendarioRiesgoRepository;
     private final ControlImporteRepository controlImporteRepository;
     private final ControlFrecuenciaRepository controlFrecuenciaRepository;
+    private final CanalRepository canalRepository;
     private final ListScreeningService listScreeningService;
+    private final DroolsScoreConfigService droolsScoreConfigService;
 
     public RiskContextBuilder(TransaccionRepository transaccionRepository,
                              ClienteObservadoRepository clienteObservadoRepository,
@@ -38,7 +41,9 @@ public class RiskContextBuilder {
                              CalendarioRiesgoRepository calendarioRiesgoRepository,
                              ControlImporteRepository controlImporteRepository,
                              ControlFrecuenciaRepository controlFrecuenciaRepository,
-                             ListScreeningService listScreeningService) {
+                              CanalRepository canalRepository,
+                              ListScreeningService listScreeningService,
+                              DroolsScoreConfigService droolsScoreConfigService) {
         this.transaccionRepository = transaccionRepository;
         this.clienteObservadoRepository = clienteObservadoRepository;
         this.clientePEPRepository = clientePEPRepository;
@@ -48,7 +53,9 @@ public class RiskContextBuilder {
         this.calendarioRiesgoRepository = calendarioRiesgoRepository;
         this.controlImporteRepository = controlImporteRepository;
         this.controlFrecuenciaRepository = controlFrecuenciaRepository;
+        this.canalRepository = canalRepository;
         this.listScreeningService = listScreeningService;
+        this.droolsScoreConfigService = droolsScoreConfigService;
     }
 
     public RiskContext build(Transaccion transaccion) {
@@ -56,8 +63,8 @@ public class RiskContextBuilder {
         context.setTransaccion(transaccion);
         context.setTransaccionFact(toTransaccionFact(transaccion));
         context.setFechaHoraActual(LocalDateTime.now());
-
-        String documento = transaccion.getIdentificadorDocumento();
+        context.setConfig(droolsScoreConfigService.getConfig());
+        String documento = transaccion.getDocumentoRemitente();
 
         log.debug("[CTX] Cargando historial para documento: {}", documento);
         List<Transaccion> historial = transaccionRepository.findUltimasPorDocumento(documento);
@@ -78,6 +85,9 @@ public class RiskContextBuilder {
 
         log.debug("[CTX] Cargando controles de importe y frecuencia");
         cargarControles(context, transaccion);
+
+        log.debug("[CTX] Resolviendo canal de alto riesgo");
+        cargarCanalAltoRiesgo(context, transaccion);
 
         log.debug("[CTX] RiskContext construido - Historial: {}, Listas Negras: {}, PEP: {}, Observados: {}",
                 context.getHistorialTransacciones().size(),
@@ -103,16 +113,22 @@ public class RiskContextBuilder {
         for (CoincidenciaListaFact c : coincidencias) {
             ListaFact fact = new ListaFact();
             fact.setNombreLista(c.getListaCodigo());
-            fact.setTipoLista(c.getCategoria());
             fact.setFuente(c.getFuenteCodigo());
             fact.setNombreCompleto(c.getNombreSujeto());
             fact.setDocumentoIdentidad(c.getValorEvaluado());
             fact.setScoreConfianza(c.getScoreMatch());
-            if (isCritical(c)) {
+            // El tipoLista debe coincidir con el bucket de la DRL ("NEGRA"/"GRIS"/"BLANCA").
+            if ("WHITELIST".equalsIgnoreCase(c.getCategoria())) {
+                fact.setTipoLista("BLANCA");
+                context.getListasBlancas().add(fact);
+            } else if (isCritical(c) || "BLACKLIST".equalsIgnoreCase(c.getCategoria())) {
+                fact.setTipoLista("NEGRA");
                 context.getListasNegras().add(fact);
             } else if (isLowRisk(c)) {
+                fact.setTipoLista("BLANCA");
                 context.getListasBlancas().add(fact);
             } else {
+                fact.setTipoLista("GRIS");
                 context.getListasGrises().add(fact);
             }
         }
@@ -129,6 +145,8 @@ public class RiskContextBuilder {
     private boolean isCritical(CoincidenciaListaFact c) {
         return c.getSeveridad() != null && (c.getSeveridad().equalsIgnoreCase("CRITICO")
                 || c.getSeveridad().equalsIgnoreCase("CRÍTICO")
+                || c.getSeveridad().equalsIgnoreCase("CRITICA")
+                || c.getSeveridad().equalsIgnoreCase("CRÍTICA")
                 || c.getSeveridad().equalsIgnoreCase("Critico")
                 || c.getSeveridad().equalsIgnoreCase("Crítico"));
     }
@@ -206,7 +224,7 @@ public class RiskContextBuilder {
                 fact.setClienteId(obs.getPersona().getId());
                 fact.setNombreCompleto(obs.getPersona().getNombreCompleto());
                 fact.setDocumentoIdentidad(documento);
-                fact.setMotivo(obs.getMotivo() != null ? obs.getMotivo().name() : null);
+                fact.setMotivo(obs.getMotivo());
                 facts.add(fact);
             }
         }
@@ -251,13 +269,20 @@ public class RiskContextBuilder {
         }
         List<ControlImporteFact> importeFacts = new ArrayList<>();
         for (ControlImporte ci : controlesImporte) {
+            if (!aplicaControlImporte(ci, transaccion)) {
+                continue;
+            }
             ControlImporteFact fact = new ControlImporteFact();
             fact.setControlId(ci.getId());
             fact.setProductoCodigo(ci.getProducto() != null ? ci.getProducto().getCodigo() : null);
+            fact.setTipoTransaccion(transaccion.getTipoTransaccion());
+            fact.setMonedaCodigo(ci.getMoneda() != null ? ci.getMoneda().getCodigoIso() : null);
+            fact.setMontoMinimo(ci.getMontoMinimo());
             fact.setMontoMaximo(ci.getMontoMaximo());
+            fact.setSeveridad(ci.getSeveridad());
             importeFacts.add(fact);
         }
-        context.setControlesImporte(importeFacts);
+        context.setControlesImporte(mejorControlImporte(importeFacts));
 
         List<ControlFrecuencia> controlesFrecuencia;
         if (productoCodigo != null) {
@@ -277,20 +302,82 @@ public class RiskContextBuilder {
         context.setControlesFrecuencia(frecuenciaFacts);
     }
 
+    private void cargarCanalAltoRiesgo(RiskContext context, Transaccion transaccion) {
+        boolean altoRiesgo = false;
+        if (transaccion != null) {
+            Canal canal = null;
+            if (transaccion.getCanalTransaccionId() != null) {
+                canal = canalRepository.findById(transaccion.getCanalTransaccionId()).orElse(null);
+            }
+            if (canal == null && transaccion.getCanal() != null) {
+                canal = canalRepository.findByCodigo(transaccion.getCanal()).orElse(null);
+            }
+            altoRiesgo = canal != null && Boolean.TRUE.equals(canal.getAltoRiesgo());
+        }
+        context.setCanalAltoRiesgo(altoRiesgo);
+    }
+
+    private boolean aplicaControlImporte(ControlImporte control, Transaccion transaccion) {
+        if (control == null || transaccion == null || transaccion.getMonto() == null
+                || control.getMontoMaximo() == null || control.getMoneda() == null) {
+            return false;
+        }
+        String monedaTransaccion = transaccion.getMoneda();
+        if (monedaTransaccion == null || !control.getMoneda().getCodigoIso().equalsIgnoreCase(monedaTransaccion)) {
+            return false;
+        }
+        if (control.getTipoTransaccionId() != null && !control.getTipoTransaccionId().equals(transaccion.getTipoTransaccionId())) {
+            return false;
+        }
+        return transaccion.getMonto().compareTo(control.getMontoMaximo()) > 0;
+    }
+
+    private List<ControlImporteFact> mejorControlImporte(List<ControlImporteFact> controles) {
+        return controles.stream()
+                .max(Comparator
+                        .comparingInt((ControlImporteFact c) -> prioridadSeveridad(c.getSeveridad()))
+                        .thenComparing(ControlImporteFact::getMontoMaximo, Comparator.nullsFirst(Comparator.naturalOrder())))
+                .map(List::of)
+                .orElseGet(List::of);
+    }
+
+    private int prioridadSeveridad(String severidad) {
+        if (severidad == null) {
+            return 0;
+        }
+        return switch (severidad.toUpperCase(java.util.Locale.ROOT)) {
+            case "CRITICA", "CRÍTICA", "CRITICO", "CRÍTICO" -> 3;
+            case "ALTA", "ALTO" -> 2;
+            case "MEDIA", "MEDIO" -> 1;
+            default -> 0;
+        };
+    }
+
     private TransaccionFact toTransaccionFact(Transaccion t) {
         TransaccionFact fact = new TransaccionFact();
         fact.setId(t.getId());
         fact.setTransactionUuid(t.getTransactionUuid() != null ? t.getTransactionUuid().toString() : null);
         fact.setCodigo(t.getCodigo());
-        fact.setIdentificadorDocumento(t.getIdentificadorDocumento());
+        fact.setIdentificadorDocumento(t.getDocumentoRemitente());
         fact.setCuentaOrigen(t.getCuentaOrigen());
         fact.setCuentaDestino(t.getCuentaDestino());
         fact.setMonto(t.getMonto());
         fact.setMonedaCodigo(t.getMoneda());
         fact.setCanalCodigo(t.getCanal());
         fact.setTipoTransaccion(t.getTipoTransaccion());
-        fact.setInfraestructuraPago(t.getCanal());
-        fact.setModuloSipap(t.getCanal() != null && t.getCanal().toUpperCase().contains("SPI") ? "SPI" : null);
+        fact.setInfraestructuraPago(t.getInfraestructuraPago() != null ? t.getInfraestructuraPago() : t.getCanal());
+        fact.setModuloSipap(t.getModuloSipap() != null ? t.getModuloSipap()
+                : (t.getCanal() != null && t.getCanal().toUpperCase().contains("SPI") ? "SPI" : null));
+        fact.setSubtipoTransaccion(t.getSubtipoTransaccion());
+        fact.setEndToEndId(t.getEndToEndId());
+        fact.setSpiReference(t.getSpiReference());
+        fact.setRequiereDeclaracionFondos(Boolean.TRUE.equals(t.getRequiereDeclaracionFondos()));
+        fact.setDepositanteTercero(Boolean.TRUE.equals(t.getDepositanteTercero()));
+        fact.setMcc(t.getMcc());
+        fact.setNombreComercio(t.getNombreComercio());
+        fact.setPanLast4(t.getPanLast4());
+        fact.setSwiftBicOrigen(t.getSwiftBicOrigen());
+        fact.setSwiftBicDestino(t.getSwiftBicDestino());
         fact.setIpOrigen(t.getIpOrigen());
         fact.setPaisOrigenCodigo(t.getPaisOrigen());
         fact.setFechaTransaccion(t.getFechaTransaccion());
@@ -313,7 +400,9 @@ public class RiskContextBuilder {
             fact.setPersonaBeneficiarioId(t.getPersonaBeneficiario().getId());
             fact.setPersonaBeneficiarioNombre(t.getPersonaBeneficiario().getNombreCompleto());
         }
-        fact.setEsInternacional(t.getPaisOrigenRef() != null && !t.getPaisOrigen().equalsIgnoreCase("PRY"));
+        fact.setEsInternacional(t.getPaisOrigenRef() != null
+                && t.getPaisDestinoRef() != null
+                && !t.getPaisOrigenRef().getCodigoIso().equalsIgnoreCase(t.getPaisDestinoRef().getCodigoIso()));
         return fact;
     }
 }

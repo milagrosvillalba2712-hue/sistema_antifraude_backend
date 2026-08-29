@@ -65,6 +65,9 @@ app:
       api-key: ${LICENSES_CONTROL_PLANE_API_KEY:}
   audit:
     nivel: ${AUDIT_NIVEL:avanzada}
+  screening:
+    name-fuzzy-threshold: ${NAME_FUZZY_THRESHOLD:70}
+    name-fuzzy-enabled: ${NAME_FUZZY_ENABLED:true}
   jwt:
     secret: ${JWT_SECRET:jwt_secret_key_default_change_in_production}
     expiration-ms: 86400000

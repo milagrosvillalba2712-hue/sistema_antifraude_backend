@@ -47,6 +47,7 @@ public class TransaccionFact {
     private String estadoClearing;
     private String procesadoraTarjeta;
     private String mcc;
+    private String nombreComercio;
     private String canalTarjeta;
     private String panLast4;
     private String qrStandard;
@@ -134,6 +135,8 @@ public class TransaccionFact {
     public void setProcesadoraTarjeta(String procesadoraTarjeta) { this.procesadoraTarjeta = procesadoraTarjeta; }
     public String getMcc() { return mcc; }
     public void setMcc(String mcc) { this.mcc = mcc; }
+    public String getNombreComercio() { return nombreComercio; }
+    public void setNombreComercio(String nombreComercio) { this.nombreComercio = nombreComercio; }
     public String getCanalTarjeta() { return canalTarjeta; }
     public void setCanalTarjeta(String canalTarjeta) { this.canalTarjeta = canalTarjeta; }
     public String getPanLast4() { return panLast4; }

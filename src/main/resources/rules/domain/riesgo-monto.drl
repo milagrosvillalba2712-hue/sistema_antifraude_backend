@@ -1,33 +1,26 @@
 package com.antifraude.drools;
 
 import com.antifraude.drools.RiskContext;
+import com.antifraude.drools.fact.ControlImporteFact;
 import com.antifraude.drools.fact.TransaccionFact;
 
 global com.antifraude.drools.DroolsService.ScoreTracker scoreTracker;
 
-rule "Monto alto"
+rule "Monto supera control multimoneda"
     when
         $ctx : RiskContext()
-        $t : TransaccionFact(monto > 10000) from $ctx.getTransaccionFact()
+        $t : TransaccionFact(monto != null, monedaCodigo != null) from $ctx.getTransaccionFact()
+        $c : ControlImporteFact(
+            monedaCodigo != null,
+            montoMaximo != null,
+            monedaCodigo.equalsIgnoreCase($t.getMonedaCodigo()),
+            eval($t.getMonto().compareTo(getMontoMaximo()) > 0)
+        ) from $ctx.getControlesImporte()
     then
-        scoreTracker.addScore(30);
-        System.out.println("[Drools] Monto alto detectado: " + $t.getMonto());
-end
-
-rule "Monto muy alto"
-    when
-        $ctx : RiskContext()
-        $t : TransaccionFact(monto > 50000) from $ctx.getTransaccionFact()
-    then
-        scoreTracker.addScore(20);
-        System.out.println("[Drools] Monto muy alto detectado: " + $t.getMonto());
-end
-
-rule "Monto exacto sospechoso"
-    when
-        $ctx : RiskContext()
-        $t : TransaccionFact(monto == 10000 || monto == 9999 || monto == 99999) from $ctx.getTransaccionFact()
-    then
-        scoreTracker.addScore(15);
-        System.out.println("[Drools] Monto exacto sospechoso detectado: " + $t.getMonto());
+        String severidad = $c.getSeveridad() != null ? $c.getSeveridad().toUpperCase() : "MEDIA";
+        double score = "CRITICA".equals(severidad) ? 70 : ("ALTA".equals(severidad) ? 50 : 30);
+        scoreTracker.addScore(score);
+        System.out.println("[Drools] Monto supera control multimoneda: "
+                + $t.getMonto() + " " + $t.getMonedaCodigo()
+                + " > " + $c.getMontoMaximo() + " " + $c.getMonedaCodigo());
 end

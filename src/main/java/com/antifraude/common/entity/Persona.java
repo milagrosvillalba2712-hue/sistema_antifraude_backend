@@ -33,6 +33,9 @@ public class Persona extends TenantAwareEntity {
     @Column(name = "razon_social", length = 200)
     private String razonSocial;
 
+    @Column(name = "nombre_razon_social", length = 220)
+    private String nombreRazonSocial;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "nacionalidad_pais_id", nullable = false)
     private Pais nacionalidadPais;
@@ -48,11 +51,18 @@ public class Persona extends TenantAwareEntity {
     }
 
     public String getNombreCompleto() {
+        if (nombreRazonSocial != null && !nombreRazonSocial.isBlank()) {
+            return nombreRazonSocial.trim();
+        }
         StringBuilder sb = new StringBuilder();
         if (primerNombre != null) sb.append(primerNombre);
         if (segundoNombre != null) sb.append(" ").append(segundoNombre);
         if (primerApellido != null) sb.append(" ").append(primerApellido);
         if (segundoApellido != null) sb.append(" ").append(segundoApellido);
-        return sb.toString().trim();
+        String nombre = sb.toString().trim();
+        if (!nombre.isEmpty()) {
+            return nombre;
+        }
+        return razonSocial != null ? razonSocial.trim() : "";
     }
 }

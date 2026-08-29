@@ -4,7 +4,9 @@ import com.antifraude.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -12,33 +14,49 @@ public class ConsumoService {
 
     private final UsoSuscripcionRepository usoSuscripcionRepository;
     private final EmpresaRepository empresaRepository;
+    private final SuscripcionRepository suscripcionRepository;
 
     public ConsumoService(UsoSuscripcionRepository usoSuscripcionRepository,
-                          EmpresaRepository empresaRepository) {
+                          EmpresaRepository empresaRepository,
+                          SuscripcionRepository suscripcionRepository) {
         this.usoSuscripcionRepository = usoSuscripcionRepository;
         this.empresaRepository = empresaRepository;
+        this.suscripcionRepository = suscripcionRepository;
     }
 
     @Transactional
     public UsoSuscripcion usoActual(UUID empresaId) {
         YearMonth periodo = YearMonth.now();
-        return usoSuscripcionRepository.findFirstByEmpresaIdAndAnioAndMesOrderByIdDesc(empresaId, periodo.getYear(), periodo.getMonthValue())
-                .orElseGet(() -> nuevaUso(empresaId, periodo.getYear(), periodo.getMonthValue()));
+        Suscripcion suscripcion = suscripcionVigente(empresaId);
+        return buscarUsoActual(empresaId, suscripcion, periodo)
+                .orElseGet(() -> nuevaUso(empresaId, suscripcion, periodo));
     }
 
     @Transactional(readOnly = true)
     public int transaccionesDelMes(UUID empresaId) {
-        return usoActual(empresaId).getTransaccionesProcesadas();
+        YearMonth periodo = YearMonth.now();
+        Suscripcion suscripcion = suscripcionVigente(empresaId);
+        return buscarUsoActual(empresaId, suscripcion, periodo)
+                .map(UsoSuscripcion::getTransaccionesProcesadas)
+                .orElse(0);
     }
 
     @Transactional(readOnly = true)
     public int consultasKycDelMes(UUID empresaId) {
-        return usoActual(empresaId).getConsultasKyc();
+        YearMonth periodo = YearMonth.now();
+        Suscripcion suscripcion = suscripcionVigente(empresaId);
+        return buscarUsoActual(empresaId, suscripcion, periodo)
+                .map(UsoSuscripcion::getConsultasKyc)
+                .orElse(0);
     }
 
     @Transactional(readOnly = true)
     public int reportesDelMes(UUID empresaId) {
-        return usoActual(empresaId).getReportesGenerados();
+        YearMonth periodo = YearMonth.now();
+        Suscripcion suscripcion = suscripcionVigente(empresaId);
+        return buscarUsoActual(empresaId, suscripcion, periodo)
+                .map(UsoSuscripcion::getReportesGenerados)
+                .orElse(0);
     }
 
     @Transactional
@@ -62,18 +80,38 @@ public class ConsumoService {
         usoSuscripcionRepository.save(uso);
     }
 
-    private UsoSuscripcion nuevaUso(UUID empresaId, int anio, int mes) {
+    private Optional<UsoSuscripcion> buscarUsoActual(UUID empresaId, Suscripcion suscripcion, YearMonth periodo) {
+        return usoSuscripcionRepository.findFirstByEmpresaIdAndSuscripcionIdAndPeriodoOrderByIdDesc(
+                empresaId,
+                suscripcion.getId(),
+                periodo.atDay(1)
+        );
+    }
+
+    private UsoSuscripcion nuevaUso(UUID empresaId, Suscripcion suscripcion, YearMonth periodo) {
         Empresa empresa = empresaRepository.findById(empresaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Empresa", "id", empresaId));
         return UsoSuscripcion.builder()
                 .empresa(empresa)
-                .anio(anio)
-                .mes(mes)
+                .suscripcion(suscripcion)
+                .periodo(periodo.atDay(1))
+                .anio(periodo.getYear())
+                .mes(periodo.getMonthValue())
                 .usuariosActivos(0)
                 .transaccionesProcesadas(0)
                 .consultasKyc(0)
                 .alertasGeneradas(0)
                 .reportesGenerados(0)
                 .build();
+    }
+
+    private Suscripcion suscripcionVigente(UUID empresaId) {
+        LocalDate hoy = LocalDate.now();
+        return suscripcionRepository.findByEmpresaId(empresaId).stream()
+                .filter(suscripcion -> suscripcion.getFechaFin() != null && !suscripcion.getFechaFin().isBefore(hoy))
+                .filter(suscripcion -> suscripcion.getEstado() == Suscripcion.EstadoSuscripcion.ACTIVA
+                        || suscripcion.getEstado() == Suscripcion.EstadoSuscripcion.POR_VENCER)
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Suscripcion", "empresaId", empresaId));
     }
 }

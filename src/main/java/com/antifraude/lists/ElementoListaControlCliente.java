@@ -1,5 +1,7 @@
 package com.antifraude.lists;
 
+import com.antifraude.common.entity.Pais;
+import com.antifraude.common.entity.TipoDocumento;
 import com.antifraude.security.tenant.TenantContext;
 import com.antifraude.users.Usuario;
 import jakarta.persistence.*;
@@ -53,6 +55,14 @@ public class ElementoListaControlCliente {
 
     @Column(name = "documento_mostrado", length = 80)
     private String documentoMostrado;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pais_id")
+    private Pais pais;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tipo_documento_id")
+    private TipoDocumento tipoDocumento;
 
     @Column(columnDefinition = "TEXT")
     private String motivo;
@@ -113,4 +123,3 @@ public class ElementoListaControlCliente {
     public enum TipoIdentificadorControl { NOMBRE, DOCUMENTO, CUENTA, WALLET, ALIAS }
     public enum EstadoElementoControl { ACTIVO, INACTIVO, VENCIDO }
 }
-

@@ -1,6 +1,10 @@
 package com.antifraude.lists;
 
 import com.antifraude.audit.AuditoriaService;
+import com.antifraude.common.entity.Pais;
+import com.antifraude.common.entity.TipoDocumento;
+import com.antifraude.common.repository.PaisRepository;
+import com.antifraude.common.repository.TipoDocumentoRepository;
 import com.antifraude.exception.ResourceNotFoundException;
 import com.antifraude.security.crypto.HmacHashService;
 import com.antifraude.security.tenant.TenantContext;
@@ -24,12 +28,15 @@ public class ListaControlService {
 
     private static final List<String> COLUMNAS_IMPORTACION = List.of(
             "tipoEntidad", "tipoIdentificador", "valor", "nombreMostrado", "documentoMostrado",
-            "motivo", "observacion", "fuente", "severidad");
+            "paisCodigo", "tipoDocumentoCodigo", "motivo", "observacion", "fuente", "severidad",
+            "fechaVigenciaDesde", "fechaVigenciaHasta");
 
     private final ListaControlClienteRepository listaRepository;
     private final ElementoListaControlClienteRepository elementoRepository;
     private final ImportacionListaControlClienteRepository importacionRepository;
     private final UsuarioRepository usuarioRepository;
+    private final PaisRepository paisRepository;
+    private final TipoDocumentoRepository tipoDocumentoRepository;
     private final HmacHashService hmacHashService;
     private final AuditoriaService auditoriaService;
     private final ObjectMapper objectMapper;
@@ -38,6 +45,8 @@ public class ListaControlService {
                                ElementoListaControlClienteRepository elementoRepository,
                                ImportacionListaControlClienteRepository importacionRepository,
                                UsuarioRepository usuarioRepository,
+                               PaisRepository paisRepository,
+                               TipoDocumentoRepository tipoDocumentoRepository,
                                HmacHashService hmacHashService,
                                AuditoriaService auditoriaService,
                                ObjectMapper objectMapper) {
@@ -45,6 +54,8 @@ public class ListaControlService {
         this.elementoRepository = elementoRepository;
         this.importacionRepository = importacionRepository;
         this.usuarioRepository = usuarioRepository;
+        this.paisRepository = paisRepository;
+        this.tipoDocumentoRepository = tipoDocumentoRepository;
         this.hmacHashService = hmacHashService;
         this.auditoriaService = auditoriaService;
         this.objectMapper = objectMapper;
@@ -190,6 +201,7 @@ public class ListaControlService {
         elemento.setValorHash(hmacHashService.hmacBytes(valor));
         elemento.setNombreMostrado(blankToNull(request.nombreMostrado()));
         elemento.setDocumentoMostrado(blankToNull(request.documentoMostrado()));
+        aplicarDocumento(elemento, request);
         elemento.setMotivo(blankToNull(request.motivo()));
         elemento.setObservacion(blankToNull(request.observacion()));
         elemento.setFuente(blankToNull(request.fuente()) != null ? request.fuente().trim() : "CLIENTE");
@@ -208,8 +220,10 @@ public class ListaControlService {
         return new ListaControlDtos.ElementoControlRequest(
                 ElementoListaControlCliente.TipoEntidadControl.valueOf(tipoEntidad.trim().toUpperCase(Locale.ROOT)),
                 ElementoListaControlCliente.TipoIdentificadorControl.valueOf(tipoIdentificador.trim().toUpperCase(Locale.ROOT)),
-                row.get("valor"), row.get("nombreMostrado"), row.get("documentoMostrado"), row.get("motivo"),
-                row.get("observacion"), row.get("fuente"), row.get("severidad"), null, null, null);
+                row.get("valor"), row.get("nombreMostrado"), row.get("documentoMostrado"),
+                row.get("paisCodigo"), row.get("tipoDocumentoCodigo"), row.get("motivo"),
+                row.get("observacion"), row.get("fuente"), row.get("severidad"), null,
+                parseDate(row.get("fechaVigenciaDesde")), parseDate(row.get("fechaVigenciaHasta")));
     }
 
     private List<Map<String, String>> parseRows(MultipartFile archivo) throws Exception {
@@ -268,6 +282,34 @@ public class ListaControlService {
         }
     }
 
+    private void aplicarDocumento(ElementoListaControlCliente elemento, ListaControlDtos.ElementoControlRequest request) {
+        String paisCodigo = blankToNull(request.paisCodigo());
+        String tipoDocumentoCodigo = blankToNull(request.tipoDocumentoCodigo());
+        Pais pais = null;
+        TipoDocumento tipoDocumento = null;
+        if (paisCodigo != null) {
+            pais = paisRepository.findByCodigoIso(paisCodigo.trim().toUpperCase(Locale.ROOT))
+                    .orElseThrow(() -> new IllegalArgumentException("El paisCodigo " + paisCodigo + " no existe."));
+            elemento.setPais(pais);
+        }
+        if (tipoDocumentoCodigo != null) {
+            String codigo = tipoDocumentoCodigo.trim().toUpperCase(Locale.ROOT);
+            tipoDocumento = tipoDocumentoRepository.findByCodigo(codigo)
+                    .or(() -> tipoDocumentoRepository.findByCodigoTecnico(codigo))
+                    .orElseThrow(() -> new IllegalArgumentException("El tipoDocumentoCodigo " + tipoDocumentoCodigo + " no existe."));
+            elemento.setTipoDocumento(tipoDocumento);
+        }
+        if (tipoDocumento != null && pais != null && tipoDocumento.getPaisRelacion() != null
+                && !tipoDocumento.getPaisRelacion().getCodigoIso().equalsIgnoreCase(pais.getCodigoIso())) {
+            throw new IllegalArgumentException("El tipo de documento " + tipoDocumento.getCodigo()
+                    + " no corresponde al pais " + pais.getCodigoIso() + ".");
+        }
+        if (elemento.getTipoIdentificador() == ElementoListaControlCliente.TipoIdentificadorControl.DOCUMENTO
+                && tipoDocumento == null) {
+            throw new IllegalArgumentException("tipoDocumentoCodigo es obligatorio cuando tipoIdentificador es DOCUMENTO.");
+        }
+    }
+
     private List<String> splitCsv(String line) {
         return Arrays.stream(line.split(",", -1)).map(String::trim).toList();
     }
@@ -278,6 +320,11 @@ public class ListaControlService {
             row.put(headers.get(i), i < values.size() ? values.get(i) : "");
         }
         return row;
+    }
+
+    private java.time.LocalDate parseDate(String value) {
+        String clean = blankToNull(value);
+        return clean == null ? null : java.time.LocalDate.parse(clean);
     }
 
     public String normalize(String value) {
@@ -346,8 +393,28 @@ public class ListaControlService {
     private ListaControlDtos.ElementoControlResponse toResponse(ElementoListaControlCliente e) {
         return new ListaControlDtos.ElementoControlResponse(e.getId(), e.getLista().getId(), e.getLista().getTipoLista().name(),
                 e.getTipoEntidad().name(), e.getTipoIdentificador().name(), e.getValorOriginal(), e.getValorNormalizado(),
-                e.getNombreMostrado(), e.getDocumentoMostrado(), e.getMotivo(), e.getObservacion(), e.getFuente(),
+                valorMostrado(e), e.getNombreMostrado(), e.getDocumentoMostrado(),
+                e.getPais() != null ? e.getPais().getCodigoIso() : null,
+                e.getPais() != null ? e.getPais().getNombre() : null,
+                e.getTipoDocumento() != null ? e.getTipoDocumento().getCodigo() : null,
+                e.getTipoDocumento() != null ? e.getTipoDocumento().getNombre() : null,
+                e.getMotivo(), e.getObservacion(), e.getFuente(),
                 e.getSeveridad(), e.getEstado().name(), e.getFechaVigenciaDesde(), e.getFechaVigenciaHasta());
+    }
+
+    private String valorMostrado(ElementoListaControlCliente e) {
+        if (e.getTipoIdentificador() == ElementoListaControlCliente.TipoIdentificadorControl.NOMBRE) {
+            return e.getValorOriginal();
+        }
+        String display = blankToNull(e.getDocumentoMostrado());
+        if (display != null) {
+            return display;
+        }
+        String value = e.getValorOriginal();
+        if (value == null || value.length() <= 4) {
+            return "***";
+        }
+        return "***" + value.substring(value.length() - 4);
     }
 
     private ListaControlDtos.ImportacionListaControlResponse toResponse(ImportacionListaControlCliente i) {
@@ -356,4 +423,3 @@ public class ListaControlService {
                 i.getRegistrosValidos(), i.getRegistrosInvalidos(), i.getErroresJson());
     }
 }
-

@@ -10,6 +10,6 @@ rule "Cliente observado detectado"
         $ctx : RiskContext()
         $o : ObservadoFact() from $ctx.getRegistrosObservados()
     then
-        scoreTracker.addScore(60);
+        scoreTracker.addScore($ctx.getConfig().getObservadoScore());
         System.out.println("[Drools] Cliente OBSERVADO detectado: " + $o.getNombreCompleto() + " - Motivo: " + $o.getMotivo());
 end

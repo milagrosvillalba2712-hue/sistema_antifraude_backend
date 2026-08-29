@@ -10,8 +10,9 @@ rule "Lista negra detectada"
         $ctx : RiskContext()
         $l : ListaFact(tipoLista == "NEGRA") from $ctx.getListasNegras()
     then
-        scoreTracker.addScore(100);
-        System.out.println("[Drools] LISTA NEGRA detectada: " + $l.getNombreCompleto() + " - Lista: " + $l.getNombreLista());
+        double conf = $l.getScoreConfianza() != null ? $l.getScoreConfianza().doubleValue() : 100.0;
+        scoreTracker.addScore(100.0 * conf / 100.0);
+        System.out.println("[Drools] LISTA NEGRA detectada: " + $l.getNombreCompleto() + " - Lista: " + $l.getNombreLista() + " - Confianza: " + conf);
 end
 
 rule "Lista gris detectada"
@@ -19,8 +20,9 @@ rule "Lista gris detectada"
         $ctx : RiskContext()
         $l : ListaFact(tipoLista == "GRIS") from $ctx.getListasGrises()
     then
-        scoreTracker.addScore(50);
-        System.out.println("[Drools] LISTA GRIS detectada: " + $l.getNombreCompleto() + " - Lista: " + $l.getNombreLista());
+        double conf = $l.getScoreConfianza() != null ? $l.getScoreConfianza().doubleValue() : 100.0;
+        scoreTracker.addScore(50.0 * conf / 100.0);
+        System.out.println("[Drools] LISTA GRIS detectada: " + $l.getNombreCompleto() + " - Lista: " + $l.getNombreLista() + " - Confianza: " + conf);
 end
 
 rule "Lista blanca detectada"
@@ -28,6 +30,7 @@ rule "Lista blanca detectada"
         $ctx : RiskContext()
         $l : ListaFact(tipoLista == "BLANCA") from $ctx.getListasBlancas()
     then
-        scoreTracker.addScore(-30);
-        System.out.println("[Drools] LISTA BLANCA detectada: " + $l.getNombreCompleto() + " - Lista: " + $l.getNombreLista());
+        double conf = $l.getScoreConfianza() != null ? $l.getScoreConfianza().doubleValue() : 100.0;
+        scoreTracker.addScore(-30.0 * conf / 100.0);
+        System.out.println("[Drools] LISTA BLANCA detectada: " + $l.getNombreCompleto() + " - Lista: " + $l.getNombreLista() + " - Confianza: " + conf);
 end

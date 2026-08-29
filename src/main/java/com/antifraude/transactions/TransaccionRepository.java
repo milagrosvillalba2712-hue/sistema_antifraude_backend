@@ -19,8 +19,14 @@ public interface TransaccionRepository extends JpaRepository<Transaccion, Transa
 
     Optional<Transaccion> findFirstByIdOrderByFechaTransaccionDesc(Long id);
 
-    @Query(value = "SELECT * FROM transacciones t WHERE false OR :identificadorDocumento IS NULL AND false", nativeQuery = true)
-    List<Transaccion> findByIdentificadorDocumento(String identificadorDocumento);
+    @Query(value = """
+            SELECT *
+            FROM transacciones t
+            WHERE t.documento_remitente_hash = :documentoHash
+               OR t.documento_beneficiario_hash = :documentoHash
+            ORDER BY t.fecha_transaccion DESC
+            """, nativeQuery = true)
+    List<Transaccion> findByDocumentoHash(@Param("documentoHash") byte[] documentoHash);
 
     List<Transaccion> findByEstado(String estado);
 

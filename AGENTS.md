@@ -32,6 +32,7 @@ com.antifraude
 ├── cases/              Caso entity, Service, Controller (/api/casos)
 ├── dashboard/          DashboardController, DashboardService
 ├── drools/             DroolsService, RiskContext, RiskResult, RiskContextBuilder, facts
+│   └── similarity/     NameSimilarity (fuzzy matching de nombres: bigramas + Levenshtein)
 ├── external/           ExternalClientsConfig + RestClient clients → https://localhost:8443 (mock TLS): IdentificacionesClient, BcpSancionesClient, SepreladPepClient, ExternalInvestigationClient, ProviderHttpClient
 ├── audit/              Auditoria entity, auto-logging
 ├── motor/              MotorController (/api/motor/historial)
@@ -75,6 +76,10 @@ Transaccion → RiskContextBuilder.build(tx) → RiskContext → KieSession.fire
 - Two eval paths in `DroolsService`:
   - `evaluar(RiskContext)` — new architecture, returns `RiskResult`
   - `evaluarTransaccion(Transaccion)` — legacy, returns `BigDecimal` score
+- `evaluar` captures fired **DRL static rules** via an `AgendaEventListener` (rule name + score delta from `ScoreTracker`) and merges them with guided DB rules into `RiskResult.reglasDisparadas`; each carries `origen` = `"DROOLS"` | `"CONFIGURABLE"`
+- List scoring in `riesgo-listas.drl` scales by `ListaFact.scoreConfianza` (0–100); `RiskContextBuilder` sets `ListaFact.tipoLista` to the bucket `"NEGRA"/"GRIS"/"BLANCA"` so the rules fire
+- **Fuzzy name screening**: `ListScreeningService` does exact match first, then `NameSimilarity` (bigramas+Levenshtein) over active subjects/aliases and client-control NOMBRE elements (whitelist excluded); threshold/flag via `app.screening.name-fuzzy-threshold` (default 70) / `app.screening.name-fuzzy-enabled`
+- `procesarTransaccion` persists the detail to `transacciones.reglas_disparadas_json` / `screening_result_json`
 - If no rules fire, hardcoded default score applied
 - Alerts generated automatically when score >= 70
 
@@ -90,7 +95,7 @@ Transaccion → RiskContextBuilder.build(tx) → RiskContext → KieSession.fire
 | GET | `/api/alertas/estado/{estado}` | Filter alerts by state (path param, not query) |
 | POST | `/api/alertas/{id}/asignar` | Assign; defaults to current user if body absent |
 | GET | `/api/availability` | English path (disponibilidad) |
-| POST | `/api/transacciones` | Creates + evaluates in one call |
+| POST | `/api/transacciones` | Creates + evaluates; returns `TransaccionEvaluacionResponse` (result-focused: reglasDisparadas con `origen` DROOLS/CONFIGURABLE, screening con similitud). GET endpoints still return `TransaccionResponse` |
 
 ## Gotchas
 

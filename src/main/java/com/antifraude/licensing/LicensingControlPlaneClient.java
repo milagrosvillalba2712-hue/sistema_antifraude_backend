@@ -1,5 +1,7 @@
 package com.antifraude.licensing;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,7 +10,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.math.BigDecimal;
@@ -28,13 +32,16 @@ public class LicensingControlPlaneClient {
     private final RestClient restClient;
     private final String apiKey;
     private final boolean habilitado;
+    private final ObjectMapper objectMapper;
 
     public LicensingControlPlaneClient(@Value("${app.licenses.control-plane.url:${LICENSES_CONTROL_PLANE_URL:}}") String url,
                                        @Value("${app.licenses.control-plane.api-key:${LICENSES_CONTROL_PLANE_API_KEY:}}") String apiKey,
+                                       ObjectMapper objectMapper,
                                        RestClient.Builder builder) {
         this.apiKey = apiKey;
         this.habilitado = StringUtils.hasText(url);
         this.restClient = habilitado ? builder.baseUrl(url).build() : null;
+        this.objectMapper = objectMapper;
     }
 
     public RespuestaControlPlane validar(UUID instalacionId, String fingerprintHash) {
@@ -83,6 +90,63 @@ public class LicensingControlPlaneClient {
         } catch (RuntimeException exception) {
             log.info("[LICENCIA] No se pudo obtener manifest de catalogos - {}", exception.getClass().getSimpleName());
             return offlinePayload("CATALOG_MANIFEST");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> catalogManifestCatalogs() {
+        Map<String, Object> manifest = catalogManifest();
+        if (!Boolean.TRUE.equals(manifest.get("online"))) {
+            return List.of();
+        }
+        Object catalogs = manifest.get("catalogs");
+        if (catalogs instanceof List<?> list) {
+            List<Map<String, Object>> result = new ArrayList<>();
+            for (Object entry : list) {
+                if (entry instanceof Map<?, ?> map) {
+                    result.add((Map<String, Object>) map);
+                }
+            }
+            return result;
+        }
+        return List.of();
+    }
+
+    /**
+     * Descarga el contenido de una version de catalogo del Control Plane.
+     * El Control Plane devuelve {@code itemsJson} como String; aqui se parsea
+     * a una lista de items. Devuelve un mapa con {@code online}, {@code code},
+     * {@code version}, {@code hash} y {@code items} (lista de maps).
+     */
+    public Map<String, Object> catalogVersion(String code, String version) {
+        if (!habilitado || restClient == null || !StringUtils.hasText(code) || !StringUtils.hasText(version)) {
+            return offlinePayload("CATALOG_VERSION");
+        }
+        try {
+            Map<?, ?> response = restClient.get()
+                    .uri("/api/v1/catalogs/{code}/versions/{version}", code, version)
+                    .header("X-API-Key", apiKey)
+                    .retrieve()
+                    .body(Map.class);
+            Map<String, Object> result = sanitizeMap(response);
+            String itemsJson = String.valueOf(result.getOrDefault("itemsJson", "[]"));
+            result.put("items", parseItems(itemsJson));
+            return result;
+        } catch (RuntimeException exception) {
+            log.info("[LICENCIA] No se pudo descargar catalogo {}/{} - {}", code, version, exception.getClass().getSimpleName());
+            return offlinePayload("CATALOG_VERSION");
+        }
+    }
+
+    private List<Map<String, Object>> parseItems(String itemsJson) {
+        if (!StringUtils.hasText(itemsJson)) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(itemsJson, new TypeReference<List<Map<String, Object>>>() {});
+        } catch (Exception exception) {
+            log.warn("[LICENCIA] itemsJson invalido: {}", exception.getMessage());
+            return List.of();
         }
     }
 

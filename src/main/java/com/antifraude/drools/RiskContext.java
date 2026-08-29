@@ -42,5 +42,7 @@ public class RiskContext {
     private boolean paisDestinoAltoRiesgo;
     private boolean paisOrigenMonitoreado;
     private boolean paisDestinoMonitoreado;
+    private boolean canalAltoRiesgo;
+    private DroolsScoreConfig config;
 
 }

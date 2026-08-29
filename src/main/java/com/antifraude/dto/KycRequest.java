@@ -4,5 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 
 public record KycRequest(
         @NotBlank String identificadorDocumento,
+        @NotBlank String tipoDocumento,
+        @NotBlank String paisEmisorDocumento,
         String tipoConsulta) {
 }

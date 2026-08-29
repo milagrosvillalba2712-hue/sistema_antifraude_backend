@@ -85,8 +85,8 @@ class AntifraudeApplicationTests {
                     where version is not null group by version having count(*) > 1
                 ) d
                 """, Integer.class);
-        assertThat(total).isGreaterThanOrEqualTo(28);
-        assertThat(ultimaVersion).isEqualTo(28);
+        assertThat(total).isGreaterThanOrEqualTo(30);
+        assertThat(ultimaVersion).isEqualTo(34);
         assertThat(duplicadas).isZero();
     }
 

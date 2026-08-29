@@ -18,9 +18,8 @@ public class ClienteObservado extends TenantAwareEntity {
     @JoinColumn(name = "persona_id", nullable = false)
     private Persona persona;
 
-    @Column(nullable = false, length = 40)
-    @Enumerated(EnumType.STRING)
-    private MotivoObservacion motivo;
+    @Column(nullable = false, length = 200)
+    private String motivo;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "nivel_riesgo_id", nullable = false)
@@ -31,8 +30,4 @@ public class ClienteObservado extends TenantAwareEntity {
 
     @Column(name = "fecha_fin")
     private LocalDate fechaFin;
-
-    public enum MotivoObservacion {
-        INVESTIGACION_INTERNA, FRAUDE_PREVIO, ROS_HISTORICO, REINCIDENTE
-    }
 }

@@ -42,6 +42,8 @@ public class RuleEngineFactsController {
                         List.of("exists", "==")),
                 new FactDefinition("paisDestinoAltoRiesgo", "País destino de alto riesgo", "BOOLEANO", null,
                         List.of("exists", "==")),
+                new FactDefinition("canalAltoRiesgo", "Canal de alto riesgo", "BOOLEANO", null,
+                        List.of("exists", "==")),
                 new FactDefinition("paisOrigenMonitoreado", "País origen bajo monitoreo", "BOOLEANO", null,
                         List.of("exists", "==")),
                 new FactDefinition("paisDestinoMonitoreado", "País destino bajo monitoreo", "BOOLEANO", null,

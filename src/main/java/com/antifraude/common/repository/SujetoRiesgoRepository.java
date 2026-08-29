@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface SujetoRiesgoRepository extends JpaRepository<SujetoRiesgo, Long> {
     List<SujetoRiesgo> findByNombreNormalizadoAndActivoTrue(String nombreNormalizado);
+
+    List<SujetoRiesgo> findByActivoTrue();
 }
