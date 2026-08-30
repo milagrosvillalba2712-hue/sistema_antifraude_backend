@@ -59,6 +59,12 @@ public class AlertaController {
         return ResponseEntity.ok(alertaService.obtenerDetalleFormal(id));
     }
 
+    @PostMapping("/{id}/cliente/consultar")
+    public ResponseEntity<AlertaDetalleResponse> consultarCliente(@PathVariable Long id) {
+        log.info("[ALERTS] POST /api/alertas/{}/cliente/consultar", id);
+        return ResponseEntity.ok(alertaService.consultarClienteExterno(id));
+    }
+
     @GetMapping("/filtros")
     public ResponseEntity<AlertaFiltrosResponse> filtros() {
         log.info("[ALERTS] GET /api/alertas/filtros");
@@ -96,6 +102,39 @@ public class AlertaController {
         Usuario usuario = usuarioService.buscarPorEmail(auth.getName());
         return ResponseEntity.ok(alertaService.toEvidenciaResponse(
                 alertaService.actualizarEvidencia(id, evidenciaId, body, usuario, request)));
+    }
+
+    @PostMapping("/{id}/evidencias/archivo")
+    public ResponseEntity<EvidenciaAlertaResponse> subirEvidenciaArchivo(
+            @PathVariable Long id,
+            @RequestParam("archivo") org.springframework.web.multipart.MultipartFile archivo,
+            @RequestParam(required = false) String nombre,
+            @RequestParam(required = false) String descripcion,
+            @RequestParam(required = false) String tipo,
+            @RequestParam(required = false) String referenciaArchivo,
+            Authentication auth,
+            HttpServletRequest request) {
+        log.info("[ALERTS] POST /api/alertas/{}/evidencias/archivo - {}", id, archivo.getOriginalFilename());
+        Usuario usuario = usuarioService.buscarPorEmail(auth.getName());
+        return ResponseEntity.ok(alertaService.toEvidenciaResponse(alertaService.crearEvidenciaConArchivo(
+                id, archivo, nombre, descripcion, tipo, referenciaArchivo, usuario, request)));
+    }
+
+    @GetMapping("/{id}/evidencias/{evidenciaId}/archivo")
+    public ResponseEntity<byte[]> descargarEvidenciaArchivo(@PathVariable Long id, @PathVariable Long evidenciaId) {
+        log.info("[ALERTS] GET /api/alertas/{}/evidencias/{}/archivo", id, evidenciaId);
+        EvidenciaAlerta evidencia = alertaService.obtenerEvidenciaConArchivo(id, evidenciaId);
+        if (evidencia.getContenido() == null || evidencia.getContenido().length == 0) {
+            return ResponseEntity.notFound().build();
+        }
+        String nombre = evidencia.getContenidoNombre() != null ? evidencia.getContenidoNombre() : evidencia.getNombre();
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + nombre.replace("\"", "") + "\"")
+                .contentType(evidencia.getMimeType() != null
+                        ? org.springframework.http.MediaType.parseMediaType(evidencia.getMimeType())
+                        : org.springframework.http.MediaType.APPLICATION_OCTET_STREAM)
+                .body(evidencia.getContenido());
     }
 
     @DeleteMapping("/{id}/evidencias/{evidenciaId}")

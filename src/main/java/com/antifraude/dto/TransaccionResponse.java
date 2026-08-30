@@ -30,5 +30,12 @@ public record TransaccionResponse(
         String productoNombre,
         String paisOrigenNombre,
         String paisDestinoNombre,
-        String nivelRiesgoCodigo) {
+        String nivelRiesgoCodigo,
+        String entidadOrigenTipo,
+        String entidadOrigenCodigo,
+        String entidadOrigenNombre,
+        String entidadDestinoTipo,
+        String entidadDestinoCodigo,
+        String entidadDestinoNombre,
+        String referenciaExterna) {
 }

@@ -120,10 +120,10 @@ FROM escenario e JOIN accion a ON a.empresa_id=e.empresa_id
 WHERE e.codigo='ESC_DEMO' AND a.codigo='REVISAR_DEMO'
   AND NOT EXISTS (SELECT 1 FROM reglas_riesgo r WHERE r.empresa_id=e.empresa_id AND r.codigo='REGLA_DEMO_001');
 
-INSERT INTO transacciones (fecha_transaccion,empresa_id,codigo,tipo_transaccion_id,canal_transaccion_id,infraestructura_pago,monto,moneda_id,estado,estado_evaluacion,procesada,persona_remitente_id,nombre_remitente,nombre_beneficiario,remitente_nombre_completo,beneficiario_nombre_completo,documento_remitente_hash,documento_beneficiario_hash,tipo_documento_remitente_id,pais_emisor_documento_remitente_id,tipo_documento_beneficiario_id,pais_emisor_documento_beneficiario_id)
+INSERT INTO transacciones (fecha_transaccion,empresa_id,codigo,tipo_transaccion_id,canal_transaccion_id,infraestructura_pago,monto,moneda_id,estado,estado_evaluacion,procesada,persona_remitente_id,nombre_remitente,nombre_beneficiario,remitente_nombre_completo,beneficiario_nombre_completo,documento_remitente_hash,documento_beneficiario_hash,tipo_documento_remitente_id,pais_emisor_documento_remitente_id,tipo_documento_beneficiario_id,pais_emisor_documento_beneficiario_id,entidad_destino_tipo,entidad_destino_nombre)
 SELECT TIMESTAMPTZ '2026-08-01 12:00:00-03' + (v.orden||' hours')::interval,
        '00000000-0000-0000-0000-000000000001',v.codigo,tt.id,ct.id,'API',v.monto,m.id,'PROCESADA','EVALUADA',true,p.id,p.nombre_razon_social,'Beneficiario Sintético',p.nombre_razon_social,'Beneficiario Sintético',
-       p.documento_hash,hmac(v.codigo||'-BENEFICIARIO','regula-demo-hmac-key','sha256'),td.id,py.id,td.id,py.id
+       p.documento_hash,hmac(v.codigo||'-BENEFICIARIO','regula-demo-hmac-key','sha256'),td.id,py.id,td.id,py.id,'BANCO','Banco Demo PY'
 FROM (VALUES
  (1,'TX-DEMO-LEGITIMO','Persona Legítima Demo',1000000::numeric),
  (2,'TX-DEMO-FRAUDE','Persona Fraude Demo',25000000::numeric),
@@ -140,6 +140,11 @@ JOIN persona p ON p.nombre_razon_social=v.persona_nombre AND p.empresa_id='00000
 JOIN tipo_documento td ON td.codigo='CI_PY'
 JOIN pais py ON py.codigo_iso='PY'
 WHERE NOT EXISTS (SELECT 1 FROM transacciones t WHERE t.empresa_id='00000000-0000-0000-0000-000000000001' AND t.codigo=v.codigo);
+
+UPDATE transacciones SET entidad_destino_tipo='BANCO', entidad_destino_nombre='Banco Demo PY'
+WHERE empresa_id='00000000-0000-0000-0000-000000000001'
+  AND codigo LIKE 'TX-DEMO-%'
+  AND entidad_destino_tipo IS NULL;
 
 INSERT INTO alertas_antifraude (empresa_id,transaccion_id,fecha_transaccion,codigo,severidad,score,motivo,estado,analista_asignado_id)
 SELECT t.empresa_id,t.id,t.fecha_transaccion,'ALT-'||t.codigo,

@@ -8,4 +8,6 @@ import java.util.Optional;
 @Repository
 public interface ClienteSnapshotAlertaRepository extends JpaRepository<ClienteSnapshotAlerta, Long> {
     Optional<ClienteSnapshotAlerta> findByAlertaId(Long alertaId);
+
+    Optional<ClienteSnapshotAlerta> findTopByAlertaIdOrderByFechaConsultaDesc(Long alertaId);
 }

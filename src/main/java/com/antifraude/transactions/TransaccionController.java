@@ -148,6 +148,13 @@ public class TransaccionController {
                 t.getProducto() != null ? t.getProducto().getNombre() : null,
                 t.getPaisOrigenRef() != null ? t.getPaisOrigenRef().getNombre() : t.getPaisOrigen(),
                 t.getPaisDestinoRef() != null ? t.getPaisDestinoRef().getNombre() : null,
-                t.getNivelRiesgo() != null ? t.getNivelRiesgo().getCodigo() : null);
+                t.getNivelRiesgo() != null ? t.getNivelRiesgo().getCodigo() : null,
+                t.getEntidadOrigenTipo(),
+                t.getEntidadOrigenCodigo(),
+                t.getEntidadOrigenNombre(),
+                t.getEntidadDestinoTipo(),
+                t.getEntidadDestinoCodigo(),
+                t.getEntidadDestinoNombre(),
+                t.getReferenciaExterna());
     }
 }

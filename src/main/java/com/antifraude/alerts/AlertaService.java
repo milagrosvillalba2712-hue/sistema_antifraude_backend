@@ -4,7 +4,9 @@ import com.antifraude.audit.Auditoria;
 import com.antifraude.audit.AuditoriaRepository;
 import com.antifraude.audit.AuditoriaService;
 import com.antifraude.common.entity.Escenario;
+import com.antifraude.common.entity.PaisRiesgo;
 import com.antifraude.common.repository.EscenarioRepository;
+import com.antifraude.common.repository.PaisRiesgoRepository;
 import com.antifraude.dto.*;
 import com.antifraude.exception.BusinessException;
 import com.antifraude.exception.ResourceNotFoundException;
@@ -12,6 +14,7 @@ import com.antifraude.external.ExternalInvestigationClient;
 import com.antifraude.external.ExternalProviderException;
 import com.antifraude.external.ProviderResult;
 import com.antifraude.licensing.EnforcementService;
+import com.antifraude.licensing.ConsumoService;
 import com.antifraude.observability.ApiEventoService;
 import com.antifraude.profile.DisponibilidadRepository;
 import com.antifraude.profile.DisponibilidadUsuario;
@@ -22,8 +25,12 @@ import com.antifraude.transactions.Transaccion;
 import com.antifraude.transactions.TransaccionRepository;
 import com.antifraude.users.Usuario;
 import com.antifraude.users.UsuarioRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Subquery;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,9 +42,13 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,12 +57,13 @@ import java.util.Set;
 import java.util.UUID;
 
 @Service
-@Transactional
+@Transactional(noRollbackFor = BusinessException.class)
 public class AlertaService {
 
     private static final Logger log = LoggerFactory.getLogger(AlertaService.class);
     private static final List<String> ROLES_REASIGNACION_ALERTAS = List.of("ANALISTA", "SUPERVISOR");
     private static final List<String> ROLES_SUPERVISION_ALERTAS = List.of("SUPERVISOR", "ADMINISTRADOR");
+    private static final Duration CLIENTE_SNAPSHOT_TTL = Duration.ofHours(24);
 
     private final AlertaRepository alertaRepository;
     private final HistorialAsignacionRepository historialRepository;
@@ -67,10 +79,13 @@ public class AlertaService {
     private final TransaccionDetalleSnapshotRepository transaccionDetalleSnapshotRepository;
     private final EjecucionReglaRepository ejecucionReglaRepository;
     private final EscenarioRepository escenarioRepository;
+    private final PaisRiesgoRepository paisRiesgoRepository;
     private final AuditoriaRepository auditoriaRepository;
     private final ExternalInvestigationClient externalInvestigationClient;
     private final EnforcementService enforcementService;
+    private final ConsumoService consumoService;
     private final ApiEventoService apiEventoService;
+    private final ObjectMapper objectMapper;
 
     public AlertaService(AlertaRepository alertaRepository,
                           HistorialAsignacionRepository historialRepository,
@@ -86,10 +101,13 @@ public class AlertaService {
                           TransaccionDetalleSnapshotRepository transaccionDetalleSnapshotRepository,
                           EjecucionReglaRepository ejecucionReglaRepository,
                           EscenarioRepository escenarioRepository,
+                          PaisRiesgoRepository paisRiesgoRepository,
                           AuditoriaRepository auditoriaRepository,
                           ExternalInvestigationClient externalInvestigationClient,
                           EnforcementService enforcementService,
-                          ApiEventoService apiEventoService) {
+                          ConsumoService consumoService,
+                          ApiEventoService apiEventoService,
+                          ObjectMapper objectMapper) {
         this.alertaRepository = alertaRepository;
         this.historialRepository = historialRepository;
         this.auditoriaService = auditoriaService;
@@ -104,10 +122,13 @@ public class AlertaService {
         this.transaccionDetalleSnapshotRepository = transaccionDetalleSnapshotRepository;
         this.ejecucionReglaRepository = ejecucionReglaRepository;
         this.escenarioRepository = escenarioRepository;
+        this.paisRiesgoRepository = paisRiesgoRepository;
         this.auditoriaRepository = auditoriaRepository;
         this.externalInvestigationClient = externalInvestigationClient;
         this.enforcementService = enforcementService;
+        this.consumoService = consumoService;
         this.apiEventoService = apiEventoService;
+        this.objectMapper = objectMapper;
     }
 
     public Alerta crearAlerta(Transaccion transaccion, ReglaRiesgo regla, String prioridad) {
@@ -126,6 +147,7 @@ public class AlertaService {
                 .reglasDisparadasJson(regla != null ? "[\"" + regla.getCodigo() + "\"]" : "[]")
                 .build();
         Alerta creada = alertaRepository.save(alerta);
+        registrarHallazgoDeRegla(creada, regla, prioridad);
         log.info("[ALERTS] Alerta creada - ID: {} - Prioridad: {}", creada.getId(), prioridad);
         return creada;
     }
@@ -320,17 +342,8 @@ public class AlertaService {
     public AlertaDetalleResponse obtenerDetalleFormal(Long alertaId) {
         Alerta alerta = buscarPorId(alertaId);
         Transaccion tx = alerta.getTransaccion();
-        ExternalInvestigationData externalData = cargarDatosExternos(alerta, tx);
-        List<TransaccionAlertaResponse> historial = externalData.historial();
-        if (tx != null && tx.getIdentificadorDocumento() != null) {
-            List<TransaccionAlertaResponse> historialLocal = transaccionRepository.findUltimasPorDocumento(tx.getIdentificadorDocumento()).stream()
-                    .limit(15)
-                    .map(this::transaccionResponse)
-                    .toList();
-            if (!historialLocal.isEmpty()) {
-                historial = historialLocal;
-            }
-        }
+        ExternalInvestigationData externalData = cargarDatosExternosCacheados(alerta);
+        List<TransaccionAlertaResponse> historial = historialTransaccionalLocal(tx);
         List<TimelineEventResponse> eventos = obtenerTimeline(alertaId).stream()
                 .map(e -> new TimelineEventResponse(null, e.tipo(), e.descripcion(), e.fecha(), e.usuario()))
                 .toList();
@@ -348,6 +361,24 @@ public class AlertaService {
         return new AlertaDetalleResponse(toAlertaResponse(alerta), transaccionResponse(tx), reglaResponse(alerta.getRegla()),
                 reglasDisparadas, hallazgos, clienteResponse(tx, alerta, externalData), historial, externalData.servicios(), eventos,
                 accionesTimeline(alertaId), evidencias, resolucion, aprobacion, accionesDisponibles(alerta));
+    }
+
+    public AlertaDetalleResponse consultarClienteExterno(Long alertaId) {
+        Alerta alerta = buscarPorId(alertaId);
+        if (alerta.getTransaccion() == null) {
+            throw new BusinessException("TRANSACCION_REQUERIDA", "La alerta no tiene transaccion asociada");
+        }
+        UUID empresaId = alerta.getEmpresa() != null ? alerta.getEmpresa().getId() : null;
+        if (empresaId == null) {
+            throw new BusinessException("EMPRESA_REQUERIDA", "No se pudo determinar la empresa de la alerta");
+        }
+        enforcementService.verificarLimiteKyc(empresaId);
+        ExternalInvestigationData data = consultarDatosExternos(alerta, alerta.getTransaccion());
+        if (data.disponible()) {
+            guardarSnapshotCliente(alerta, data);
+        }
+        consumoService.registrarConsultaKyc(empresaId);
+        return obtenerDetalleFormal(alertaId);
     }
 
     @Transactional(readOnly = true)
@@ -432,6 +463,78 @@ public class AlertaService {
                 "Evidencia eliminada de alerta " + alertaId + ": " + evidencia.getNombre(),
                 request.getRemoteAddr(), request.getHeader("User-Agent"), "alertas", alertaId,
                 anterior, "{}");
+    }
+
+    public EvidenciaAlerta crearEvidenciaConArchivo(Long alertaId, org.springframework.web.multipart.MultipartFile archivo,
+                                                    String nombre, String descripcion, String tipo, String referenciaArchivo,
+                                                    Usuario usuario, HttpServletRequest request) {
+        if (archivo == null || archivo.isEmpty()) {
+            throw new BusinessException("ARCHIVO_REQUERIDO", "Debe adjuntar el archivo de evidencia");
+        }
+        if (archivo.getSize() > 10L * 1024L * 1024L) {
+            throw new BusinessException("EVIDENCIA_MUY_GRANDE", "La evidencia no puede superar 10 MB");
+        }
+        String originalName = archivo.getOriginalFilename() == null ? "evidencia" : archivo.getOriginalFilename();
+        String extension = normalizeExtension(
+                originalName.contains(".") ? originalName.substring(originalName.lastIndexOf('.') + 1) : "");
+        Set<String> permitidas = Set.of("PDF", "JPG", "JPEG", "PNG", "CSV", "XLSX", "DOCX", "TXT");
+        if (extension == null || !permitidas.contains(extension)) {
+            throw new BusinessException("EXTENSION_NO_PERMITIDA",
+                    "Extensión no permitida (" + originalName + "). Compatibles: PDF, JPG, JPEG, PNG, CSV, XLSX, DOCX, TXT");
+        }
+        byte[] contenido;
+        try {
+            contenido = archivo.getBytes();
+        } catch (java.io.IOException exception) {
+            throw new BusinessException("LECTURA_ARCHIVO_FALLIDA", "No se pudo leer el archivo cargado");
+        }
+        Alerta alerta = buscarPorId(alertaId);
+        EvidenciaAlerta evidencia = EvidenciaAlerta.builder()
+                .alerta(alerta)
+                .nombre(blankToDefault(nombre, originalName))
+                .descripcion(descripcion)
+                .tipo(blankToDefault(tipo, "DOCUMENTO"))
+                .extension(extension)
+                .mimeType(blankToDefault(archivo.getContentType(), "application/octet-stream"))
+                .tamanoBytes((long) contenido.length)
+                .hash(sha256Hex(contenido))
+                .referenciaArchivo(blankToDefault(referenciaArchivo, "evidencia:" + originalName))
+                .estado("CARGADA")
+                .contenido(contenido)
+                .contenidoNombre(originalName)
+                .cargadoPor(usuario)
+                .build();
+        EvidenciaAlerta guardada = evidenciaAlertaRepository.save(evidencia);
+        auditoriaService.registrar(usuario != null ? usuario.getId() : null,
+                alerta.getEmpresa() != null ? alerta.getEmpresa().getId() : null,
+                "CARGAR_EVIDENCIA_ARCHIVO",
+                "Archivo de evidencia cargado en alerta " + alertaId + ": " + guardada.getContenidoNombre(),
+                request.getRemoteAddr(), request.getHeader("User-Agent"), "alertas", alertaId,
+                "{}", evidenciaAuditJson(guardada));
+        return guardada;
+    }
+
+    public EvidenciaAlerta obtenerEvidenciaConArchivo(Long alertaId, Long evidenciaId) {
+        EvidenciaAlerta evidencia = evidenciaAlertaRepository.findById(evidenciaId)
+                .orElseThrow(() -> new ResourceNotFoundException("EvidenciaAlerta", "id", evidenciaId));
+        if (!evidencia.getAlerta().getId().equals(alertaId)) {
+            throw new BusinessException("EVIDENCIA_NO_PERTENECE_ALERTA", "La evidencia no pertenece a la alerta indicada");
+        }
+        return evidencia;
+    }
+
+    private String sha256Hex(byte[] contenido) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(contenido);
+            StringBuilder builder = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                builder.append(String.format("%02x", b));
+            }
+            return builder.toString();
+        } catch (java.security.NoSuchAlgorithmException exception) {
+            return null;
+        }
     }
 
     public ResolucionAlerta resolverFormalmente(Long alertaId, Usuario usuario, ResolucionAlertaRequest body,
@@ -598,15 +701,16 @@ public class AlertaService {
     public record TimelineEvent(String tipo, String descripcion, OffsetDateTime fecha, String usuario) {}
 
     public AlertaResponse toAlertaResponse(Alerta a) {
+        ReglaAlertaResponse reglaPrincipal = reglaPrincipal(a);
         return new AlertaResponse(
                 a.getId(),
                 a.getCodigo(),
                 a.getTransaccion() != null ? a.getTransaccion().getId() : null,
-                null,
-                null,
-                null,
-                "Sin escenario",
-                a.getTransaccion() != null ? a.getTransaccion().getIdentificadorDocumento() : null,
+                reglaPrincipal != null ? reglaPrincipal.id() : null,
+                reglaPrincipal != null ? reglaPrincipal.nombre() : null,
+                reglaPrincipal != null ? reglaPrincipal.escenarioId() : null,
+                reglaPrincipal != null ? reglaPrincipal.escenarioNombre() : "Sin escenario",
+                a.getTransaccion() != null ? a.getTransaccion().getIdentificadorDocumentoEnmascarado() : null,
                 clienteNombre(a.getTransaccion()),
                 a.getTransaccion() != null ? a.getTransaccion().getMonto() : null,
                 a.getTransaccion() != null ? a.getTransaccion().getMoneda() : null,
@@ -651,41 +755,56 @@ public class AlertaService {
     private TransaccionAlertaResponse transaccionResponse(Transaccion tx) {
         if (tx == null) return null;
         Map<String, Object> remitente = mapOf(
-                "Nombre Completo", tx.getPersonaRemitente() != null ? tx.getPersonaRemitente().getNombreCompleto() : "No informado",
-                "Documento", tx.getIdentificadorDocumento(),
+                "Nombre Completo", nombreRemitente(tx),
+                "Documento", tx.getIdentificadorDocumentoEnmascarado(),
                 "Cuenta Origen", tx.getCuentaOrigen(),
-                "Teléfono", "Pendiente API externa",
+                "Tipo De Documento", tx.getTipoDocumentoRemitenteCodigo(),
+                "País Emisor Documento", tx.getPaisEmisorDocumentoRemitenteCodigo(),
                 "País De Residencia", tx.getPaisOrigen());
         Map<String, Object> beneficiario = mapOf(
-                "Nombre Completo", tx.getPersonaBeneficiario() != null ? tx.getPersonaBeneficiario().getNombreCompleto() : "No informado",
+                "Nombre Completo", nombreBeneficiario(tx),
+                "Documento", tx.getDocumentoBeneficiarioEnmascarado(),
+                "Tipo De Documento", tx.getTipoDocumentoBeneficiarioCodigo(),
+                "País Emisor Documento", tx.getPaisEmisorDocumentoBeneficiarioCodigo(),
                 "Cuenta Destino", tx.getCuentaDestino(),
-                "Banco Destino", "Pendiente API externa",
-                "SWIFT/BIC", tx.getPaisDestinoRef() != null ? "Pendiente API externa" : "No aplica");
+                "Entidad Destino", firstNonBlank(tx.getEntidadDestinoNombre(), tx.getEntidadDestinoCodigo(), "No informado"));
         Map<String, Object> operacion = mapOf(
                 "Monto Origen", tx.getMonto(),
                 "Moneda", tx.getMoneda(),
-                "Monto Destino", "Pendiente cálculo de tasa",
-                "Comisión", "Pendiente API/catálogo",
-                "Impuestos", "Pendiente API/catálogo",
+                "Monto Destino", tx.getMontoDestino(),
+                "Moneda Destino", tx.getMonedaDestinoRef() != null ? tx.getMonedaDestinoRef().getCodigoIso() : null,
+                "Tipo De Cambio", tx.getTipoCambio(),
+                "Comisión", tx.getComision(),
+                "Impuestos", tx.getImpuesto(),
+                "Monto Total Debitado", tx.getMontoTotalDebitado(),
                 "Tipo Transacción", tx.getTipoTransaccion());
         Map<String, Object> control = mapOf(
                 "Identificador Único", tx.getTransactionUuid() != null ? tx.getTransactionUuid().toString() : tx.getCodigo(),
                 "Código", tx.getCodigo(),
                 "Fecha Y Hora", tx.getFechaTransaccion(),
                 "Estado", tx.getEstadoEvaluacion() != null ? tx.getEstadoEvaluacion().name() : tx.getEstado(),
+                "Referencia Externa", tx.getReferenciaExterna(),
                 "IP Origen", tx.getIpOrigen());
-        Map<String, Object> internacional = mapOf(
+        Map<String, Object> entidades = mapOf(
+                "Entidad Origen Tipo", tx.getEntidadOrigenTipo(),
+                "Entidad Origen Código", tx.getEntidadOrigenCodigo(),
+                "Entidad Origen Nombre", tx.getEntidadOrigenNombre(),
+                "Entidad Destino Tipo", tx.getEntidadDestinoTipo(),
+                "Entidad Destino Código", tx.getEntidadDestinoCodigo(),
+                "Entidad Destino Nombre", tx.getEntidadDestinoNombre());
+        Map<String, Object> internacional = !esInternacional(tx) ? mapOf() : mapOf(
                 "País Origen", tx.getPaisOrigen(),
                 "País Destino", tx.getPaisDestinoRef() != null ? tx.getPaisDestinoRef().getNombre() : "No informado",
-                "Requiere SWIFT", tx.getPaisDestinoRef() != null,
-                "Referencia Internacional", "Pendiente API externa");
+                "SWIFT/BIC Origen", tx.getSwiftBicOrigen(),
+                "SWIFT/BIC Destino", tx.getSwiftBicDestino(),
+                "Referencia Internacional", tx.getReferenciaExterna());
         return new TransaccionAlertaResponse(tx.getId(), tx.getCodigo(), tx.getTransactionUuid() != null ? tx.getTransactionUuid().toString() : null,
-                tx.getIdentificadorDocumento(), tx.getCuentaOrigen(), tx.getCuentaDestino(), tx.getMonto(),
+                tx.getIdentificadorDocumentoEnmascarado(), tx.getCuentaOrigen(), tx.getCuentaDestino(), tx.getMonto(),
                 tx.getMoneda(), tx.getCanal(), tx.getTipoTransaccion(), tx.getIpOrigen(), tx.getPaisOrigen(),
                 tx.getFechaTransaccion(), tx.getScoreRiesgo(),
                 tx.getNivelRiesgo() != null ? tx.getNivelRiesgo().getCodigo() : null,
                 tx.getEstadoEvaluacion() != null ? tx.getEstadoEvaluacion().name() : null,
-                remitente, beneficiario, operacion, control, internacional);
+                remitente, beneficiario, operacion, control, entidades, internacional);
     }
 
     private ReglaAlertaResponse reglaResponse(ReglaRiesgo regla) {
@@ -699,7 +818,7 @@ public class AlertaService {
 
     private ClienteAlertaResponse clienteResponse(Transaccion tx, Alerta alerta, ExternalInvestigationData externalData) {
         if (tx == null) return null;
-        String documento = tx.getIdentificadorDocumento();
+        String documento = tx.getIdentificadorDocumentoEnmascarado();
         Map<String, Object> perfil = externalData.perfil();
         Map<String, Object> documentos = externalData.documentos();
         Map<String, Object> screening = externalData.screening();
@@ -726,9 +845,9 @@ public class AlertaService {
                 "Celular", firstNonBlank(personalRaw.get("telefonoMovilEnmascarado"), "No informado"),
                 "Email", firstNonBlank(personalRaw.get("email"), "No informado"),
                 "Edad", firstNonBlank(personalRaw.get("edad"), "No informado"),
-                "Foto Documento Frente", firstNonBlank(personalRaw.get("fotoDocumentoFrenteReferencia"), documentReference(documentos, "CI_PY", "frenteDisponible"), "No disponible"),
-                "Foto Documento Dorso", firstNonBlank(personalRaw.get("fotoDocumentoDorsoReferencia"), documentReference(documentos, "CI_PY", "dorsoDisponible"), "No disponible"),
-                "Foto Perfil Cliente", firstNonBlank(personalRaw.get("fotoPerfilReferencia"), "No disponible"));
+                "Foto Documento Frente", firstNonBlank(clienteImageDataUri(tx, "Documento Frente"), personalRaw.get("fotoDocumentoFrenteReferencia"), documentReference(documentos, "CI_PY", "frenteDisponible"), "No disponible"),
+                "Foto Documento Dorso", firstNonBlank(clienteImageDataUri(tx, "Documento Dorso"), personalRaw.get("fotoDocumentoDorsoReferencia"), documentReference(documentos, "CI_PY", "dorsoDisponible"), "No disponible"),
+                "Foto Perfil Cliente", firstNonBlank(clienteImageDataUri(tx, "Foto Perfil"), personalRaw.get("fotoPerfilReferencia"), "No disponible"));
         Map<String, Object> laboral = mapOf(
                 "Lugar De Trabajo", firstNonBlank(laboralRaw.get("lugarTrabajo"), "No informado"),
                 "Dirección Del Trabajo", firstNonBlank(laboralRaw.get("direccionTrabajo"), "No informado"),
@@ -750,38 +869,94 @@ public class AlertaService {
                 "Parentescos Directos", firstNonBlank(familiarRaw.get("parentescosDirectos"), "No informado"),
                 "Contacto Familiar De Emergencia", firstNonBlank(familiarRaw.get("contactoEmergencia"), "No informado"),
                 "Dirección Contacto Emergencia", firstNonBlank(familiarRaw.get("direccionContactoEmergencia"), "No informado"));
-        Map<String, Object> judicial = mapOf(
-                "Antecedentes Penales", firstNonBlank(judicialRaw.get("antecedentesPenales"), judicialRaw.get("antecedentes"), "No informado"),
-                "Procesos Judiciales Activos", firstNonBlank(judicialRaw.get("procesosJudicialesActivos"), "No informado"),
-                "Órdenes Y Requerimientos", firstNonBlank(judicialRaw.get("ordenesRequerimientos"), "No informado"),
-                "Historial De Litigios", firstNonBlank(judicialRaw.get("historialLitigios"), "No informado"),
-                "PEP", firstNonBlank(judicialRaw.get("pep"), "No informado"),
-                "Sancionado", firstNonBlank(judicialRaw.get("sancionado"), "No informado"),
-                "Nivel De Riesgo", firstNonBlank(judicialRaw.get("nivelRiesgo"), perfil.get("nivelRiesgo"), "No informado"),
-                "Hallazgos", firstNonBlank(judicialRaw.get("hallazgos"), screening.get("hallazgos"), "No informado"));
+        Object ordenCaptura = judicialRaw.get("ordenCaptura");
+        Object personaRequerida = judicialRaw.get("personaRequerida");
+        boolean requerimientoCritico = Boolean.TRUE.equals(ordenCaptura) || Boolean.TRUE.equals(personaRequerida);
+        Map<String, Object> judicial = new LinkedHashMap<>();
+        judicial.put("Antecedentes Penales", firstNonBlank(judicialRaw.get("antecedentesPenales"), judicialRaw.get("antecedentes"), List.of()));
+        judicial.put("Procesos Judiciales Activos", firstNonBlank(judicialRaw.get("procesosJudicialesActivos"), List.of()));
+        judicial.put("Órdenes Y Requerimientos", firstNonBlank(judicialRaw.get("ordenesRequerimientos"), List.of()));
+        judicial.put("Historial De Litigios", firstNonBlank(judicialRaw.get("historialLitigios"), List.of()));
+        judicial.put("Hallazgos", firstNonBlank(judicialRaw.get("hallazgos"), screening.get("hallazgos"), List.of()));
+        judicial.put("PEP", booleanLabel(judicialRaw.get("pep")));
+        judicial.put("Sancionado", booleanLabel(judicialRaw.get("sancionado")));
+        judicial.put("Nivel De Riesgo", firstNonBlank(judicialRaw.get("nivelRiesgo"), perfil.get("nivelRiesgo"), "No informado"));
+        judicial.put("Orden De Captura", requerimientoCritico || Boolean.TRUE.equals(ordenCaptura));
+        judicial.put("Persona Requerida", requerimientoCritico || Boolean.TRUE.equals(personaRequerida));
+        judicial.put("Hallazgo Crítico", requerimientoCritico);
         String fuente = externalData.disponible()
-                ? "MOCK_EXTERNO_REGULA"
-                : clienteSnapshotAlertaRepository.findByAlertaId(alerta.getId())
+                ? firstNonBlank(externalData.fuente(), "Proveedor KYC Externo").toString()
+                : clienteSnapshotAlertaRepository.findTopByAlertaIdOrderByFechaConsultaDesc(alerta.getId())
                         .map(ClienteSnapshotAlerta::getFuente)
-                        .orElse("API_EXTERNA_NO_DISPONIBLE");
+                        .orElse("Sin consulta externa registrada");
         String pep = booleanLabel(judicialRaw.get("pep"));
         String sancionado = booleanLabel(judicialRaw.get("sancionado"));
         String listas = screening.get("resultado") != null ? String.valueOf(screening.get("resultado")) : "Pendiente de consulta KYC";
-        return new ClienteAlertaResponse(tx.getIdentificadorDocumento(),
-                tx.getPersonaRemitente() != null ? tx.getPersonaRemitente().getNombreCompleto() : null,
-                tx.getPersonaBeneficiario() != null ? tx.getPersonaBeneficiario().getNombreCompleto() : null,
+        return new ClienteAlertaResponse(tx.getIdentificadorDocumentoEnmascarado(),
+                nombreRemitente(tx),
+                nombreBeneficiario(tx),
                 pep, sancionado, listas, fuente,
+                externalData.fechaConsulta(), externalData.cacheVigente(), true, externalData.mensaje(),
+                externalData.disponible(),
                 personal, laboral, academico, familiar, judicial);
     }
 
     private List<ServicioExternoAlertaResponse> serviciosExternos() {
         return List.of(new ServicioExternoAlertaResponse(
                 "Consulta KYC externa",
-                "API externa no disponible",
-                "La vista queda preparada para integrar proveedores externos cuando estén disponibles"));
+                "SIN_CONSULTA",
+                "Use Consultar APIs Externas para actualizar el snapshot del cliente."));
     }
 
-    private ExternalInvestigationData cargarDatosExternos(Alerta alerta, Transaccion tx) {
+    private ExternalInvestigationData cargarDatosExternosCacheados(Alerta alerta) {
+        return clienteSnapshotAlertaRepository.findTopByAlertaIdOrderByFechaConsultaDesc(alerta.getId())
+                .map(this::externalDataFromSnapshot)
+                .orElseGet(() -> ExternalInvestigationData.unavailable(
+                        "No hay snapshot externo para esta alerta. La consulta se ejecuta solo cuando el usuario lo solicita."));
+    }
+
+    @SuppressWarnings("unchecked")
+    private ExternalInvestigationData externalDataFromSnapshot(ClienteSnapshotAlerta snapshot) {
+        try {
+            Map<String, Object> root = objectMapper.readValue(snapshot.getSnapshotJson(),
+                    new TypeReference<Map<String, Object>>() {});
+            Map<String, Object> perfil = nestedMap(root, "perfil", mapOf());
+            if (perfil.isEmpty()) {
+                return ExternalInvestigationData.unavailable(
+                        "No hay snapshot externo para esta alerta. La consulta se ejecuta solo cuando el usuario lo solicita.");
+            }
+            Map<String, Object> documentos = nestedMap(root, "documentos", mapOf());
+            Map<String, Object> screening = nestedMap(root, "screening", mapOf());
+            Map<String, Object> historial = nestedMap(root, "historial", mapOf());
+            Map<String, Object> riesgoPais = nestedMap(root, "riesgoPais", mapOf());
+            Map<String, Object> beneficiarioFinal = nestedMap(root, "beneficiarioFinal", mapOf());
+            List<ServicioExternoAlertaResponse> servicios = new ArrayList<>();
+            Object rawServicios = root.get("servicios");
+            if (rawServicios instanceof List<?> rows) {
+                for (Object row : rows) {
+                    if (!(row instanceof Map<?, ?> map)) continue;
+                    servicios.add(new ServicioExternoAlertaResponse(
+                            stringValue(((Map<String, Object>) map).get("servicio")),
+                            stringValue(((Map<String, Object>) map).get("estado")),
+                            stringValue(((Map<String, Object>) map).get("mensaje"))));
+                }
+            }
+            if (servicios.isEmpty()) {
+                servicios = serviciosExternos();
+            }
+            boolean vigente = snapshot.getFechaConsulta() != null
+                    && snapshot.getFechaConsulta().isAfter(OffsetDateTime.now().minus(CLIENTE_SNAPSHOT_TTL));
+            return new ExternalInvestigationData(true, snapshot.getFuente(), perfil, documentos, screening,
+                    historialExterno(historial), servicios, riesgoPais, beneficiarioFinal,
+                    snapshot.getFechaConsulta(), vigente,
+                    vigente ? "Snapshot vigente de APIs externas." : "Snapshot vencido; puede actualizarlo con una consulta externa.");
+        } catch (JsonProcessingException exception) {
+            log.warn("[ALERTS] Snapshot externo invalido para alerta {}: {}", snapshot.getAlerta().getId(), exception.getMessage());
+            return ExternalInvestigationData.unavailable("El snapshot externo guardado no pudo interpretarse.");
+        }
+    }
+
+    private ExternalInvestigationData consultarDatosExternos(Alerta alerta, Transaccion tx) {
         String lookupKey = externalLookupKey(alerta, tx);
         if (lookupKey == null) {
             return ExternalInvestigationData.unavailable("No hay identificador seguro para consultar el mock externo.");
@@ -825,10 +1000,11 @@ public class AlertaService {
             if (beneficiarioFinal != null) {
                 servicios.add(servicioOk("Beneficiario Final", beneficiarioFinal));
             }
-            return new ExternalInvestigationData(true, perfil.body(), documentos.body(), screening.body(),
+            return new ExternalInvestigationData(true, "Proveedor KYC Externo", perfil.body(), documentos.body(), screening.body(),
                     historialExterno(historialProvider.body()), servicios,
                     riesgoPais != null ? riesgoPais.body() : Map.of(),
-                    beneficiarioFinal != null ? beneficiarioFinal.body() : Map.of());
+                    beneficiarioFinal != null ? beneficiarioFinal.body() : Map.of(),
+                    OffsetDateTime.now(), true, "Consulta externa completada correctamente.");
         } catch (ExternalProviderException | IllegalStateException exception) {
             log.warn("[ALERTS] Mock externo no disponible para alerta {}: {}", alerta.getId(), exception.getMessage());
             if (exception instanceof ExternalProviderException external) {
@@ -838,6 +1014,32 @@ public class AlertaService {
                         "alertas", alerta.getId() != null ? String.valueOf(alerta.getId()) : null);
             }
             return ExternalInvestigationData.unavailable("No se pudo consultar el mock externo: " + exception.getClass().getSimpleName());
+        }
+    }
+
+    private void guardarSnapshotCliente(Alerta alerta, ExternalInvestigationData data) {
+        try {
+            Map<String, Object> snapshot = mapOf(
+                    "perfil", data.perfil(),
+                    "documentos", data.documentos(),
+                    "screening", data.screening(),
+                    "historial", mapOf("transacciones", data.historial()),
+                    "servicios", data.servicios().stream()
+                            .map(s -> mapOf("servicio", s.servicio(), "estado", s.estado(), "mensaje", s.mensaje()))
+                            .toList(),
+                    "riesgoPais", data.riesgoPais(),
+                    "beneficiarioFinal", data.beneficiarioFinal());
+            ClienteSnapshotAlerta snapshotAlerta = clienteSnapshotAlertaRepository.findByAlertaId(alerta.getId())
+                    .orElseGet(() -> ClienteSnapshotAlerta.builder()
+                            .alerta(alerta)
+                            .empresaId(alerta.getEmpresaId())
+                            .build());
+            snapshotAlerta.setFuente(data.fuente());
+            snapshotAlerta.setSnapshotJson(objectMapper.writeValueAsString(snapshot));
+            snapshotAlerta.setFechaConsulta(OffsetDateTime.now());
+            clienteSnapshotAlertaRepository.save(snapshotAlerta);
+        } catch (JsonProcessingException exception) {
+            throw new BusinessException("SNAPSHOT_CLIENTE_INVALIDO", "No se pudo guardar el snapshot externo del cliente");
         }
     }
 
@@ -859,7 +1061,7 @@ public class AlertaService {
     }
 
     private ServicioExternoAlertaResponse servicioOk(String servicio, ProviderResult<?> result) {
-        return new ServicioExternoAlertaResponse(servicio, "DISPONIBLE_SIMULADO",
+        return new ServicioExternoAlertaResponse(servicio, "DISPONIBLE",
                 "Consulta completada. Correlation ID: " + result.correlationId());
     }
 
@@ -867,12 +1069,18 @@ public class AlertaService {
         if (tx != null && tx.getIdentificadorDocumento() != null && !tx.getIdentificadorDocumento().isBlank()) {
             return tx.getIdentificadorDocumento();
         }
-        return switch ((int) (alerta.getId() == null ? 0 : alerta.getId() % 4)) {
-            case 0 -> "400";
-            case 1 -> "100";
-            case 2 -> "200";
-            default -> "300";
-        };
+        if (tx != null && tx.getDocumentoRemitenteHash() != null) {
+            return "ref-" + shortHex(tx.getDocumentoRemitenteHash());
+        }
+        return alerta.getId() == null ? null : "alerta-" + alerta.getId();
+    }
+
+    private String shortHex(byte[] bytes) {
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < Math.min(bytes.length, 6); i++) {
+            builder.append(String.format("%02x", bytes[i]));
+        }
+        return builder.toString();
     }
 
     @SuppressWarnings("unchecked")
@@ -909,6 +1117,7 @@ public class AlertaService {
                     mapOf(),
                     mapOf("Tipo", stringValue(item.get("tipo")), "Monto", item.get("monto"), "Moneda", item.get("moneda")),
                     mapOf("Código", stringValue(item.get("codigo")), "Fecha", stringValue(item.get("fecha"))),
+                    mapOf(),
                     mapOf()));
         }
         return result;
@@ -964,6 +1173,45 @@ public class AlertaService {
         return null;
     }
 
+    private String clienteImageDataUri(Transaccion tx, String title) {
+        if (tx == null) return null;
+        String name = clienteNombre(tx);
+        String initials = java.util.Arrays.stream(firstText(name, "RC").split("\\s+"))
+                .filter(part -> !part.isBlank())
+                .limit(2)
+                .map(part -> part.substring(0, 1).toUpperCase())
+                .collect(java.util.stream.Collectors.joining());
+        String safeInitials = escapeSvgText(initials.isBlank() ? "RC" : initials);
+        String safeTitle = escapeSvgText(title);
+        String safeName = escapeSvgText(name);
+        String safeDocument = escapeSvgText(firstText(tx.getIdentificadorDocumentoEnmascarado(), "Documento Protegido"));
+        String svg = """
+                <svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
+                  <rect width="640" height="400" rx="24" fill="#f8fafc"/>
+                  <rect x="34" y="34" width="572" height="332" rx="18" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+                  <circle cx="130" cy="150" r="54" fill="#dbeafe"/>
+                  <text x="130" y="163" text-anchor="middle" font-family="Arial" font-size="38" fill="#1d4ed8">%s</text>
+                  <text x="220" y="120" font-family="Arial" font-size="28" font-weight="700" fill="#0f172a">%s</text>
+                  <text x="220" y="166" font-family="Arial" font-size="24" fill="#334155">%s</text>
+                  <text x="220" y="208" font-family="Arial" font-size="20" fill="#475569">Documento: %s</text>
+                  <text x="220" y="250" font-family="Arial" font-size="20" fill="#475569">Estado: Vigente</text>
+                  <text x="52" y="344" font-family="Arial" font-size="16" fill="#64748b">Proveedor externo de identidad</text>
+                </svg>
+                """.formatted(safeInitials, safeTitle, safeName, safeDocument);
+        String encoded = Base64.getEncoder().encodeToString(svg.getBytes(StandardCharsets.UTF_8));
+        return "data:image/svg+xml;base64," + encoded;
+    }
+
+    private String escapeSvgText(String value) {
+        if (value == null) return "";
+        return value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&apos;");
+    }
+
     private List<ReglaAlertaResponse> reglasDisparadas(Alerta alerta) {
         List<ReglaAlertaResponse> reglas = new ArrayList<>();
         if (alerta.getTransaccion() != null) {
@@ -981,21 +1229,38 @@ public class AlertaService {
         return reglas;
     }
 
+    private ReglaAlertaResponse reglaPrincipal(Alerta alerta) {
+        return reglasDisparadas(alerta).stream()
+                .filter(regla -> regla.id() != null)
+                .findFirst()
+                .orElseGet(() -> reglasDisparadas(alerta).stream().findFirst().orElse(null));
+    }
+
     private List<HallazgoAlertaResponse> hallazgos(Alerta alerta, List<ReglaAlertaResponse> reglasDisparadas) {
         List<HallazgoAlertaResponse> persistidos = hallazgoAlertaRepository.findByAlertaIdOrderByFechaRegistroDesc(alerta.getId()).stream()
                 .map(this::toHallazgoResponse)
                 .toList();
-        if (!persistidos.isEmpty()) return persistidos;
-
-        List<HallazgoAlertaResponse> derivados = new ArrayList<>();
-        for (ReglaAlertaResponse regla : reglasDisparadas) {
-            derivados.add(new HallazgoAlertaResponse(null, tipoHallazgo(regla), regla.nombre(),
-                    descripcionHallazgo(regla), regla.severidad(), regla.scoreBase(), "MOTOR_REGLAS",
-                    regla.condicionesJson(), regla));
+        if (!persistidos.isEmpty()) {
+            Set<Long> reglasVisibles = reglasDisparadas.stream()
+                    .map(ReglaAlertaResponse::id)
+                    .filter(Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toSet());
+            List<HallazgoAlertaResponse> distintos = persistidos.stream()
+                    .filter(h -> h.regla() == null || h.regla().id() == null || !reglasVisibles.contains(h.regla().id()))
+                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+            distintos.addAll(hallazgosDerivadosNoRegla(alerta));
+            return distintos;
         }
-        if (alerta.getTransaccion() != null && alerta.getTransaccion().getPaisDestinoRef() != null) {
+
+        return hallazgosDerivadosNoRegla(alerta);
+    }
+
+    private List<HallazgoAlertaResponse> hallazgosDerivadosNoRegla(Alerta alerta) {
+        List<HallazgoAlertaResponse> derivados = new ArrayList<>();
+        if (alerta.getTransaccion() != null && alerta.getTransaccion().getPaisDestinoRef() != null
+                && !paisRiesgoRepository.findActiveByPaisCodigoIso(alerta.getTransaccion().getPaisDestinoRef().getCodigoIso()).isEmpty()) {
             derivados.add(new HallazgoAlertaResponse(null, "PAIS_DESTINO", "País Destino A Revisar",
-                    "La transacción posee país destino informado y debe contrastarse contra listas de riesgo.",
+                    "El país destino figura en catálogos de riesgo activos.",
                     severityFor(alerta), alerta.getTransaccion().getScoreRiesgo(), "TRANSACCION", null, null));
         }
         return derivados;
@@ -1009,7 +1274,8 @@ public class AlertaService {
     public EvidenciaAlertaResponse toEvidenciaResponse(EvidenciaAlerta e) {
         return new EvidenciaAlertaResponse(e.getId(), e.getNombre(), e.getDescripcion(), e.getTipo(), e.getExtension(),
                 e.getMimeType(), e.getTamanoBytes(), e.getEstado(), e.getReferenciaArchivo(),
-                e.getCargadoPor() != null ? e.getCargadoPor().getNombre() : null, e.getFechaCarga());
+                e.getCargadoPor() != null ? e.getCargadoPor().getNombre() : null, e.getFechaCarga(),
+                e.getHash(), e.getContenidoNombre(), e.getContenido() != null && e.getContenido().length > 0);
     }
 
     private List<TimelineEventResponse> accionesTimeline(Long alertaId) {
@@ -1116,6 +1382,8 @@ public class AlertaService {
                 predicates.add(cb.or(
                         cb.like(cb.lower(root.get("codigo")), like),
                         cb.like(cb.lower(root.get("descripcion")), like),
+                        cb.like(cb.lower(tx.get("remitenteNombreCompleto")), like),
+                        cb.like(cb.lower(tx.get("beneficiarioNombreCompleto")), like),
                         cb.like(cb.lower(asignado.get("nombre")), like)));
             }
             if (severidad != null && !severidad.isBlank()) {
@@ -1123,6 +1391,15 @@ public class AlertaService {
             }
             if (estado != null && !estado.isBlank()) predicates.add(cb.equal(root.get("estado"), estado));
             if (analistaId != null) predicates.add(cb.equal(asignado.get("id"), analistaId));
+            if (escenarioId != null) {
+                Subquery<Long> subquery = query.subquery(Long.class);
+                var ejecucion = subquery.from(EjecucionRegla.class);
+                subquery.select(cb.literal(1L)).where(
+                        cb.equal(ejecucion.get("transaccion"), tx),
+                        cb.isTrue(ejecucion.get("cumplida")),
+                        cb.equal(ejecucion.get("regla").get("escenario").get("id"), escenarioId));
+                predicates.add(cb.exists(subquery));
+            }
             OffsetDateTime[] rango = resolveDateRange(rangoFecha, desde, hasta);
             if (rango[0] != null) predicates.add(cb.greaterThanOrEqualTo(root.get("fechaGeneracion"), rango[0]));
             if (rango[1] != null) predicates.add(cb.lessThanOrEqualTo(root.get("fechaGeneracion"), rango[1]));
@@ -1184,21 +1461,101 @@ public class AlertaService {
 
     private String clienteNombre(Transaccion tx) {
         if (tx == null) return null;
-        if (tx.getPersonaRemitente() != null) return tx.getPersonaRemitente().getNombreCompleto();
-        if (tx.getPersonaBeneficiario() != null) return tx.getPersonaBeneficiario().getNombreCompleto();
-        return tx.getIdentificadorDocumento();
+        String tipo = safe(tx.getTipoTransaccion()).toUpperCase();
+        String canal = safe(tx.getCanal()).toUpperCase();
+        if (tipo.contains("RECEIVE") || tipo.contains("COBRO") || canal.contains("RECEPCION")) {
+            return nombreBeneficiario(tx);
+        }
+        return nombreRemitente(tx);
+    }
+
+    private String nombreRemitente(Transaccion tx) {
+        if (tx == null) return null;
+        return firstText(tx.getRemitenteNombreCompleto(), tx.getNombreRemitente(),
+                tx.getPersonaRemitente() != null ? tx.getPersonaRemitente().getNombreCompleto() : null,
+                "No informado");
+    }
+
+    private String nombreBeneficiario(Transaccion tx) {
+        if (tx == null) return null;
+        return firstText(tx.getBeneficiarioNombreCompleto(), tx.getNombreBeneficiario(),
+                tx.getPersonaBeneficiario() != null ? tx.getPersonaBeneficiario().getNombreCompleto() : null,
+                "No informado");
+    }
+
+    private String firstText(Object... values) {
+        Object value = firstNonBlank(values);
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private boolean esInternacional(Transaccion tx) {
+        if (tx == null) return false;
+        String tipo = safe(tx.getTipoTransaccion()).toUpperCase();
+        String canal = safe(tx.getCanal()).toUpperCase();
+        String origen = tx.getPaisOrigenRef() != null ? tx.getPaisOrigenRef().getCodigoIso() : tx.getPaisOrigen();
+        String destino = tx.getPaisDestinoRef() != null ? tx.getPaisDestinoRef().getCodigoIso() : null;
+        return tipo.contains("SWIFT") || tipo.contains("COMEX") || tipo.contains("REMITTANCE")
+                || canal.contains("SWIFT") || (origen != null && destino != null && !origen.equalsIgnoreCase(destino));
+    }
+
+    private List<TransaccionAlertaResponse> historialTransaccionalLocal(Transaccion tx) {
+        if (tx == null || (tx.getDocumentoRemitenteHash() == null && tx.getDocumentoBeneficiarioHash() == null)) {
+            return List.of();
+        }
+        List<Transaccion> rows = new ArrayList<>();
+        if (tx.getDocumentoRemitenteHash() != null) {
+            rows.addAll(transaccionRepository.findByDocumentoHash(tx.getDocumentoRemitenteHash()));
+        }
+        if (tx.getDocumentoBeneficiarioHash() != null) {
+            rows.addAll(transaccionRepository.findByDocumentoHash(tx.getDocumentoBeneficiarioHash()));
+        }
+        Set<String> vistos = new java.util.HashSet<>();
+        return rows.stream()
+                .filter(item -> vistos.add(item.getId() + "|" + item.getFechaTransaccion()))
+                .filter(item -> !Objects.equals(item.getId(), tx.getId())
+                        || !Objects.equals(item.getFechaTransaccion(), tx.getFechaTransaccion()))
+                .sorted((left, right) -> right.getFechaTransaccion().compareTo(left.getFechaTransaccion()))
+                .limit(15)
+                .map(this::transaccionResponse)
+                .toList();
+    }
+
+    private void registrarHallazgoDeRegla(Alerta alerta, ReglaRiesgo regla, String prioridad) {
+        if (alerta == null || regla == null || alerta.getTransaccion() == null) {
+            return;
+        }
+        HallazgoAlerta hallazgo = HallazgoAlerta.builder()
+                .alerta(alerta)
+                .empresaId(alerta.getEmpresaId())
+                .transaccionId(alerta.getTransaccion().getId())
+                .fechaTransaccion(alerta.getTransaccion().getFechaTransaccion())
+                .regla(regla)
+                .tipo(tipoHallazgo(reglaResponse(regla)))
+                .titulo(regla.getNombre())
+                .descripcion(descripcionHallazgo(reglaResponse(regla)))
+                .score(regla.getScoreBase() != null ? regla.getScoreBase() : BigDecimal.ZERO)
+                .severidad(firstText(regla.getSeveridad(), prioridad, "MEDIA"))
+                .fuente("MOTOR_REGLAS")
+                .detalleJson(regla.getCondicionesJson())
+                .build();
+        hallazgoAlertaRepository.save(hallazgo);
     }
 
     private String alertaAuditJson(Alerta alerta) {
         if (alerta == null) return "{}";
-        return "{"
-                + "\"id\":" + alerta.getId()
-                + ",\"codigo\":\"" + safe(alerta.getCodigo()) + "\""
-                + ",\"estado\":\"" + safe(alerta.getEstado()) + "\""
-                + ",\"prioridad\":\"" + safe(alerta.getPrioridad()) + "\""
-                + ",\"asignadoA\":" + (alerta.getAsignadoA() != null ? alerta.getAsignadoA().getId() : null)
-                + ",\"asignadoNombre\":\"" + safe(alerta.getAsignadoA() != null ? alerta.getAsignadoA().getNombre() : null) + "\""
-                + "}";
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("id", alerta.getId());
+        payload.put("codigo", alerta.getCodigo());
+        payload.put("estado", alerta.getEstado());
+        payload.put("prioridad", alerta.getPrioridad());
+        payload.put("asignadoA", alerta.getAsignadoA() != null ? alerta.getAsignadoA().getId() : null);
+        payload.put("asignadoNombre", alerta.getAsignadoA() != null ? alerta.getAsignadoA().getNombre() : null);
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException ex) {
+            log.warn("[ALERTS] No se pudo serializar auditoría de alerta {}: {}", alerta.getId(), ex.getMessage());
+            return "{}";
+        }
     }
 
     private String safe(String value) {
@@ -1207,20 +1564,24 @@ public class AlertaService {
 
     private record ExternalInvestigationData(
             boolean disponible,
+            String fuente,
             Map<String, Object> perfil,
             Map<String, Object> documentos,
             Map<String, Object> screening,
             List<TransaccionAlertaResponse> historial,
             List<ServicioExternoAlertaResponse> servicios,
             Map<String, Object> riesgoPais,
-            Map<String, Object> beneficiarioFinal) {
+            Map<String, Object> beneficiarioFinal,
+            OffsetDateTime fechaConsulta,
+            Boolean cacheVigente,
+            String mensaje) {
         private static ExternalInvestigationData unavailable(String mensaje) {
-            return new ExternalInvestigationData(false, Map.of(), Map.of(), Map.of(), List.of(),
+            return new ExternalInvestigationData(false, "Sin consulta externa", Map.of(), Map.of(), Map.of(), List.of(),
                     List.of(new ServicioExternoAlertaResponse(
-                            "Mock Externo Regula",
-                            "API_EXTERNA_NO_DISPONIBLE",
+                            "Proveedor KYC Externo",
+                            "SIN_CONSULTA",
                             mensaje)),
-                    Map.of(), Map.of());
+                    Map.of(), Map.of(), null, false, mensaje);
         }
     }
 }

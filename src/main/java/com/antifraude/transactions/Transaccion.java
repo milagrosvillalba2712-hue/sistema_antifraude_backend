@@ -216,6 +216,27 @@ public class Transaccion {
     @Column(name = "swift_bic_destino", length = 11)
     private String swiftBicDestino;
 
+    @Column(name = "entidad_origen_tipo", length = 40)
+    private String entidadOrigenTipo;
+
+    @Column(name = "entidad_origen_codigo", length = 80)
+    private String entidadOrigenCodigo;
+
+    @Column(name = "entidad_origen_nombre", length = 180)
+    private String entidadOrigenNombre;
+
+    @Column(name = "entidad_destino_tipo", length = 40)
+    private String entidadDestinoTipo;
+
+    @Column(name = "entidad_destino_codigo", length = 80)
+    private String entidadDestinoCodigo;
+
+    @Column(name = "entidad_destino_nombre", length = 180)
+    private String entidadDestinoNombre;
+
+    @Column(name = "referencia_externa", length = 120)
+    private String referenciaExterna;
+
     @Column(name = "score_riesgo", precision = 8, scale = 2)
     private BigDecimal scoreRiesgo;
 

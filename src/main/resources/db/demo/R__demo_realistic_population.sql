@@ -277,14 +277,18 @@ SELECT '00000000-0000-0000-0000-000000000001',DATE '2026-01-01'+n*20,'Evento Rie
 
 -- Volumen transaccional repartido en meses para probar particiones y dashboard.
 -- Los documentos se guardan como HMAC deterministico para cumplir la regla de no persistir PII en texto plano.
-INSERT INTO transacciones(fecha_transaccion,empresa_id,codigo,tipo_transaccion_id,canal_transaccion_id,infraestructura_pago,monto,moneda_id,estado,estado_evaluacion,procesada,nombre_remitente,nombre_beneficiario,remitente_nombre_completo,beneficiario_nombre_completo,documento_remitente_hash,documento_beneficiario_hash,tipo_documento_remitente_id,pais_emisor_documento_remitente_id,tipo_documento_beneficiario_id,pais_emisor_documento_beneficiario_id,score_riesgo,nivel_riesgo_id,reglas_disparadas_json)
+INSERT INTO transacciones(fecha_transaccion,empresa_id,codigo,tipo_transaccion_id,canal_transaccion_id,infraestructura_pago,monto,moneda_id,estado,estado_evaluacion,procesada,nombre_remitente,nombre_beneficiario,remitente_nombre_completo,beneficiario_nombre_completo,documento_remitente_hash,documento_beneficiario_hash,tipo_documento_remitente_id,pais_emisor_documento_remitente_id,tipo_documento_beneficiario_id,pais_emisor_documento_beneficiario_id,entidad_origen_tipo,entidad_origen_nombre,entidad_destino_tipo,entidad_destino_nombre,score_riesgo,nivel_riesgo_id,reglas_disparadas_json)
 SELECT TIMESTAMPTZ '2026-01-01 08:00:00-03'+(n*interval '3 days'),
  '00000000-0000-0000-0000-000000000001','TX-PY-REAL-'||lpad(n::text,4,'0'),tt.id,ct.id,
  CASE WHEN n%4=0 THEN 'SIPAP' WHEN n%4=1 THEN 'TARJETA' WHEN n%4=2 THEN 'EMPE' ELSE 'CAJA' END,
  250000+n*475000,m.id,'COMPLETADA','EVALUADA',true,'Cliente Sintetico '||lpad(((n-1)%60+1)::text,3,'0'),'Beneficiario Sintetico '||n,'Cliente Sintetico '||lpad(((n-1)%60+1)::text,3,'0'),'Beneficiario Sintetico '||n,
  hmac('CI-REM-'||lpad(((n-1)%60+1)::text,7,'0'),'regula-demo-hmac-key','sha256'),
- hmac('CI-BEN-'||lpad(n::text,7,'0'),'regula-demo-hmac-key','sha256'),
+hmac('CI-BEN-'||lpad(n::text,7,'0'),'regula-demo-hmac-key','sha256'),
  td.id,py.id,td.id,py.id,
+ CASE ct.codigo WHEN 'SPI' THEN 'BANCO' WHEN 'TARJETA' THEN 'FINANCIERA' WHEN 'EMPE' THEN 'EMPE' ELSE 'SUCURSAL' END,
+ CASE ct.codigo WHEN 'SPI' THEN 'Banco Continental SAECA' WHEN 'TARJETA' THEN 'Financiera Santa Clara' WHEN 'EMPE' THEN 'Billetera Electronica Demo' ELSE 'Sucursal Demo Asuncion' END,
+ CASE ct.codigo WHEN 'SPI' THEN 'BANCO' WHEN 'TARJETA' THEN 'COMERCIO' WHEN 'EMPE' THEN 'EMPE' ELSE 'BANCO' END,
+ CASE ct.codigo WHEN 'SPI' THEN 'Banco Itau Paraguay' WHEN 'TARJETA' THEN 'Comercio Sintetico '||n WHEN 'EMPE' THEN 'Billetera Electrónica Demo' ELSE 'Banco Continental SAECA' END,
  CASE WHEN n%10=0 THEN 92 WHEN n%5=0 THEN 75 WHEN n%3=0 THEN 48 ELSE 18 END,nr.id,
  CASE WHEN n%5=0 THEN jsonb_build_array(jsonb_build_object('codigo','REG-PY-05','score',75)) ELSE '[]'::jsonb END
 FROM generate_series(1,80)n
@@ -295,6 +299,17 @@ JOIN nivel_riesgo nr ON nr.codigo=CASE WHEN n%10=0 THEN 'CRITICO' WHEN n%5=0 THE
 JOIN tipo_documento td ON td.codigo='CI_PY'
 JOIN pais py ON py.codigo_iso='PY'
 WHERE NOT EXISTS(SELECT 1 FROM transacciones x WHERE x.empresa_id='00000000-0000-0000-0000-000000000001' AND x.codigo='TX-PY-REAL-'||lpad(n::text,4,'0'));
+
+UPDATE transacciones t SET
+ entidad_origen_tipo=CASE ct.codigo WHEN 'SPI' THEN 'BANCO' WHEN 'TARJETA' THEN 'FINANCIERA' WHEN 'EMPE' THEN 'EMPE' ELSE 'SUCURSAL' END,
+ entidad_origen_nombre=CASE ct.codigo WHEN 'SPI' THEN 'Banco Continental SAECA' WHEN 'TARJETA' THEN 'Financiera Santa Clara' WHEN 'EMPE' THEN 'Billetera Electronica Demo' ELSE 'Sucursal Demo Asuncion' END,
+ entidad_destino_tipo=CASE ct.codigo WHEN 'SPI' THEN 'BANCO' WHEN 'TARJETA' THEN 'COMERCIO' WHEN 'EMPE' THEN 'EMPE' ELSE 'BANCO' END,
+ entidad_destino_nombre=CASE ct.codigo WHEN 'SPI' THEN 'Banco Itau Paraguay' WHEN 'TARJETA' THEN 'Comercio Sintetico' WHEN 'EMPE' THEN 'Billetera Electrónica Demo' ELSE 'Banco Continental SAECA' END
+FROM canal_transaccion ct
+WHERE ct.id=t.canal_transaccion_id
+  AND t.empresa_id='00000000-0000-0000-0000-000000000001'
+  AND t.codigo LIKE 'TX-PY-REAL-%'
+  AND (t.entidad_origen_tipo IS NULL OR t.entidad_destino_tipo IS NULL);
 
 INSERT INTO evaluaciones_riesgo(empresa_id,transaccion_id,fecha_transaccion,score_total,nivel_riesgo_id,resultado,detalle)
 SELECT t.empresa_id,t.id,t.fecha_transaccion,t.score_riesgo,t.nivel_riesgo_id,CASE WHEN t.score_riesgo>=70 THEN 'ALERTA' ELSE 'APROBADA' END,jsonb_build_object('demo',true,'score',t.score_riesgo) FROM transacciones t WHERE t.codigo LIKE 'TX-PY-REAL-%' ON CONFLICT DO NOTHING;

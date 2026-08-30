@@ -13,5 +13,8 @@ public record EvidenciaAlertaResponse(
         String estado,
         String referenciaArchivo,
         String cargadoPor,
-        OffsetDateTime fechaCarga) {
+        OffsetDateTime fechaCarga,
+        String hash,
+        String contenidoNombre,
+        Boolean tieneArchivo) {
 }

@@ -90,6 +90,9 @@ app:
     pep:
       url: ${PEP_API_URL:https://localhost:8443}
       api-key: ${PEP_API_KEY:}
+    screening:
+      url: ${SCREENING_API_URL:https://localhost:8443}
+      api-key: ${SCREENING_API_KEY:${IDENTIFICACIONES_API_KEY:}}
 
 resilience4j:
   retry:

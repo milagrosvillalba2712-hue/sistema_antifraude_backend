@@ -35,5 +35,12 @@ public record TransaccionRequest(
         String tipoPersonaRemitente,
         String nombreCompletoRemitente,
         String tipoPersonaBeneficiario,
-        String nombreCompletoBeneficiario) {
+        String nombreCompletoBeneficiario,
+        String entidadOrigenTipo,
+        String entidadOrigenCodigo,
+        String entidadOrigenNombre,
+        String entidadDestinoTipo,
+        String entidadDestinoCodigo,
+        String entidadDestinoNombre,
+        String referenciaExterna) {
 }

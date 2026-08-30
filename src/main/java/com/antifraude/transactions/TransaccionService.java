@@ -126,6 +126,9 @@ public class TransaccionService {
         String beneficiarioNombre = resolveNombreCompleto(beneficiario, request.nombreCompletoBeneficiario(),
                 request.personaBeneficiarioId(), "beneficiario");
 
+        validarEntidadesPorCanal(request.tipoTransaccion(), request.canal(),
+                request.entidadOrigenTipo(), request.entidadDestinoTipo());
+
         Transaccion transaccion = Transaccion.builder()
                 .transactionUuid(uuid)
                 .empresa(empresa)
@@ -165,6 +168,13 @@ public class TransaccionService {
                 .nombreBeneficiario(beneficiarioNombre)
                 .remitenteNombreCompleto(remitenteNombre)
                 .beneficiarioNombreCompleto(beneficiarioNombre)
+                .entidadOrigenTipo(normalizeUpper(request.entidadOrigenTipo()))
+                .entidadOrigenCodigo(trimToNull(request.entidadOrigenCodigo()))
+                .entidadOrigenNombre(trimToNull(request.entidadOrigenNombre()))
+                .entidadDestinoTipo(normalizeUpper(request.entidadDestinoTipo()))
+                .entidadDestinoCodigo(trimToNull(request.entidadDestinoCodigo()))
+                .entidadDestinoNombre(trimToNull(request.entidadDestinoNombre()))
+                .referenciaExterna(trimToNull(request.referenciaExterna()))
                 .producto(producto)
                 .fechaTransaccion(request.fechaTransaccion() != null ? request.fechaTransaccion() : OffsetDateTime.now())
                 .estado("PENDIENTE")
@@ -391,5 +401,58 @@ public class TransaccionService {
             case "PY_TRADE_FINANCE_PAYMENT", "COMEX" -> "COMEX";
             default -> normalized;
         };
+    }
+
+    private String normalizeUpper(String value) {
+        if (value == null || value.isBlank()) return null;
+        return value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void validarEntidadesPorCanal(String tipoTransaccion, String canal,
+                                          String entidadOrigenTipo, String entidadDestinoTipo) {
+        String tipo = normalizeUpper(tipoTransaccion);
+        String ch = normalizeUpper(canal);
+        if (tipo == null) return;
+
+        boolean esDestino = contiene(tipo, "SEND", "ENVIO", "TRANSFER", "P2P", "TOPUP",
+                "REMITTANCE_SEND", "PAYMENT", "PAYROLL", "BATCH_CREDIT", "ALIAS_TRANSFER", "HIGH_VALUE");
+        boolean esOrigen = contiene(tipo, "RECEIVE", "COBRO", "CASH_IN", "DEPOSITO");
+        boolean esExtraccion = contiene(tipo, "WITHDRAWAL", "EXTRACCION", "RETIRO", "ATM");
+        boolean esInternacional = contiene(tipo, "REMITTANCE_SEND", "COMEX", "FX", "TRADE");
+        if (ch != null) {
+            esDestino = esDestino || contiene(ch, "SPI", "ACH", "QR", "EMPE", "REMESA", "COMEX", "CAMBIO");
+            esOrigen = esOrigen || contiene(ch, "CAJA", "REMESA");
+            esExtraccion = esExtraccion || contiene(ch, "ATM");
+        }
+
+        if (esDestino && entidadDestinoTipo == null) {
+            throw new BusinessException("ENTIDAD_DESTINO_REQUERIDA",
+                    "El tipo " + tipoTransaccion + " requiere entidadDestinoTipo (banco/financiera/intermediario) para completar el envío.");
+        }
+        if (esOrigen && entidadOrigenTipo == null) {
+            throw new BusinessException("ENTIDAD_ORIGEN_REQUERIDA",
+                    "El tipo " + tipoTransaccion + " requiere entidadOrigenTipo (banco/sucursal/cajero) para completar la recepción.");
+        }
+        if (esExtraccion && entidadOrigenTipo == null) {
+            throw new BusinessException("ENTIDAD_ORIGEN_REQUERIDA",
+                    "El tipo " + tipoTransaccion + " (extracción/retiro) requiere entidadOrigenTipo (sucursal o cajero).");
+        }
+        if (esInternacional && entidadDestinoTipo == null) {
+            throw new BusinessException("ENTIDAD_DESTINO_REQUERIDA",
+                    "La operación internacional " + tipoTransaccion + " requiere entidadDestinoTipo + información SWIFT del beneficiario.");
+        }
+    }
+
+    private boolean contiene(String value, String... tokens) {
+        if (value == null) return false;
+        for (String token : tokens) {
+            if (value.contains(token)) return true;
+        }
+        return false;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null || value.isBlank()) return null;
+        return value.trim();
     }
 }

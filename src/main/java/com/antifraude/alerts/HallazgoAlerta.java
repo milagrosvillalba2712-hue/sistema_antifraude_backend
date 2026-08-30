@@ -44,7 +44,7 @@ public class HallazgoAlerta {
     @Column(name = "tipo_hallazgo", nullable = false, length = 60)
     private String tipo;
 
-    @Transient
+    @Column(length = 180)
     private String titulo;
 
     @Column(nullable = false, columnDefinition = "TEXT")
@@ -57,7 +57,7 @@ public class HallazgoAlerta {
     @Builder.Default
     private BigDecimal score = BigDecimal.ZERO;
 
-    @Transient
+    @Column(length = 80)
     private String fuente;
 
     @JdbcTypeCode(SqlTypes.JSON)
@@ -85,6 +85,12 @@ public class HallazgoAlerta {
         }
         if (severidad == null) {
             severidad = "MEDIA";
+        }
+        if (titulo == null || titulo.isBlank()) {
+            titulo = tipo != null ? tipo.replace("_", " ") : "Hallazgo";
+        }
+        if (fuente == null || fuente.isBlank()) {
+            fuente = "MOTOR_REGLAS";
         }
     }
 }
