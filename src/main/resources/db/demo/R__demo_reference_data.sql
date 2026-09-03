@@ -41,7 +41,8 @@ ON CONFLICT (codigo) DO UPDATE SET nombre=EXCLUDED.nombre, descripcion=EXCLUDED.
 INSERT INTO permiso (codigo, nombre, descripcion, modulo, accion)
 VALUES
   ('DEMO_ADMIN', 'Administrar demo', 'Permiso académico integral', 'Demo', 'GESTIONAR'),
-  ('DEMO_INVESTIGAR', 'Investigar demo', 'Permiso académico de investigación', 'Demo', 'RESOLVER')
+  ('DEMO_INVESTIGAR', 'Investigar demo', 'Permiso académico de investigación', 'Demo', 'RESOLVER'),
+  ('CLIENTES_EXTERNOS_GESTIONAR', 'Gestionar clientes externos', 'Gestionar API keys de integraciones M2M/B2B de entidades bancarias', 'ClientesExternos', 'GESTIONAR')
 ON CONFLICT (codigo) DO UPDATE SET nombre=EXCLUDED.nombre;
 
 INSERT INTO rol_permiso (rol_id, permiso_id)

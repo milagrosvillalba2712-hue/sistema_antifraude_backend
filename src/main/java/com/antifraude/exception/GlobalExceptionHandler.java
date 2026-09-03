@@ -16,6 +16,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -156,6 +157,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(error(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
                         "No tiene permisos para acceder a este recurso", request, null));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex,
+                                                                  HttpServletRequest request) {
+        log.warn("[METHOD] Metodo no soportado: {} - Ruta: {}",
+                ex.getMethod(), request.getRequestURI());
+        String[] metodos = ex.getSupportedMethods() != null ? ex.getSupportedMethods() : new String[0];
+        String soportados = String.join(", ", metodos);
+        Map<String, Object> detalles = Map.of(
+                "metodo", ex.getMethod() != null ? ex.getMethod() : "",
+                "soportados", soportados
+        );
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(error(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED",
+                        "Método HTTP no soportado para este recurso", request, detalles));
     }
 
     @ExceptionHandler(ExternalProviderException.class)

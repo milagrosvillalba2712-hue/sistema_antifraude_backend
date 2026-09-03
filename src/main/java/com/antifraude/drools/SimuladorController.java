@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -119,10 +120,22 @@ public class SimuladorController {
                 .paisOrigenRef(paisOrigen)
                 .paisDestinoRef(paisDestino)
                 .producto(producto)
-                .fechaTransaccion(request.fechaHora() != null ? request.fechaHora() : OffsetDateTime.now())
+                .fechaTransaccion(parseFechaHora(request.fechaHora()))
                 .estado("SIMULACION")
                 .estadoEvaluacion(EstadoEvaluacion.PENDIENTE)
                 .build();
+    }
+
+    private OffsetDateTime parseFechaHora(String fechaHora) {
+        if (fechaHora == null || fechaHora.isBlank()) {
+            return OffsetDateTime.now();
+        }
+        try {
+            return OffsetDateTime.parse(fechaHora);
+        } catch (DateTimeParseException ex) {
+            throw new BusinessException("FECHA_HORA_INVALIDA",
+                    "La fecha debe incluir zona horaria. Ejemplo: 2026-09-02T16:08:00-03:00");
+        }
     }
 
     private Pais resolvePais(String nombre) {

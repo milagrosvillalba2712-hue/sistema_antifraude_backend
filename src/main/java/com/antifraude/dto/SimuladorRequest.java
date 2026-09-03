@@ -5,8 +5,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
-
 public record SimuladorRequest(
         String productoCodigo,
         String canalCodigo,
@@ -17,6 +15,6 @@ public record SimuladorRequest(
         @NotBlank String documentoCliente,
         @NotBlank String tipoDocumentoCliente,
         @NotBlank String paisEmisorDocumentoCliente,
-        OffsetDateTime fechaHora
+        String fechaHora
 ) {
 }

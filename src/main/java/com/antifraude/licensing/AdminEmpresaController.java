@@ -4,6 +4,7 @@ import com.antifraude.audit.Auditoria;
 import com.antifraude.audit.AuditoriaRepository;
 import com.antifraude.audit.AuditoriaService;
 import com.antifraude.config.ClientIpResolver;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.antifraude.dto.ApiErrorDescriptor;
 import com.antifraude.exception.BusinessException;
 import com.antifraude.security.tenant.TenantContext;
@@ -48,6 +49,7 @@ public class AdminEmpresaController {
     private final LicensingOnlineService onlineService;
     private final AuditoriaService auditoriaService;
     private final AdminEmpresaObservabilityService observabilityService;
+    private final JdbcTemplate jdbcTemplate;
 
     @Value("${app.licenses.jobs.enabled:true}")
     private boolean jobsHabilitados;
@@ -64,7 +66,8 @@ public class AdminEmpresaController {
                                   LicensingControlPlaneClient controlPlaneClient,
                                   LicensingOnlineService onlineService,
                                   AuditoriaService auditoriaService,
-                                  AdminEmpresaObservabilityService observabilityService) {
+                                  AdminEmpresaObservabilityService observabilityService,
+                                  JdbcTemplate jdbcTemplate) {
         this.empresaRepository = empresaRepository;
         this.suscripcionRepository = suscripcionRepository;
         this.pagoRepository = pagoRepository;
@@ -78,6 +81,7 @@ public class AdminEmpresaController {
         this.onlineService = onlineService;
         this.auditoriaService = auditoriaService;
         this.observabilityService = observabilityService;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @GetMapping("/resumen")
@@ -186,20 +190,25 @@ public class AdminEmpresaController {
         Long suscripcionId = suscripcion != null ? suscripcion.getId() : null;
         String successUrl = body != null && body.get("successUrl") != null ? String.valueOf(body.get("successUrl")) : null;
         String cancelUrl = body != null && body.get("cancelUrl") != null ? String.valueOf(body.get("cancelUrl")) : null;
+        Integer coverageYears = intValue(body != null ? body.get("coverageYears") : null, 1);
+        Integer cantidad = intValue(body != null ? body.get("cantidad") : null, 1);
+        String tipo = body != null && body.get("tipo") != null ? String.valueOf(body.get("tipo")) : "RENOVACION_LICENCIA";
+        String rolCodigo = body != null && body.get("rolCodigo") != null ? String.valueOf(body.get("rolCodigo")) : null;
+        BigDecimal montoLicencia = suscripcion != null && suscripcion.getPlanLicencia() != null && suscripcion.getPlanLicencia().getPrecioAnual() != null
+                ? suscripcion.getPlanLicencia().getPrecioAnual().multiply(BigDecimal.valueOf(coverageYears))
+                : BigDecimal.ZERO;
         Pago pago = Pago.builder()
                 .empresa(empresa)
                 .suscripcion(suscripcion)
                 .codigo("PAY-LIC-" + System.currentTimeMillis())
-                .monto(suscripcion != null && suscripcion.getPlanLicencia() != null && suscripcion.getPlanLicencia().getPrecioAnual() != null
-                        ? suscripcion.getPlanLicencia().getPrecioAnual()
-                        : BigDecimal.ZERO)
+                .monto(montoLicencia)
                 .metodoPago("STRIPE_CHECKOUT")
-                .concepto("Pago de licencia anual Regula")
+                .concepto("Pago de licencia Regula - cobertura " + coverageYears + " anio(s)")
                 .estado(Pago.EstadoPago.PENDIENTE)
                 .build();
         pagoRepository.save(pago);
 
-        Map<String, Object> checkout = controlPlaneClient.createStripeCheckout(empresaId, null, successUrl, cancelUrl);
+        Map<String, Object> checkout = controlPlaneClient.createStripeCheckout(empresaId, null, coverageYears, tipo, cantidad, rolCodigo, successUrl, cancelUrl);
         String sessionId = String.valueOf(checkout.getOrDefault("stripeCheckoutSessionId", ""));
         if (!sessionId.isBlank() && !"null".equalsIgnoreCase(sessionId)) {
             pago.setReferenciaExterna(sessionId);
@@ -373,6 +382,68 @@ public class AdminEmpresaController {
         UUID empresaId = empresaActual();
         return ResponseEntity.ok(auditoriaRepository.findTop50ByEmpresaIdOrderByFechaEventoDesc(empresaId)
                 .stream().map(this::auditoriaDto).toList());
+    }
+
+    @GetMapping("/logs")
+    public ResponseEntity<Map<String, Object>> logs(@RequestParam(required = false) String nivel,
+                                                    @RequestParam(required = false) String busca,
+                                                    @RequestParam(required = false) String desde,
+                                                    @RequestParam(required = false) String hasta,
+                                                    @RequestParam(defaultValue = "100") int size,
+                                                    @RequestParam(defaultValue = "0") int page) {
+        UUID empresaId = empresaActual();
+        StringBuilder where = new StringBuilder("WHERE empresa_id = ?");
+        List<Object> params = new java.util.ArrayList<>();
+        params.add(empresaId);
+
+        if (nivel != null && !nivel.isBlank()) {
+            where.append(" AND nivel = ?");
+            params.add(nivel.trim().toUpperCase());
+        }
+        if (busca != null && !busca.isBlank()) {
+            where.append(" AND mensaje ILIKE ?");
+            params.add("%" + busca.trim() + "%");
+        }
+        OffsetDateTime desdeDate = parseDate(desde);
+        if (desdeDate != null) {
+            where.append(" AND fecha >= ?");
+            params.add(desdeDate);
+        }
+        OffsetDateTime hastaDate = parseDate(hasta);
+        if (hastaDate != null) {
+            where.append(" AND fecha <= ?");
+            params.add(hastaDate);
+        }
+
+        Integer total = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM app_log " + where, Integer.class, params.toArray());
+
+        Object[] pageParams = java.util.Arrays.copyOf(params.toArray(), params.size() + 2);
+        pageParams[params.size()] = Math.max(0, size);
+        pageParams[params.size() + 1] = Math.max(0, page) * Math.max(0, size);
+
+        List<Map<String, Object>> filas = jdbcTemplate.queryForList(
+                "SELECT id, nivel, logger, mensaje, fecha FROM app_log " + where
+                        + " ORDER BY fecha DESC LIMIT ? OFFSET ?",
+                pageParams);
+
+        List<Map<String, Object>> logs = new java.util.ArrayList<>();
+        for (Map<String, Object> f : filas) {
+            logs.add(mapOf(
+                    "id", f.get("id"),
+                    "nivel", f.get("nivel"),
+                    "logger", f.get("logger"),
+                    "mensaje", f.get("mensaje"),
+                    "fecha", f.get("fecha")
+            ));
+        }
+
+        return ResponseEntity.ok(mapOf(
+                "total", total != null ? total : 0,
+                "page", page,
+                "size", size,
+                "logs", logs
+        ));
     }
 
     private UUID empresaActual() {
@@ -550,6 +621,20 @@ public class AdminEmpresaController {
             return null;
         }
         return OffsetDateTime.parse(value);
+    }
+
+    private Integer intValue(Object value, int fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            return fallback;
+        }
     }
 
     private Map<String, Object> mapOf(Object... values) {

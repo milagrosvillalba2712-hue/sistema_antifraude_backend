@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
@@ -225,14 +226,31 @@ public class LicensingControlPlaneClient {
     }
 
     public Map<String, Object> createStripeCheckout(UUID empresaId, Long suscripcionId, String successUrl, String cancelUrl) {
+        return createStripeCheckout(empresaId, suscripcionId, 1, "RENOVACION_LICENCIA", 1, null, successUrl, cancelUrl);
+    }
+
+    public Map<String, Object> createStripeCheckout(UUID empresaId,
+                                                    Long suscripcionId,
+                                                    Integer coverageYears,
+                                                    String tipo,
+                                                    Integer cantidad,
+                                                    String rolCodigo,
+                                                    String successUrl,
+                                                    String cancelUrl) {
         if (!habilitado || restClient == null || empresaId == null) {
             return offlinePayload("STRIPE_CHECKOUT");
         }
         try {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("empresaId", empresaId.toString());
+            payload.put("coverageYears", coverageYears != null ? coverageYears : 1);
+            payload.put("tipo", StringUtils.hasText(tipo) ? tipo : "RENOVACION_LICENCIA");
+            payload.put("cantidad", cantidad != null && cantidad > 0 ? cantidad : 1);
             if (suscripcionId != null) {
                 payload.put("suscripcionId", suscripcionId);
+            }
+            if (StringUtils.hasText(rolCodigo)) {
+                payload.put("rolCodigo", rolCodigo);
             }
             if (StringUtils.hasText(successUrl)) {
                 payload.put("successUrl", successUrl);
@@ -240,8 +258,8 @@ public class LicensingControlPlaneClient {
             if (StringUtils.hasText(cancelUrl)) {
                 payload.put("cancelUrl", cancelUrl);
             }
-            log.info("[LICENCIA] Creando checkout Stripe - URL={}/api/v1/billing/checkout-session, apiKey={}, payload={}",
-                    restClient != null ? "configured" : "null", apiKey, payload);
+            log.info("[LICENCIA] Creando checkout Stripe - URL=/api/v1/billing/checkout-session, payload={}",
+                    payload);
             Map<?, ?> response = restClient.post()
                     .uri("/api/v1/billing/checkout-session")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -253,6 +271,11 @@ public class LicensingControlPlaneClient {
             return sanitizeMap(response);
         } catch (RuntimeException exception) {
             log.error("[LICENCIA] No se pudo crear Checkout Stripe - {} - message: {}", exception.getClass().getSimpleName(), exception.getMessage(), exception);
+            if (exception instanceof HttpStatusCodeException httpException) {
+                return offlinePayload("STRIPE_CHECKOUT",
+                        "CONTROL_PLANE_HTTP_" + httpException.getStatusCode().value(),
+                        mensajeControlPlane(httpException));
+            }
             return offlinePayload("STRIPE_CHECKOUT");
         }
     }
@@ -337,12 +360,24 @@ public class LicensingControlPlaneClient {
     }
 
     private Map<String, Object> offlinePayload(String operation) {
+        return offlinePayload(operation, "SIN_CONECTIVIDAD", "Control Plane no configurado o no disponible");
+    }
+
+    private Map<String, Object> offlinePayload(String operation, String estado, String mensaje) {
         return Map.of(
                 "online", false,
                 "operation", operation,
-                "estado", "SIN_CONECTIVIDAD",
-                "mensaje", "Control Plane no configurado o no disponible"
+                "estado", estado,
+                "mensaje", mensaje
         );
+    }
+
+    private String mensajeControlPlane(HttpStatusCodeException exception) {
+        String body = exception.getResponseBodyAsString();
+        if (StringUtils.hasText(body)) {
+            return body.length() > 500 ? body.substring(0, 500) : body;
+        }
+        return "Control Plane rechazo la solicitud con estado HTTP " + exception.getStatusCode().value();
     }
 
     private Map<String, Object> sanitizeMap(Map<?, ?> response) {

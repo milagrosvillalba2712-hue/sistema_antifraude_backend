@@ -86,7 +86,7 @@ class AntifraudeApplicationTests {
                 ) d
                 """, Integer.class);
         assertThat(total).isGreaterThanOrEqualTo(30);
-        assertThat(ultimaVersion).isEqualTo(35);
+        assertThat(ultimaVersion).isEqualTo(38);
         assertThat(duplicadas).isZero();
     }
 
