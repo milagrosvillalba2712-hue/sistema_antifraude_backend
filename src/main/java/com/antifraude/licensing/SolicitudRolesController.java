@@ -1,6 +1,8 @@
 package com.antifraude.licensing;
 
 import com.antifraude.audit.AuditoriaService;
+import com.antifraude.common.entity.Moneda;
+import com.antifraude.common.repository.MonedaRepository;
 import com.antifraude.exception.BusinessException;
 import com.antifraude.security.tenant.TenantContext;
 import com.antifraude.users.Usuario;
@@ -34,6 +36,7 @@ public class SolicitudRolesController {
     private final UsuarioRepository usuarioRepository;
     private final AuditoriaService auditoriaService;
     private final LicensingControlPlaneClient controlPlaneClient;
+    private final MonedaRepository monedaRepository;
 
     public SolicitudRolesController(SolicitudRolesRepository solicitudRolesRepository,
                                      PlanLicenciaRepository planLicenciaRepository,
@@ -42,7 +45,8 @@ public class SolicitudRolesController {
                                      PagoRepository pagoRepository,
                                      UsuarioRepository usuarioRepository,
                                      AuditoriaService auditoriaService,
-                                     LicensingControlPlaneClient controlPlaneClient) {
+                                     LicensingControlPlaneClient controlPlaneClient,
+                                     MonedaRepository monedaRepository) {
         this.solicitudRolesRepository = solicitudRolesRepository;
         this.planLicenciaRepository = planLicenciaRepository;
         this.usuarioEmpresaRepository = usuarioEmpresaRepository;
@@ -51,6 +55,7 @@ public class SolicitudRolesController {
         this.usuarioRepository = usuarioRepository;
         this.auditoriaService = auditoriaService;
         this.controlPlaneClient = controlPlaneClient;
+        this.monedaRepository = monedaRepository;
     }
 
     /** Verifica si la empresa puede crear un usuario del rol indicado. */
@@ -137,11 +142,13 @@ public class SolicitudRolesController {
         }
 
         UUID empresaId = TenantContext.getEmpresaId();
+        String moneda = normalizarMoneda(request != null ? request.moneda() : null);
 
         Pago pago = Pago.builder()
                 .empresa(solicitud.getEmpresa())
                 .codigo("PAGO-SOL-" + solicitudId + "-" + System.currentTimeMillis())
                 .monto(solicitud.getPrecioTotal())
+                .monedaRef(monedaRef(moneda))
                 .metodoPago("STRIPE_CHECKOUT")
                 .concepto("Roles adicionales: " + solicitud.getRolSolicitado() + " x" + solicitud.getCantidad())
                 .solicitudRoles(solicitud)
@@ -154,7 +161,7 @@ public class SolicitudRolesController {
         Map<String, Object> checkout = controlPlaneClient.createStripeOneTimeCheckout(
                 empresaId,
                 solicitud.getPrecioTotal(),
-                "USD",
+                moneda,
                 pago.getConcepto(),
                 String.valueOf(pago.getId()),
                 Map.of(
@@ -169,8 +176,8 @@ public class SolicitudRolesController {
         String sessionId = String.valueOf(checkout.getOrDefault("stripeCheckoutSessionId", ""));
         if (StringUtils.hasText(sessionId) && !"null".equalsIgnoreCase(sessionId)) {
             pago.setReferenciaExterna(sessionId);
-            pagoRepository.save(pago);
         }
+        actualizarMontoLocalDesdeCheckout(pago, checkout, moneda);
 
         auditoriaService.registrar(TenantContext.getUsuarioId(), empresaId, "INICIAR_PAGO_STRIPE",
                 "Inicio de pago Stripe por solicitud " + solicitudId + ": " + solicitud.getPrecioTotal(),
@@ -182,7 +189,8 @@ public class SolicitudRolesController {
         java.util.LinkedHashMap<String, Object> response = new java.util.LinkedHashMap<>();
         response.put("pagoId", pago.getId());
         response.put("solicitudId", solicitudId);
-        response.put("monto", solicitud.getPrecioTotal());
+        response.put("monto", pago.getMonto());
+        response.put("moneda", pago.getMoneda());
         response.put("metodo", "STRIPE_CHECKOUT");
         response.put("estado", pago.getEstado());
         response.put("online", checkout.getOrDefault("online", false));
@@ -278,6 +286,35 @@ public class SolicitudRolesController {
     }
 
     public record SolicitudRequest(String rolCodigo, int cantidad, String observacion) {}
-    public record PagoRequest(String successUrl, String cancelUrl) {}
+    public record PagoRequest(String successUrl, String cancelUrl, String moneda) {}
     public record ConfirmarStripeRequest(String sessionId) {}
+
+    private String normalizarMoneda(Object value) {
+        String moneda = value != null ? String.valueOf(value).trim().toUpperCase() : "USD";
+        return switch (moneda) {
+            case "USD", "PYG" -> moneda;
+            default -> "USD";
+        };
+    }
+
+    private Moneda monedaRef(String codigo) {
+        return monedaRepository.findByCodigoIso(codigo).orElse(null);
+    }
+
+    private void actualizarMontoLocalDesdeCheckout(Pago pago, Map<String, Object> checkout, String monedaFallback) {
+        Object monto = checkout.get("monto");
+        if (monto != null) {
+            pago.setMonto(decimalValue(monto));
+        }
+        String moneda = normalizarMoneda(checkout.getOrDefault("moneda", monedaFallback));
+        pago.setMonedaRef(monedaRef(moneda));
+        pagoRepository.save(pago);
+    }
+
+    private BigDecimal decimalValue(Object value) {
+        if (value instanceof BigDecimal decimal) return decimal;
+        if (value instanceof Number number) return BigDecimal.valueOf(number.doubleValue());
+        if (value == null || String.valueOf(value).isBlank()) return BigDecimal.ZERO;
+        return new BigDecimal(String.valueOf(value));
+    }
 }

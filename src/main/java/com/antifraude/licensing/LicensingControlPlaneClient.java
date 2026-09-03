@@ -226,7 +226,7 @@ public class LicensingControlPlaneClient {
     }
 
     public Map<String, Object> createStripeCheckout(UUID empresaId, Long suscripcionId, String successUrl, String cancelUrl) {
-        return createStripeCheckout(empresaId, suscripcionId, 1, "RENOVACION_LICENCIA", 1, null, successUrl, cancelUrl);
+        return createStripeCheckout(empresaId, suscripcionId, 1, "RENOVACION_LICENCIA", 1, null, null, successUrl, cancelUrl);
     }
 
     public Map<String, Object> createStripeCheckout(UUID empresaId,
@@ -235,6 +235,7 @@ public class LicensingControlPlaneClient {
                                                     String tipo,
                                                     Integer cantidad,
                                                     String rolCodigo,
+                                                    String moneda,
                                                     String successUrl,
                                                     String cancelUrl) {
         if (!habilitado || restClient == null || empresaId == null) {
@@ -251,6 +252,9 @@ public class LicensingControlPlaneClient {
             }
             if (StringUtils.hasText(rolCodigo)) {
                 payload.put("rolCodigo", rolCodigo);
+            }
+            if (StringUtils.hasText(moneda)) {
+                payload.put("moneda", moneda.trim().toUpperCase());
             }
             if (StringUtils.hasText(successUrl)) {
                 payload.put("successUrl", successUrl);

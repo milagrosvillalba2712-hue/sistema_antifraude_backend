@@ -3,6 +3,8 @@ package com.antifraude.licensing;
 import com.antifraude.audit.Auditoria;
 import com.antifraude.audit.AuditoriaRepository;
 import com.antifraude.audit.AuditoriaService;
+import com.antifraude.common.entity.Moneda;
+import com.antifraude.common.repository.MonedaRepository;
 import com.antifraude.config.ClientIpResolver;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.antifraude.dto.ApiErrorDescriptor;
@@ -49,6 +51,7 @@ public class AdminEmpresaController {
     private final LicensingOnlineService onlineService;
     private final AuditoriaService auditoriaService;
     private final AdminEmpresaObservabilityService observabilityService;
+    private final MonedaRepository monedaRepository;
     private final JdbcTemplate jdbcTemplate;
 
     @Value("${app.licenses.jobs.enabled:true}")
@@ -67,6 +70,7 @@ public class AdminEmpresaController {
                                   LicensingOnlineService onlineService,
                                   AuditoriaService auditoriaService,
                                   AdminEmpresaObservabilityService observabilityService,
+                                  MonedaRepository monedaRepository,
                                   JdbcTemplate jdbcTemplate) {
         this.empresaRepository = empresaRepository;
         this.suscripcionRepository = suscripcionRepository;
@@ -81,6 +85,7 @@ public class AdminEmpresaController {
         this.onlineService = onlineService;
         this.auditoriaService = auditoriaService;
         this.observabilityService = observabilityService;
+        this.monedaRepository = monedaRepository;
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -194,6 +199,7 @@ public class AdminEmpresaController {
         Integer cantidad = intValue(body != null ? body.get("cantidad") : null, 1);
         String tipo = body != null && body.get("tipo") != null ? String.valueOf(body.get("tipo")) : "RENOVACION_LICENCIA";
         String rolCodigo = body != null && body.get("rolCodigo") != null ? String.valueOf(body.get("rolCodigo")) : null;
+        String moneda = normalizarMoneda(body != null ? body.get("moneda") : null, "PYG");
         BigDecimal montoLicencia = suscripcion != null && suscripcion.getPlanLicencia() != null && suscripcion.getPlanLicencia().getPrecioAnual() != null
                 ? suscripcion.getPlanLicencia().getPrecioAnual().multiply(BigDecimal.valueOf(coverageYears))
                 : BigDecimal.ZERO;
@@ -202,13 +208,15 @@ public class AdminEmpresaController {
                 .suscripcion(suscripcion)
                 .codigo("PAY-LIC-" + System.currentTimeMillis())
                 .monto(montoLicencia)
+                .monedaRef(monedaRef(moneda))
                 .metodoPago("STRIPE_CHECKOUT")
                 .concepto("Pago de licencia Regula - cobertura " + coverageYears + " anio(s)")
                 .estado(Pago.EstadoPago.PENDIENTE)
                 .build();
         pagoRepository.save(pago);
 
-        Map<String, Object> checkout = controlPlaneClient.createStripeCheckout(empresaId, null, coverageYears, tipo, cantidad, rolCodigo, successUrl, cancelUrl);
+        Map<String, Object> checkout = controlPlaneClient.createStripeCheckout(empresaId, null, coverageYears, tipo, cantidad, rolCodigo, moneda, successUrl, cancelUrl);
+        actualizarMontoLocalDesdeCheckout(pago, checkout, moneda);
         String sessionId = String.valueOf(checkout.getOrDefault("stripeCheckoutSessionId", ""));
         if (!sessionId.isBlank() && !"null".equalsIgnoreCase(sessionId)) {
             pago.setReferenciaExterna(sessionId);
@@ -621,6 +629,35 @@ public class AdminEmpresaController {
             return null;
         }
         return OffsetDateTime.parse(value);
+    }
+
+    private String normalizarMoneda(Object value, String fallback) {
+        String moneda = value != null ? String.valueOf(value).trim().toUpperCase() : fallback;
+        return switch (moneda) {
+            case "USD", "PYG" -> moneda;
+            default -> fallback;
+        };
+    }
+
+    private Moneda monedaRef(String codigo) {
+        return monedaRepository.findByCodigoIso(codigo).orElse(null);
+    }
+
+    private void actualizarMontoLocalDesdeCheckout(Pago pago, Map<String, Object> checkout, String monedaFallback) {
+        Object monto = checkout.get("monto");
+        if (monto != null) {
+            pago.setMonto(decimalValue(monto));
+        }
+        String moneda = normalizarMoneda(checkout.get("moneda"), monedaFallback);
+        pago.setMonedaRef(monedaRef(moneda));
+        pagoRepository.save(pago);
+    }
+
+    private BigDecimal decimalValue(Object value) {
+        if (value instanceof BigDecimal decimal) return decimal;
+        if (value instanceof Number number) return BigDecimal.valueOf(number.doubleValue());
+        if (value == null || String.valueOf(value).isBlank()) return BigDecimal.ZERO;
+        return new BigDecimal(String.valueOf(value));
     }
 
     private Integer intValue(Object value, int fallback) {
