@@ -62,6 +62,7 @@ public class LicensingControlPlaneClient {
                     .uri("/api/v1/licencias/validar")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .body(Map.of("instalacionId", instalacionId.toString(), "fingerprintHash", fingerprintHash))
                     .retrieve()
                     .body(Map.class);
@@ -85,6 +86,7 @@ public class LicensingControlPlaneClient {
             Map<?, ?> response = restClient.get()
                     .uri("/api/v1/catalogs/manifest")
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .retrieve()
                     .body(Map.class);
             return sanitizeMap(response);
@@ -127,6 +129,7 @@ public class LicensingControlPlaneClient {
             Map<?, ?> response = restClient.get()
                     .uri("/api/v1/catalogs/{code}/versions/{version}", code, version)
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .retrieve()
                     .body(Map.class);
             Map<String, Object> result = sanitizeMap(response);
@@ -159,6 +162,7 @@ public class LicensingControlPlaneClient {
             Map<?, ?> response = restClient.get()
                     .uri("/api/v1/licencias/jwks")
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .retrieve()
                     .body(Map.class);
             return sanitizeMap(response);
@@ -176,6 +180,7 @@ public class LicensingControlPlaneClient {
             Map<?, ?> response = restClient.get()
                     .uri("/api/v1/configuration/package")
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .retrieve()
                     .body(Map.class);
             return sanitizeMap(response);
@@ -194,6 +199,7 @@ public class LicensingControlPlaneClient {
                     .uri("/api/v1/telemetry/heartbeat")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .body(Map.of("instalacionId", instalacionId.toString()))
                     .retrieve()
                     .body(Map.class);
@@ -215,6 +221,7 @@ public class LicensingControlPlaneClient {
                     .uri("/api/v1/telemetry/usage")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .body(payload)
                     .retrieve()
                     .body(Map.class);
@@ -268,6 +275,7 @@ public class LicensingControlPlaneClient {
                     .uri("/api/v1/billing/checkout-session")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .body(payload)
                     .retrieve()
                     .body(Map.class);
@@ -314,6 +322,7 @@ public class LicensingControlPlaneClient {
                     .uri("/api/v1/billing/checkout-session")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .body(payload)
                     .retrieve()
                     .body(Map.class);
@@ -332,6 +341,7 @@ public class LicensingControlPlaneClient {
             Map<?, ?> response = restClient.get()
                     .uri("/api/v1/billing/checkout-session/{sessionId}", sessionId)
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .retrieve()
                     .body(Map.class);
             return sanitizeMap(response);
@@ -351,6 +361,7 @@ public class LicensingControlPlaneClient {
                             .queryParam("empresaId", empresaId.toString())
                             .build())
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .retrieve()
                     .body(Object.class);
             Map<String, Object> result = new LinkedHashMap<>();
@@ -365,6 +376,10 @@ public class LicensingControlPlaneClient {
 
     private Map<String, Object> offlinePayload(String operation) {
         return offlinePayload(operation, "SIN_CONECTIVIDAD", "Control Plane no configurado o no disponible");
+    }
+
+    private String bearerApiKey() {
+        return StringUtils.hasText(apiKey) ? "Bearer " + apiKey : "";
     }
 
     private Map<String, Object> offlinePayload(String operation, String estado, String mensaje) {

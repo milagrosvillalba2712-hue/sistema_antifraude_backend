@@ -97,8 +97,11 @@ public class SolicitudRolesController {
         Empresa empresa = new Empresa();
         empresa.setId(empresaId);
 
-        List<BigDecimal> preciosRol = planLicenciaRepository.findPreciosRol(rolCodigoToId(request.rolCodigo()), empresaId);
-        BigDecimal precioUnitario = preciosRol.isEmpty() ? BigDecimal.valueOf(400) : preciosRol.get(0);
+        BigDecimal precioUnitario = tarifaRolDesdeControlPlane(request.rolCodigo(), "USD");
+        if (precioUnitario.compareTo(BigDecimal.ZERO) <= 0) {
+            List<BigDecimal> preciosRol = planLicenciaRepository.findPreciosRol(rolCodigoToId(request.rolCodigo()), empresaId);
+            precioUnitario = preciosRol.isEmpty() ? BigDecimal.valueOf(400) : preciosRol.get(0);
+        }
         BigDecimal precioTotal = precioUnitario.multiply(BigDecimal.valueOf(request.cantidad()));
 
         SolicitudRoles solicitud = SolicitudRoles.builder()
@@ -158,17 +161,14 @@ public class SolicitudRolesController {
 
         String defaultSuccess = "http://localhost:5173/users?rolesPayment=success";
         String defaultCancel = "http://localhost:5173/users?rolesPayment=cancel";
-        Map<String, Object> checkout = controlPlaneClient.createStripeOneTimeCheckout(
+        Map<String, Object> checkout = controlPlaneClient.createStripeCheckout(
                 empresaId,
-                solicitud.getPrecioTotal(),
+                null,
+                1,
+                "ROLES_ADICIONALES",
+                solicitud.getCantidad(),
+                solicitud.getRolSolicitado(),
                 moneda,
-                pago.getConcepto(),
-                String.valueOf(pago.getId()),
-                Map.of(
-                        "solicitudRolesId", solicitud.getId(),
-                        "rolSolicitado", solicitud.getRolSolicitado(),
-                        "cantidad", solicitud.getCantidad()
-                ),
                 request != null && request.successUrl() != null ? request.successUrl() : defaultSuccess,
                 request != null && request.cancelUrl() != null ? request.cancelUrl() : defaultCancel
         );
@@ -283,6 +283,22 @@ public class SolicitudRolesController {
 
     private String rolCodigoToId(String rolCodigo) {
         return rolCodigo;
+    }
+
+    @SuppressWarnings("unchecked")
+    private BigDecimal tarifaRolDesdeControlPlane(String rolCodigo, String moneda) {
+        Map<String, Object> paquete = controlPlaneClient.configurationPackage();
+        Object rows = paquete != null ? paquete.get("rolePrices") : null;
+        if (!(rows instanceof List<?> list)) {
+            return BigDecimal.ZERO;
+        }
+        return list.stream()
+                .filter(Map.class::isInstance)
+                .map(Map.class::cast)
+                .filter(row -> rolCodigo.equalsIgnoreCase(String.valueOf(row.get("rolCodigo"))))
+                .findFirst()
+                .map(row -> decimalValue("PYG".equalsIgnoreCase(moneda) ? row.get("precioAnualPyg") : row.get("precioAnualUsd")))
+                .orElse(BigDecimal.ZERO);
     }
 
     public record SolicitudRequest(String rolCodigo, int cantidad, String observacion) {}
