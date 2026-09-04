@@ -10,17 +10,26 @@ rule "Transaccion internacional"
         $ctx : RiskContext()
         $t : TransaccionFact(esInternacional == true) from $ctx.getTransaccionFact()
     then
-        scoreTracker.addScore(20);
+        scoreTracker.addScore($ctx.getConfig().getPaisInternacionalScore());
         System.out.println("[Drools] Transaccion internacional detectada - Pais origen: " + $t.getPaisOrigenCodigo());
 end
 
 rule "Pais de alto riesgo"
     when
-        $ctx : RiskContext()
-        $t : TransaccionFact(paisOrigenCodigo != null, paisOrigenCodigo != "PRY") from $ctx.getTransaccionFact()
+        $ctx : RiskContext(paisOrigenAltoRiesgo == true)
+        $t : TransaccionFact(paisOrigenCodigo != null) from $ctx.getTransaccionFact()
     then
-        scoreTracker.addScore(15);
+        scoreTracker.addScore($ctx.getConfig().getPaisAltoRiesgoScore());
         System.out.println("[Drools] Pais de alto riesgo detectado: " + $t.getPaisOrigenCodigo());
+end
+
+rule "Pais destino de alto riesgo"
+    when
+        $ctx : RiskContext(paisDestinoAltoRiesgo == true)
+        $t : TransaccionFact(paisDestinoCodigo != null) from $ctx.getTransaccionFact()
+    then
+        scoreTracker.addScore($ctx.getConfig().getPaisDestinoAltoRiesgoScore());
+        System.out.println("[Drools] Pais destino de alto riesgo detectado: " + $t.getPaisDestinoCodigo());
 end
 
 rule "Pais destino diferente a origen"
@@ -29,6 +38,6 @@ rule "Pais destino diferente a origen"
         $t : TransaccionFact(paisOrigenCodigo != null, paisDestinoCodigo != null, 
                              paisOrigenCodigo != paisDestinoCodigo) from $ctx.getTransaccionFact()
     then
-        scoreTracker.addScore(10);
+        scoreTracker.addScore($ctx.getConfig().getPaisDestinoDistintoScore());
         System.out.println("[Drools] Pais destino diferente a origen");
 end

@@ -64,7 +64,7 @@ class DatabaseLifecycleTest {
             assertThat(queryInt(postgres, "select count(*) from api_error_catalogo"))
                     .isEqualTo(33);
             assertThat(queryInt(postgres, "select count(*) from admin_empresa_configuracion_local"))
-                    .isEqualTo(11);
+                    .isEqualTo(12);
         }
     }
 

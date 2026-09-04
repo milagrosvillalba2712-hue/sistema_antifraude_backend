@@ -25,5 +25,6 @@ public record TransaccionAlertaResponse(
         Map<String, Object> beneficiario,
         Map<String, Object> operacion,
         Map<String, Object> controlSeguimiento,
+        Map<String, Object> entidades,
         Map<String, Object> internacional) {
 }

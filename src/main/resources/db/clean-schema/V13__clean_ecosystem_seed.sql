@@ -172,12 +172,15 @@ JOIN plan_licencia p ON p.id = s.plan_licencia_id
 CROSS JOIN generate_series(1,4) gs(n)
 ON CONFLICT (codigo) DO UPDATE SET estado = EXCLUDED.estado, monto = EXCLUDED.monto;
 
-INSERT INTO uso_suscripcion (empresa_id, suscripcion_id, periodo, usuarios_activos, transacciones_procesadas, consultas_kyc, alertas_generadas, reportes_generados, consumo_json)
+INSERT INTO uso_suscripcion (empresa_id, suscripcion_id, periodo, usuarios_activos, transacciones_procesadas, consultas_kyc, alertas_generadas, reportes_generados, consumo_json, anio, mes)
 SELECT s.empresa_id, s.id, make_date(2026, gs.n, 1), 12 + gs.n, 15000 * gs.n, 300 * gs.n, 20 * gs.n, gs.n,
-       jsonb_build_object('origen', 'seed_demo', 'periodo', gs.n)
+       jsonb_build_object('origen', 'seed_demo', 'periodo', gs.n), 2026, gs.n
 FROM suscripcion s
 CROSS JOIN generate_series(1,4) gs(n)
-ON CONFLICT (empresa_id, suscripcion_id, periodo) DO UPDATE SET transacciones_procesadas = EXCLUDED.transacciones_procesadas;
+ON CONFLICT (empresa_id, suscripcion_id, periodo) DO UPDATE SET
+    transacciones_procesadas = EXCLUDED.transacciones_procesadas,
+    anio = EXCLUDED.anio,
+    mes = EXCLUDED.mes;
 
 INSERT INTO tipo_documento (codigo, nombre, descripcion, pais_relacion_id, tipo_persona, fuente_oficial)
 SELECT v.codigo, v.nombre, v.descripcion, p.id, v.tipo_persona, v.fuente

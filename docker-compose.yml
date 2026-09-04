@@ -32,8 +32,29 @@ services:
       timeout: 3s
       retries: 20
 
+  # Servidor de BD del cliente (banco suscriptor): aislado del CP de Regula.
+  # Simula el PostgreSQL que corre dentro de la red del banco.
+  postgres-banco:
+    image: postgres:16
+    container_name: regula-db-banco
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+    ports:
+      - "${BANCO_DB_PORT:-5434}:5432"
+    volumes:
+      - banco_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 volumes:
   pgdata:
     name: sistema_antifraude_backend_pgdata
   canonical_pgdata:
     name: regula_pgdata_canonical
+  banco_pgdata:
+    name: regula_pgdata_banco

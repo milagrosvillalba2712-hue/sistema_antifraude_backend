@@ -51,6 +51,12 @@ public class EvidenciaAlerta {
     @Column(name = "referencia_archivo", length = 500)
     private String referenciaArchivo;
 
+    @Column(name = "contenido", columnDefinition = "bytea")
+    private byte[] contenido;
+
+    @Column(name = "contenido_nombre", length = 255)
+    private String contenidoNombre;
+
     @Column(length = 30)
     @Builder.Default
     private String estado = "CARGADA";

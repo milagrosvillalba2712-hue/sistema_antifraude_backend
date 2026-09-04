@@ -34,6 +34,9 @@ public class Empresa extends AuditableEntity {
     @Column(name = "telefono_contacto", length = 60)
     private String telefonoContacto;
 
+    @Column(name = "direccion_contacto", length = 250)
+    private String direccionContacto;
+
     @Column(length = 30)
     @Enumerated(EnumType.STRING)
     @Builder.Default

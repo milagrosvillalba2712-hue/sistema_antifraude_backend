@@ -234,14 +234,19 @@ SELECT l.id,'DOCUMENTO','DEMO-ELEMENTO-'||n,true FROM lista_regulatoria l CROSS 
 ON CONFLICT DO NOTHING;
 
 INSERT INTO sujeto_riesgo(lista_regulatoria_id,codigo,tipo_sujeto,nombre_normalizado,pais_id,tipo_riesgo,severidad,estado,detalle_json)
-SELECT l.id,'SR-DEMO-'||n,CASE WHEN n%5=0 THEN 'ENTIDAD' ELSE 'PERSONA' END,'Sujeto Riesgo Sintetico '||n,(SELECT id FROM pais WHERE codigo_iso=CASE WHEN n%4=0 THEN 'BR' ELSE 'PY' END),CASE WHEN n%6=0 THEN 'PEP' ELSE 'LISTA_INTERNA' END,CASE WHEN n%7=0 THEN 'CRITICA' WHEN n%3=0 THEN 'ALTA' ELSE 'MEDIA' END,'ACTIVO',jsonb_build_object('demo',true)
+SELECT l.id,'SR-DEMO-'||n,CASE WHEN n%5=0 THEN 'ENTIDAD' ELSE 'PERSONA' END,UPPER('Sujeto Riesgo Sintetico '||n),(SELECT id FROM pais WHERE codigo_iso=CASE WHEN n%4=0 THEN 'BR' ELSE 'PY' END),CASE WHEN n%6=0 THEN 'PEP' ELSE 'LISTA_INTERNA' END,CASE WHEN n%7=0 THEN 'CRITICA' WHEN n%3=0 THEN 'ALTA' ELSE 'MEDIA' END,'ACTIVO',jsonb_build_object('demo',true)
 FROM generate_series(1,40)n JOIN lista_regulatoria l ON l.codigo=CASE WHEN n%6=0 THEN 'PEP_DEMO_LIST' ELSE 'LISTA_INTERNA_DEMO_LIST' END
 ON CONFLICT(codigo) DO UPDATE SET nombre_normalizado=EXCLUDED.nombre_normalizado,severidad=EXCLUDED.severidad;
 
+DELETE FROM sujeto_riesgo_alias a
+USING sujeto_riesgo s
+WHERE a.sujeto_riesgo_id = s.id
+  AND a.tipo_alias = 'ALIAS'
+  AND UPPER(a.alias_normalizado) = UPPER(s.nombre_normalizado || ' Alias')
+  AND a.alias_normalizado <> UPPER(s.nombre_normalizado || ' Alias');
 INSERT INTO sujeto_riesgo_alias(sujeto_riesgo_id,alias_normalizado,tipo_alias)
-SELECT s.id,s.nombre_normalizado||' Alias','ALIAS' FROM sujeto_riesgo s
-WHERE NOT EXISTS(SELECT 1 FROM sujeto_riesgo_alias a WHERE a.sujeto_riesgo_id=s.id AND a.alias_normalizado=s.nombre_normalizado||' Alias');
-INSERT INTO sujeto_riesgo_documento(sujeto_riesgo_id,tipo_documento_id,pais_emisor_id,numero_documento_hash,documento_enmascarado)
+SELECT s.id,UPPER(s.nombre_normalizado||' Alias'),'ALIAS' FROM sujeto_riesgo s
+WHERE NOT EXISTS(SELECT 1 FROM sujeto_riesgo_alias a WHERE a.sujeto_riesgo_id=s.id AND a.alias_normalizado=UPPER(s.nombre_normalizado||' Alias'));INSERT INTO sujeto_riesgo_documento(sujeto_riesgo_id,tipo_documento_id,pais_emisor_id,numero_documento_hash,documento_enmascarado)
 SELECT s.id,(SELECT id FROM tipo_documento WHERE codigo='CI_PY'),COALESCE(s.pais_id,(SELECT id FROM pais WHERE codigo_iso='PY')),hmac(s.codigo||'-DOC','regula-demo-hmac-key','sha256'),'***'||right(s.codigo,4) FROM sujeto_riesgo s
 WHERE NOT EXISTS(SELECT 1 FROM sujeto_riesgo_documento d WHERE d.sujeto_riesgo_id=s.id AND d.numero_documento_hash=hmac(s.codigo||'-DOC','regula-demo-hmac-key','sha256'));
 INSERT INTO sujeto_riesgo_relacion(sujeto_origen_id,sujeto_destino_id,tipo_relacion,descripcion)
@@ -271,11 +276,19 @@ INSERT INTO calendario_riesgo(empresa_id,fecha,nombre,tipo_evento,severidad)
 SELECT '00000000-0000-0000-0000-000000000001',DATE '2026-01-01'+n*20,'Evento Riesgo '||n,CASE WHEN n%2=0 THEN 'FERIADO' ELSE 'CIERRE_MES' END,CASE WHEN n%4=0 THEN 'ALTA' ELSE 'MEDIA' END FROM generate_series(1,12)n ON CONFLICT(empresa_id,fecha,tipo_evento) DO UPDATE SET nombre=EXCLUDED.nombre;
 
 -- Volumen transaccional repartido en meses para probar particiones y dashboard.
-INSERT INTO transacciones(fecha_transaccion,empresa_id,codigo,tipo_transaccion_id,canal_transaccion_id,infraestructura_pago,monto,moneda_id,estado,estado_evaluacion,procesada,nombre_remitente,nombre_beneficiario,score_riesgo,nivel_riesgo_id,reglas_disparadas_json)
+-- Los documentos se guardan como HMAC deterministico para cumplir la regla de no persistir PII en texto plano.
+INSERT INTO transacciones(fecha_transaccion,empresa_id,codigo,tipo_transaccion_id,canal_transaccion_id,infraestructura_pago,monto,moneda_id,estado,estado_evaluacion,procesada,nombre_remitente,nombre_beneficiario,remitente_nombre_completo,beneficiario_nombre_completo,documento_remitente_hash,documento_beneficiario_hash,tipo_documento_remitente_id,pais_emisor_documento_remitente_id,tipo_documento_beneficiario_id,pais_emisor_documento_beneficiario_id,entidad_origen_tipo,entidad_origen_nombre,entidad_destino_tipo,entidad_destino_nombre,score_riesgo,nivel_riesgo_id,reglas_disparadas_json)
 SELECT TIMESTAMPTZ '2026-01-01 08:00:00-03'+(n*interval '3 days'),
  '00000000-0000-0000-0000-000000000001','TX-PY-REAL-'||lpad(n::text,4,'0'),tt.id,ct.id,
  CASE WHEN n%4=0 THEN 'SIPAP' WHEN n%4=1 THEN 'TARJETA' WHEN n%4=2 THEN 'EMPE' ELSE 'CAJA' END,
- 250000+n*475000,m.id,'COMPLETADA','EVALUADA',true,'Cliente Sintetico '||lpad(((n-1)%60+1)::text,3,'0'),'Beneficiario Sintetico '||n,
+ 250000+n*475000,m.id,'COMPLETADA','EVALUADA',true,'Cliente Sintetico '||lpad(((n-1)%60+1)::text,3,'0'),'Beneficiario Sintetico '||n,'Cliente Sintetico '||lpad(((n-1)%60+1)::text,3,'0'),'Beneficiario Sintetico '||n,
+ hmac('CI-REM-'||lpad(((n-1)%60+1)::text,7,'0'),'regula-demo-hmac-key','sha256'),
+hmac('CI-BEN-'||lpad(n::text,7,'0'),'regula-demo-hmac-key','sha256'),
+ td.id,py.id,td.id,py.id,
+ CASE ct.codigo WHEN 'SPI' THEN 'BANCO' WHEN 'TARJETA' THEN 'FINANCIERA' WHEN 'EMPE' THEN 'EMPE' ELSE 'SUCURSAL' END,
+ CASE ct.codigo WHEN 'SPI' THEN 'Banco Continental SAECA' WHEN 'TARJETA' THEN 'Financiera Santa Clara' WHEN 'EMPE' THEN 'Billetera Electronica Demo' ELSE 'Sucursal Demo Asuncion' END,
+ CASE ct.codigo WHEN 'SPI' THEN 'BANCO' WHEN 'TARJETA' THEN 'COMERCIO' WHEN 'EMPE' THEN 'EMPE' ELSE 'BANCO' END,
+ CASE ct.codigo WHEN 'SPI' THEN 'Banco Itau Paraguay' WHEN 'TARJETA' THEN 'Comercio Sintetico '||n WHEN 'EMPE' THEN 'Billetera Electrónica Demo' ELSE 'Banco Continental SAECA' END,
  CASE WHEN n%10=0 THEN 92 WHEN n%5=0 THEN 75 WHEN n%3=0 THEN 48 ELSE 18 END,nr.id,
  CASE WHEN n%5=0 THEN jsonb_build_array(jsonb_build_object('codigo','REG-PY-05','score',75)) ELSE '[]'::jsonb END
 FROM generate_series(1,80)n
@@ -283,7 +296,20 @@ JOIN tipo_transaccion tt ON tt.codigo=CASE WHEN n%4=0 THEN 'PY_SPI_TRANSFER' WHE
 JOIN canal_transaccion ct ON ct.codigo=CASE WHEN n%4=0 THEN 'SPI' WHEN n%4=1 THEN 'TARJETA' WHEN n%4=2 THEN 'EMPE' ELSE 'CAJA' END
 JOIN moneda m ON m.codigo_iso='PYG'
 JOIN nivel_riesgo nr ON nr.codigo=CASE WHEN n%10=0 THEN 'CRITICO' WHEN n%5=0 THEN 'ALTO' WHEN n%3=0 THEN 'MEDIO' ELSE 'BAJO' END
+JOIN tipo_documento td ON td.codigo='CI_PY'
+JOIN pais py ON py.codigo_iso='PY'
 WHERE NOT EXISTS(SELECT 1 FROM transacciones x WHERE x.empresa_id='00000000-0000-0000-0000-000000000001' AND x.codigo='TX-PY-REAL-'||lpad(n::text,4,'0'));
+
+UPDATE transacciones t SET
+ entidad_origen_tipo=CASE ct.codigo WHEN 'SPI' THEN 'BANCO' WHEN 'TARJETA' THEN 'FINANCIERA' WHEN 'EMPE' THEN 'EMPE' ELSE 'SUCURSAL' END,
+ entidad_origen_nombre=CASE ct.codigo WHEN 'SPI' THEN 'Banco Continental SAECA' WHEN 'TARJETA' THEN 'Financiera Santa Clara' WHEN 'EMPE' THEN 'Billetera Electronica Demo' ELSE 'Sucursal Demo Asuncion' END,
+ entidad_destino_tipo=CASE ct.codigo WHEN 'SPI' THEN 'BANCO' WHEN 'TARJETA' THEN 'COMERCIO' WHEN 'EMPE' THEN 'EMPE' ELSE 'BANCO' END,
+ entidad_destino_nombre=CASE ct.codigo WHEN 'SPI' THEN 'Banco Itau Paraguay' WHEN 'TARJETA' THEN 'Comercio Sintetico' WHEN 'EMPE' THEN 'Billetera Electrónica Demo' ELSE 'Banco Continental SAECA' END
+FROM canal_transaccion ct
+WHERE ct.id=t.canal_transaccion_id
+  AND t.empresa_id='00000000-0000-0000-0000-000000000001'
+  AND t.codigo LIKE 'TX-PY-REAL-%'
+  AND (t.entidad_origen_tipo IS NULL OR t.entidad_destino_tipo IS NULL);
 
 INSERT INTO evaluaciones_riesgo(empresa_id,transaccion_id,fecha_transaccion,score_total,nivel_riesgo_id,resultado,detalle)
 SELECT t.empresa_id,t.id,t.fecha_transaccion,t.score_riesgo,t.nivel_riesgo_id,CASE WHEN t.score_riesgo>=70 THEN 'ALERTA' ELSE 'APROBADA' END,jsonb_build_object('demo',true,'score',t.score_riesgo) FROM transacciones t WHERE t.codigo LIKE 'TX-PY-REAL-%' ON CONFLICT DO NOTHING;

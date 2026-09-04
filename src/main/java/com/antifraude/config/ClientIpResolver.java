@@ -22,13 +22,29 @@ public final class ClientIpResolver {
         if (StringUtils.hasText(forwarded)) {
             String primera = forwarded.split(",")[0].trim();
             if (StringUtils.hasText(primera)) {
-                return primera;
+                return normalizar(primera);
             }
         }
         String realIp = request.getHeader("X-Real-IP");
         if (StringUtils.hasText(realIp)) {
-            return realIp.trim();
+            return normalizar(realIp.trim());
         }
-        return request.getRemoteAddr();
+        return normalizar(request.getRemoteAddr());
+    }
+
+    /**
+     * Normaliza la representacion del loopback IPv6 (::1 / 0:0:0:0:0:0:0:1) a su
+     * forma IPv4 (127.0.0.1) para mantener logs y auditoria consistentes cuando
+     * la conexion local llega via IPv6.
+     */
+    static String normalizar(String ip) {
+        if (ip == null) {
+            return null;
+        }
+        String limpia = ip.trim();
+        if ("::1".equals(limpia) || "0:0:0:0:0:0:0:1".equals(limpia)) {
+            return "127.0.0.1";
+        }
+        return limpia;
     }
 }

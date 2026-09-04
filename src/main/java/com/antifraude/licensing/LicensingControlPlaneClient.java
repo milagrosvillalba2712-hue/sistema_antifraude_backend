@@ -1,13 +1,19 @@
 package com.antifraude.licensing;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClient;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.math.BigDecimal;
@@ -27,12 +33,16 @@ public class LicensingControlPlaneClient {
     private final RestClient restClient;
     private final String apiKey;
     private final boolean habilitado;
+    private final ObjectMapper objectMapper;
 
     public LicensingControlPlaneClient(@Value("${app.licenses.control-plane.url:${LICENSES_CONTROL_PLANE_URL:}}") String url,
-                                       @Value("${app.licenses.control-plane.api-key:${LICENSES_CONTROL_PLANE_API_KEY:}}") String apiKey) {
+                                       @Value("${app.licenses.control-plane.api-key:${LICENSES_CONTROL_PLANE_API_KEY:}}") String apiKey,
+                                       ObjectMapper objectMapper,
+                                       RestClient.Builder builder) {
         this.apiKey = apiKey;
         this.habilitado = StringUtils.hasText(url);
-        this.restClient = habilitado ? RestClient.builder().baseUrl(url).build() : null;
+        this.restClient = habilitado ? builder.baseUrl(url).build() : null;
+        this.objectMapper = objectMapper;
     }
 
     public RespuestaControlPlane validar(UUID instalacionId, String fingerprintHash) {
@@ -50,7 +60,9 @@ public class LicensingControlPlaneClient {
         try {
             Map<?, ?> response = restClient.post()
                     .uri("/api/v1/licencias/validar")
+                    .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .body(Map.of("instalacionId", instalacionId.toString(), "fingerprintHash", fingerprintHash))
                     .retrieve()
                     .body(Map.class);
@@ -74,12 +86,71 @@ public class LicensingControlPlaneClient {
             Map<?, ?> response = restClient.get()
                     .uri("/api/v1/catalogs/manifest")
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .retrieve()
                     .body(Map.class);
             return sanitizeMap(response);
         } catch (RuntimeException exception) {
             log.info("[LICENCIA] No se pudo obtener manifest de catalogos - {}", exception.getClass().getSimpleName());
             return offlinePayload("CATALOG_MANIFEST");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> catalogManifestCatalogs() {
+        Map<String, Object> manifest = catalogManifest();
+        if (!Boolean.TRUE.equals(manifest.get("online"))) {
+            return List.of();
+        }
+        Object catalogs = manifest.get("catalogs");
+        if (catalogs instanceof List<?> list) {
+            List<Map<String, Object>> result = new ArrayList<>();
+            for (Object entry : list) {
+                if (entry instanceof Map<?, ?> map) {
+                    result.add((Map<String, Object>) map);
+                }
+            }
+            return result;
+        }
+        return List.of();
+    }
+
+    /**
+     * Descarga el contenido de una version de catalogo del Control Plane.
+     * El Control Plane devuelve {@code itemsJson} como String; aqui se parsea
+     * a una lista de items. Devuelve un mapa con {@code online}, {@code code},
+     * {@code version}, {@code hash} y {@code items} (lista de maps).
+     */
+    public Map<String, Object> catalogVersion(String code, String version) {
+        if (!habilitado || restClient == null || !StringUtils.hasText(code) || !StringUtils.hasText(version)) {
+            return offlinePayload("CATALOG_VERSION");
+        }
+        try {
+            Map<?, ?> response = restClient.get()
+                    .uri("/api/v1/catalogs/{code}/versions/{version}", code, version)
+                    .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
+                    .retrieve()
+                    .body(Map.class);
+            Map<String, Object> result = sanitizeMap(response);
+            String itemsJson = String.valueOf(result.getOrDefault("itemsJson", "[]"));
+            result.put("items", parseItems(itemsJson));
+            return result;
+        } catch (RuntimeException exception) {
+            log.info("[LICENCIA] No se pudo descargar catalogo {}/{} - {}", code, version, exception.getClass().getSimpleName());
+            return offlinePayload("CATALOG_VERSION");
+        }
+    }
+
+    private List<Map<String, Object>> parseItems(String itemsJson) {
+        if (!StringUtils.hasText(itemsJson)) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(itemsJson, new TypeReference<List<Map<String, Object>>>() {});
+        } catch (Exception exception) {
+            log.warn("[LICENCIA] itemsJson invalido: {}", exception.getMessage());
+            return List.of();
         }
     }
 
@@ -91,6 +162,7 @@ public class LicensingControlPlaneClient {
             Map<?, ?> response = restClient.get()
                     .uri("/api/v1/licencias/jwks")
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .retrieve()
                     .body(Map.class);
             return sanitizeMap(response);
@@ -108,6 +180,7 @@ public class LicensingControlPlaneClient {
             Map<?, ?> response = restClient.get()
                     .uri("/api/v1/configuration/package")
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .retrieve()
                     .body(Map.class);
             return sanitizeMap(response);
@@ -124,7 +197,9 @@ public class LicensingControlPlaneClient {
         try {
             Map<?, ?> response = restClient.post()
                     .uri("/api/v1/telemetry/heartbeat")
+                    .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .body(Map.of("instalacionId", instalacionId.toString()))
                     .retrieve()
                     .body(Map.class);
@@ -144,7 +219,9 @@ public class LicensingControlPlaneClient {
             payload.put("instalacionId", instalacionId.toString());
             Map<?, ?> response = restClient.post()
                     .uri("/api/v1/telemetry/usage")
+                    .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .body(payload)
                     .retrieve()
                     .body(Map.class);
@@ -156,14 +233,35 @@ public class LicensingControlPlaneClient {
     }
 
     public Map<String, Object> createStripeCheckout(UUID empresaId, Long suscripcionId, String successUrl, String cancelUrl) {
+        return createStripeCheckout(empresaId, suscripcionId, 1, "RENOVACION_LICENCIA", 1, null, null, successUrl, cancelUrl);
+    }
+
+    public Map<String, Object> createStripeCheckout(UUID empresaId,
+                                                    Long suscripcionId,
+                                                    Integer coverageYears,
+                                                    String tipo,
+                                                    Integer cantidad,
+                                                    String rolCodigo,
+                                                    String moneda,
+                                                    String successUrl,
+                                                    String cancelUrl) {
         if (!habilitado || restClient == null || empresaId == null) {
             return offlinePayload("STRIPE_CHECKOUT");
         }
         try {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("empresaId", empresaId.toString());
+            payload.put("coverageYears", coverageYears != null ? coverageYears : 1);
+            payload.put("tipo", StringUtils.hasText(tipo) ? tipo : "RENOVACION_LICENCIA");
+            payload.put("cantidad", cantidad != null && cantidad > 0 ? cantidad : 1);
             if (suscripcionId != null) {
                 payload.put("suscripcionId", suscripcionId);
+            }
+            if (StringUtils.hasText(rolCodigo)) {
+                payload.put("rolCodigo", rolCodigo);
+            }
+            if (StringUtils.hasText(moneda)) {
+                payload.put("moneda", moneda.trim().toUpperCase());
             }
             if (StringUtils.hasText(successUrl)) {
                 payload.put("successUrl", successUrl);
@@ -171,15 +269,25 @@ public class LicensingControlPlaneClient {
             if (StringUtils.hasText(cancelUrl)) {
                 payload.put("cancelUrl", cancelUrl);
             }
+            log.info("[LICENCIA] Creando checkout Stripe - URL=/api/v1/billing/checkout-session, payload={}",
+                    payload);
             Map<?, ?> response = restClient.post()
                     .uri("/api/v1/billing/checkout-session")
+                    .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .body(payload)
                     .retrieve()
                     .body(Map.class);
+            log.info("[LICENCIA] Checkout Stripe respuesta: {}", response);
             return sanitizeMap(response);
         } catch (RuntimeException exception) {
-            log.info("[LICENCIA] No se pudo crear Checkout Stripe - {}", exception.getClass().getSimpleName());
+            log.error("[LICENCIA] No se pudo crear Checkout Stripe - {} - message: {}", exception.getClass().getSimpleName(), exception.getMessage(), exception);
+            if (exception instanceof HttpStatusCodeException httpException) {
+                return offlinePayload("STRIPE_CHECKOUT",
+                        "CONTROL_PLANE_HTTP_" + httpException.getStatusCode().value(),
+                        mensajeControlPlane(httpException));
+            }
             return offlinePayload("STRIPE_CHECKOUT");
         }
     }
@@ -212,7 +320,9 @@ public class LicensingControlPlaneClient {
             }
             Map<?, ?> response = restClient.post()
                     .uri("/api/v1/billing/checkout-session")
+                    .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .body(payload)
                     .retrieve()
                     .body(Map.class);
@@ -231,6 +341,7 @@ public class LicensingControlPlaneClient {
             Map<?, ?> response = restClient.get()
                     .uri("/api/v1/billing/checkout-session/{sessionId}", sessionId)
                     .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
                     .retrieve()
                     .body(Map.class);
             return sanitizeMap(response);
@@ -240,13 +351,52 @@ public class LicensingControlPlaneClient {
         }
     }
 
+    public Map<String, Object> receipts(UUID empresaId) {
+        if (!habilitado || restClient == null || empresaId == null) {
+            return offlinePayload("RECEIPTS");
+        }
+        try {
+            Object response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/api/admin/receipts")
+                            .queryParam("empresaId", empresaId.toString())
+                            .build())
+                    .header("X-API-Key", apiKey)
+                    .header("Authorization", bearerApiKey())
+                    .retrieve()
+                    .body(Object.class);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("online", true);
+            result.put("items", response);
+            return result;
+        } catch (RuntimeException exception) {
+            log.info("[LICENCIA] No se pudieron obtener recibos - {}", exception.getClass().getSimpleName());
+            return offlinePayload("RECEIPTS");
+        }
+    }
+
     private Map<String, Object> offlinePayload(String operation) {
+        return offlinePayload(operation, "SIN_CONECTIVIDAD", "Control Plane no configurado o no disponible");
+    }
+
+    private String bearerApiKey() {
+        return StringUtils.hasText(apiKey) ? "Bearer " + apiKey : "";
+    }
+
+    private Map<String, Object> offlinePayload(String operation, String estado, String mensaje) {
         return Map.of(
                 "online", false,
                 "operation", operation,
-                "estado", "SIN_CONECTIVIDAD",
-                "mensaje", "Control Plane no configurado o no disponible"
+                "estado", estado,
+                "mensaje", mensaje
         );
+    }
+
+    private String mensajeControlPlane(HttpStatusCodeException exception) {
+        String body = exception.getResponseBodyAsString();
+        if (StringUtils.hasText(body)) {
+            return body.length() > 500 ? body.substring(0, 500) : body;
+        }
+        return "Control Plane rechazo la solicitud con estado HTTP " + exception.getStatusCode().value();
     }
 
     private Map<String, Object> sanitizeMap(Map<?, ?> response) {

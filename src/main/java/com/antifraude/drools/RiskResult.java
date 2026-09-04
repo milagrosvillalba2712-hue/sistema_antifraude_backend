@@ -13,15 +13,16 @@ public record RiskResult(
         String nivelRiesgo,
         List<ReglaDisparada> reglasDisparadas,
         boolean requiereAccionInmediata,
-        String observaciones
+        String observaciones,
+        List<com.antifraude.drools.fact.CoincidenciaListaFact> coincidenciasListas
 ) {
     public static RiskResult vacio() {
-        return new RiskResult(BigDecimal.ZERO, "BAJO", List.of(), false, null);
+        return new RiskResult(BigDecimal.ZERO, "BAJO", List.of(), false, null, List.of());
     }
 
     public static RiskResult desdeScore(BigDecimal score) {
         String nivel = calcularNivel(score);
-        return new RiskResult(score, nivel, List.of(), false, null);
+        return new RiskResult(score, nivel, List.of(), false, null, List.of());
     }
 
     private static String calcularNivel(BigDecimal score) {
@@ -33,6 +34,7 @@ public record RiskResult(
 
     public record ReglaDisparada(
             Long reglaId,
+            String origen,
             String codigo,
             String descripcion,
             BigDecimal score,

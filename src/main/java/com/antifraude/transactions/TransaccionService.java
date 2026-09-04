@@ -18,6 +18,7 @@ import com.antifraude.rules.ReglaRiesgoRepository;
 import com.antifraude.security.crypto.AesGcmCryptoService;
 import com.antifraude.security.crypto.HmacHashService;
 import com.antifraude.security.tenant.TenantContext;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,10 +28,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
-@Transactional
+@Transactional(noRollbackFor = BusinessException.class)
 public class TransaccionService {
 
     private static final Logger log = LoggerFactory.getLogger(TransaccionService.class);
@@ -43,22 +46,28 @@ public class TransaccionService {
     private final CanalRepository canalRepository;
     private final ProductoRepository productoRepository;
     private final PersonaRepository personaRepository;
+    private final TipoDocumentoRepository tipoDocumentoRepository;
     private final ReglaRiesgoRepository reglaRiesgoRepository;
+    private final NivelRiesgoRepository nivelRiesgoRepository;
     private final EmpresaRepository empresaRepository;
     private final JdbcTemplate jdbcTemplate;
     private final AesGcmCryptoService aesGcmCryptoService;
     private final HmacHashService hmacHashService;
     private final EnforcementService enforcementService;
     private final ConsumoService consumoService;
+    private final ObjectMapper objectMapper;
 
     public TransaccionService(TransaccionRepository transaccionRepository, DroolsService droolsService,
                               RiskContextBuilder riskContextBuilder,
                               PaisRepository paisRepository, MonedaRepository monedaRepository,
                               CanalRepository canalRepository, ProductoRepository productoRepository,
-                              PersonaRepository personaRepository, ReglaRiesgoRepository reglaRiesgoRepository,
-                              EmpresaRepository empresaRepository, JdbcTemplate jdbcTemplate,
+                              PersonaRepository personaRepository, TipoDocumentoRepository tipoDocumentoRepository,
+                              ReglaRiesgoRepository reglaRiesgoRepository,
+                              EmpresaRepository empresaRepository, NivelRiesgoRepository nivelRiesgoRepository,
+                              JdbcTemplate jdbcTemplate,
                               AesGcmCryptoService aesGcmCryptoService, HmacHashService hmacHashService,
-                              EnforcementService enforcementService, ConsumoService consumoService) {
+                              EnforcementService enforcementService, ConsumoService consumoService,
+                              ObjectMapper objectMapper) {
         this.transaccionRepository = transaccionRepository;
         this.droolsService = droolsService;
         this.riskContextBuilder = riskContextBuilder;
@@ -67,19 +76,22 @@ public class TransaccionService {
         this.canalRepository = canalRepository;
         this.productoRepository = productoRepository;
         this.personaRepository = personaRepository;
+        this.tipoDocumentoRepository = tipoDocumentoRepository;
         this.reglaRiesgoRepository = reglaRiesgoRepository;
+        this.nivelRiesgoRepository = nivelRiesgoRepository;
         this.empresaRepository = empresaRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.aesGcmCryptoService = aesGcmCryptoService;
         this.hmacHashService = hmacHashService;
         this.enforcementService = enforcementService;
         this.consumoService = consumoService;
+        this.objectMapper = objectMapper;
     }
 
     public Transaccion crearDesdeRequest(TransaccionRequest request) {
         UUID uuid = UUID.fromString(request.transactionUuid());
-        log.info("[TX] Creando transaccion UUID: {} - Documento: {} - Monto: {} {}",
-                uuid, request.identificadorDocumento(), request.monto(), request.moneda());
+        log.info("[TX] Creando transaccion UUID: {} - Monto: {} {}",
+                uuid, request.monto(), request.moneda());
 
         if (transaccionRepository.findByTransactionUuid(uuid).isPresent()) {
             throw new BusinessException("DUPLICATE_TRANSACTION",
@@ -91,6 +103,12 @@ public class TransaccionService {
         Long canalTransaccionId = resolveCanalTransaccionId(request.canal());
         Pais paisOrigen = resolvePais(request.paisOrigen());
         Pais paisDestino = resolvePais(request.paisDestino());
+        Pais paisDocRemitente = requirePais(request.paisEmisorDocumentoRemitente(), "paisEmisorDocumentoRemitente");
+        Pais paisDocBeneficiario = requirePais(request.paisEmisorDocumentoBeneficiario(), "paisEmisorDocumentoBeneficiario");
+        TipoDocumento tipoDocRemitente = requireTipoDocumento(request.tipoDocumentoRemitenteId(), request.tipoDocumentoRemitente(),
+                paisDocRemitente, request.documentoRemitente(), "remitente");
+        TipoDocumento tipoDocBeneficiario = requireTipoDocumento(request.tipoDocumentoBeneficiarioId(), request.tipoDocumentoBeneficiario(),
+                paisDocBeneficiario, request.documentoBeneficiario(), "beneficiario");
         Empresa empresa = resolveEmpresa();
         UUID empresaId = empresa.getId();
         enforcementService.verificarSuscripcionVigente(empresaId);
@@ -103,19 +121,34 @@ public class TransaccionService {
         Persona beneficiario = request.personaBeneficiarioId() != null
                 ? personaRepository.findById(request.personaBeneficiarioId()).orElse(null) : null;
 
+        String remitenteNombre = resolveNombreCompleto(remitente, request.nombreCompletoRemitente(),
+                request.personaRemitenteId(), "remitente");
+        String beneficiarioNombre = resolveNombreCompleto(beneficiario, request.nombreCompletoBeneficiario(),
+                request.personaBeneficiarioId(), "beneficiario");
+
+        validarEntidadesPorCanal(request.tipoTransaccion(), request.canal(),
+                request.entidadOrigenTipo(), request.entidadDestinoTipo());
+
         Transaccion transaccion = Transaccion.builder()
                 .transactionUuid(uuid)
                 .empresa(empresa)
-                .codigo("TX-" + uuid.toString().substring(0, 12).toUpperCase())
+                .codigo("TX-" + uuid.toString().replace("-", "").toUpperCase())
                 .tipoTransaccionId(tipoTransaccionId)
                 .canalTransaccionId(canalTransaccionId)
                 .infraestructuraPago(defaultInfraestructura(request.canal()))
                 .subtipoTransaccion(request.tipoTransaccion())
-                .identificadorDocumento(request.identificadorDocumento())
+                .identificadorDocumento(request.documentoRemitente())
+                .documentoBeneficiario(request.documentoBeneficiario())
                 .cuentaOrigen(request.cuentaOrigen())
                 .cuentaDestino(request.cuentaDestino())
-                .documentoRemitenteEnc(aesGcmCryptoService.encryptToBytes(request.identificadorDocumento()))
-                .documentoRemitenteHash(hmacHashService.hmacBytes(request.identificadorDocumento()))
+                .documentoRemitenteEnc(aesGcmCryptoService.encryptToBytes(request.documentoRemitente()))
+                .documentoRemitenteHash(hmacHashService.hmacBytes(request.documentoRemitente()))
+                .tipoDocumentoRemitente(tipoDocRemitente)
+                .paisEmisorDocumentoRemitente(paisDocRemitente)
+                .documentoBeneficiarioEnc(aesGcmCryptoService.encryptToBytes(request.documentoBeneficiario()))
+                .documentoBeneficiarioHash(hmacHashService.hmacBytes(request.documentoBeneficiario()))
+                .tipoDocumentoBeneficiario(tipoDocBeneficiario)
+                .paisEmisorDocumentoBeneficiario(paisDocBeneficiario)
                 .cuentaOrigenEnc(aesGcmCryptoService.encryptToBytes(request.cuentaOrigen()))
                 .cuentaOrigenHash(hmacHashService.hmacBytes(request.cuentaOrigen()))
                 .cuentaDestinoEnc(aesGcmCryptoService.encryptToBytes(request.cuentaDestino()))
@@ -131,6 +164,17 @@ public class TransaccionService {
                 .paisDestinoRef(paisDestino)
                 .personaRemitente(remitente)
                 .personaBeneficiario(beneficiario)
+                .nombreRemitente(remitenteNombre)
+                .nombreBeneficiario(beneficiarioNombre)
+                .remitenteNombreCompleto(remitenteNombre)
+                .beneficiarioNombreCompleto(beneficiarioNombre)
+                .entidadOrigenTipo(normalizeUpper(request.entidadOrigenTipo()))
+                .entidadOrigenCodigo(trimToNull(request.entidadOrigenCodigo()))
+                .entidadOrigenNombre(trimToNull(request.entidadOrigenNombre()))
+                .entidadDestinoTipo(normalizeUpper(request.entidadDestinoTipo()))
+                .entidadDestinoCodigo(trimToNull(request.entidadDestinoCodigo()))
+                .entidadDestinoNombre(trimToNull(request.entidadDestinoNombre()))
+                .referenciaExterna(trimToNull(request.referenciaExterna()))
                 .producto(producto)
                 .fechaTransaccion(request.fechaTransaccion() != null ? request.fechaTransaccion() : OffsetDateTime.now())
                 .estado("PENDIENTE")
@@ -146,6 +190,18 @@ public class TransaccionService {
         return guardada;
     }
 
+    private String resolveNombreCompleto(Persona persona, String nombreCompleto,
+                                         Long personaId, String parte) {
+        if (persona != null) {
+            String derivado = persona.getNombreCompleto();
+            if (derivado != null && !derivado.isBlank()) {
+                return derivado.trim();
+            }
+            log.warn("[TX] Persona {} {} sin identidad derivable (ID {}); se usa la del request", parte, personaId, persona.getId());
+        }
+        return nombreCompleto == null ? "" : nombreCompleto.trim();
+    }
+
     public Transaccion procesarTransaccion(Transaccion transaccion) {
         log.info("[TX] Procesando transaccion ID: {} - UUID: {}", transaccion.getId(), transaccion.getTransactionUuid());
 
@@ -157,6 +213,16 @@ public class TransaccionService {
 
         transaccion.setScoreRiesgo(result.scoreTotal());
 
+        String nivel = result.nivelRiesgo();
+        if (nivel != null) {
+            transaccion.setNivelRiesgo(nivelRiesgoRepository.findByCodigo(nivel).orElse(null));
+        }
+
+        if (result.requiereAccionInmediata()) {
+            droolsService.crearAlertasDesdeResultado(transaccion, result.reglasDisparadas(),
+                    result.scoreTotal(), result.nivelRiesgo());
+        }
+
         String estado;
         Transaccion.EstadoEvaluacion estadoEvaluacion;
         if (result.scoreTotal().compareTo(new BigDecimal("70")) >= 0) {
@@ -164,7 +230,7 @@ public class TransaccionService {
             estadoEvaluacion = Transaccion.EstadoEvaluacion.SOSPECHOSA;
             log.warn("[TX] Transaccion SOSPECHOSA - ID: {} - Score: {} - UUID: {}",
                     transaccion.getId(), result.scoreTotal(), transaccion.getTransactionUuid());
-        } else if (result.scoreTotal().compareTo(new BigDecimal("40")) >= 0) {
+        } else if (result.requiereAccionInmediata() || result.scoreTotal().compareTo(new BigDecimal("40")) >= 0) {
             estado = "OBSERVADA";
             estadoEvaluacion = Transaccion.EstadoEvaluacion.REVISION_MANUAL;
             log.info("[TX] Transaccion en REVISION - ID: {} - Score: {} - UUID: {}",
@@ -178,9 +244,20 @@ public class TransaccionService {
 
         transaccion.setEstado(estado);
         transaccion.setEstadoEvaluacion(estadoEvaluacion);
+        transaccion.setReglasDisparadasJson(toJson(result.reglasDisparadas()));
+        transaccion.setScreeningResultJson(toJson(result.coincidenciasListas()));
         transaccion.setProcesada(true);
         transaccion.setFechaProcesamiento(OffsetDateTime.now());
         return transaccionRepository.save(transaccion);
+    }
+
+    private String toJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            log.warn("[TX] No se pudo serializar detalle de evaluacion: {}", e.getMessage());
+            return "[]";
+        }
     }
 
     public List<Transaccion> listarTodas() {
@@ -200,8 +277,8 @@ public class TransaccionService {
     }
 
     public List<Transaccion> buscarPorDocumento(String documento) {
-        log.debug("[TX] Buscando transacciones por documento: {}", documento);
-        return transaccionRepository.findByIdentificadorDocumento(documento);
+        log.debug("[TX] Buscando transacciones por documento protegido");
+        return transaccionRepository.findByDocumentoHash(hmacHashService.hmacBytes(documento));
     }
 
     public List<Transaccion> buscarPorEstado(String estado) {
@@ -223,6 +300,59 @@ public class TransaccionService {
         if (nombre == null || nombre.isBlank()) return null;
         return paisRepository.findByNombre(nombre)
                 .orElseGet(() -> paisRepository.findByCodigoIso(nombre).orElse(null));
+    }
+
+    private Pais requirePais(String codigo, String field) {
+        if (codigo == null || codigo.isBlank()) {
+            throw new BusinessException("DOCUMENT_COUNTRY_REQUIRED", "El campo " + field + " es obligatorio");
+        }
+        return paisRepository.findByCodigoIso(codigo.trim().toUpperCase(Locale.ROOT))
+                .orElseThrow(() -> new BusinessException("DOCUMENT_COUNTRY_INVALID",
+                        "El pais emisor de documento " + codigo + " no existe"));
+    }
+
+    private TipoDocumento requireTipoDocumento(Long id, String codigo, Pais pais, String numeroDocumento, String parte) {
+        if (id == null && (codigo == null || codigo.isBlank())) {
+            throw new BusinessException("DOCUMENT_TYPE_REQUIRED",
+                    "El tipo de documento del " + parte + " es obligatorio");
+        }
+        TipoDocumento tipoDocumento = id != null
+                ? tipoDocumentoRepository.findById(id).orElseThrow(() -> new BusinessException("DOCUMENT_TYPE_INVALID",
+                "El tipo de documento con id " + id + " no existe"))
+                : resolveTipoDocumentoByCode(codigo);
+        if (Boolean.FALSE.equals(tipoDocumento.getEstadoActivo()) || Boolean.FALSE.equals(tipoDocumento.getActivo())) {
+            throw new BusinessException("DOCUMENT_TYPE_INACTIVE",
+                    "El tipo de documento " + tipoDocumento.getCodigo() + " no esta activo");
+        }
+        if (tipoDocumento.getPaisRelacion() != null
+                && !tipoDocumento.getPaisRelacion().getCodigoIso().equalsIgnoreCase(pais.getCodigoIso())) {
+            throw new BusinessException("DOCUMENT_TYPE_COUNTRY_MISMATCH",
+                    "El tipo de documento " + tipoDocumento.getCodigo() + " no corresponde al pais " + pais.getCodigoIso());
+        }
+        if (numeroDocumento == null || numeroDocumento.isBlank()) {
+            throw new BusinessException("DOCUMENT_NUMBER_REQUIRED",
+                    "El numero de documento del " + parte + " es obligatorio");
+        }
+        String regex = tipoDocumento.getFormatoRegex();
+        if (regex != null && !regex.isBlank() && !Pattern.matches(regex, numeroDocumento.trim())) {
+            throw new BusinessException("DOCUMENT_FORMAT_INVALID",
+                    "El numero de documento del " + parte + " no cumple el formato esperado para " + tipoDocumento.getCodigo());
+        }
+        return tipoDocumento;
+    }
+
+    private TipoDocumento resolveTipoDocumentoByCode(String codigo) {
+        String codigoNormalizado = codigo.trim().toUpperCase(Locale.ROOT);
+        if (codigoNormalizado.matches("\\d+")) {
+            Long id = Long.valueOf(codigoNormalizado);
+            return tipoDocumentoRepository.findById(id)
+                    .orElseThrow(() -> new BusinessException("DOCUMENT_TYPE_INVALID",
+                            "El tipo de documento con id " + id + " no existe"));
+        }
+        return tipoDocumentoRepository.findByCodigo(codigoNormalizado)
+                .or(() -> tipoDocumentoRepository.findByCodigoTecnico(codigoNormalizado))
+                .orElseThrow(() -> new BusinessException("DOCUMENT_TYPE_INVALID",
+                        "El tipo de documento " + codigo + " no existe"));
     }
 
     private Empresa resolveEmpresa() {
@@ -271,5 +401,58 @@ public class TransaccionService {
             case "PY_TRADE_FINANCE_PAYMENT", "COMEX" -> "COMEX";
             default -> normalized;
         };
+    }
+
+    private String normalizeUpper(String value) {
+        if (value == null || value.isBlank()) return null;
+        return value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void validarEntidadesPorCanal(String tipoTransaccion, String canal,
+                                          String entidadOrigenTipo, String entidadDestinoTipo) {
+        String tipo = normalizeUpper(tipoTransaccion);
+        String ch = normalizeUpper(canal);
+        if (tipo == null) return;
+
+        boolean esDestino = contiene(tipo, "SEND", "ENVIO", "TRANSFER", "P2P", "TOPUP",
+                "REMITTANCE_SEND", "PAYMENT", "PAYROLL", "BATCH_CREDIT", "ALIAS_TRANSFER", "HIGH_VALUE");
+        boolean esOrigen = contiene(tipo, "RECEIVE", "COBRO", "CASH_IN", "DEPOSITO");
+        boolean esExtraccion = contiene(tipo, "WITHDRAWAL", "EXTRACCION", "RETIRO", "ATM");
+        boolean esInternacional = contiene(tipo, "REMITTANCE_SEND", "COMEX", "FX", "TRADE");
+        if (ch != null) {
+            esDestino = esDestino || contiene(ch, "SPI", "ACH", "QR", "EMPE", "REMESA", "COMEX", "CAMBIO");
+            esOrigen = esOrigen || contiene(ch, "CAJA", "REMESA");
+            esExtraccion = esExtraccion || contiene(ch, "ATM");
+        }
+
+        if (esDestino && entidadDestinoTipo == null) {
+            throw new BusinessException("ENTIDAD_DESTINO_REQUERIDA",
+                    "El tipo " + tipoTransaccion + " requiere entidadDestinoTipo (banco/financiera/intermediario) para completar el envío.");
+        }
+        if (esOrigen && entidadOrigenTipo == null) {
+            throw new BusinessException("ENTIDAD_ORIGEN_REQUERIDA",
+                    "El tipo " + tipoTransaccion + " requiere entidadOrigenTipo (banco/sucursal/cajero) para completar la recepción.");
+        }
+        if (esExtraccion && entidadOrigenTipo == null) {
+            throw new BusinessException("ENTIDAD_ORIGEN_REQUERIDA",
+                    "El tipo " + tipoTransaccion + " (extracción/retiro) requiere entidadOrigenTipo (sucursal o cajero).");
+        }
+        if (esInternacional && entidadDestinoTipo == null) {
+            throw new BusinessException("ENTIDAD_DESTINO_REQUERIDA",
+                    "La operación internacional " + tipoTransaccion + " requiere entidadDestinoTipo + información SWIFT del beneficiario.");
+        }
+    }
+
+    private boolean contiene(String value, String... tokens) {
+        if (value == null) return false;
+        for (String token : tokens) {
+            if (value.contains(token)) return true;
+        }
+        return false;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null || value.isBlank()) return null;
+        return value.trim();
     }
 }

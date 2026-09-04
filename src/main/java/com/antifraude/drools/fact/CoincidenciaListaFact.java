@@ -13,6 +13,8 @@ public class CoincidenciaListaFact {
     private String parteTransaccion;
     private String campoEvaluado;
     private String valorEvaluado;
+    private String paisCodigo;
+    private String tipoDocumentoCodigo;
     private String nombreSujeto;
     private String descripcion;
     private BigDecimal scoreMatch = BigDecimal.valueOf(100);
@@ -35,6 +37,10 @@ public class CoincidenciaListaFact {
     public void setCampoEvaluado(String campoEvaluado) { this.campoEvaluado = campoEvaluado; }
     public String getValorEvaluado() { return valorEvaluado; }
     public void setValorEvaluado(String valorEvaluado) { this.valorEvaluado = valorEvaluado; }
+    public String getPaisCodigo() { return paisCodigo; }
+    public void setPaisCodigo(String paisCodigo) { this.paisCodigo = paisCodigo; }
+    public String getTipoDocumentoCodigo() { return tipoDocumentoCodigo; }
+    public void setTipoDocumentoCodigo(String tipoDocumentoCodigo) { this.tipoDocumentoCodigo = tipoDocumentoCodigo; }
     public String getNombreSujeto() { return nombreSujeto; }
     public void setNombreSujeto(String nombreSujeto) { this.nombreSujeto = nombreSujeto; }
     public String getDescripcion() { return descripcion; }

@@ -1,25 +1,15 @@
 package com.antifraude.drools;
 
 import com.antifraude.drools.RiskContext;
-import com.antifraude.drools.fact.TransaccionFact;
 
 global com.antifraude.drools.DroolsService.ScoreTracker scoreTracker;
 
-rule "Transferencia internacional"
-    when
-        $ctx : RiskContext()
-        $t : TransaccionFact(canalCodigo != null, canalCodigo == "TRANSFERENCIA_INTERNACIONAL") from $ctx.getTransaccionFact()
-    then
-        scoreTracker.addScore(25);
-        System.out.println("[Drools] Transferencia internacional detectada");
-end
-
+// Canal de alto riesgo — configurable vía canal_transaccion.alto_riesgo (V32).
+// Ya no se usan literales hardcodeados; el builder resuelve el flag en el contexto.
 rule "Canal de alto riesgo"
     when
-        $ctx : RiskContext()
-        $t : TransaccionFact(canalCodigo != null, 
-                             (canalCodigo == "CRYPTO" || canalCodigo == "TARJETA_CREDITO" || canalCodigo == "CHEQUE")) from $ctx.getTransaccionFact()
+        $ctx : RiskContext(canalAltoRiesgo == true)
     then
         scoreTracker.addScore(15);
-        System.out.println("[Drools] Canal de alto riesgo detectado: " + $t.getCanalCodigo());
+        System.out.println("[Drools] Canal de alto riesgo detectado");
 end

@@ -1,17 +1,20 @@
 package com.antifraude.dto;
 
-import java.math.BigDecimal;
-import java.time.OffsetDateTime;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 
+import java.math.BigDecimal;
 public record SimuladorRequest(
         String productoCodigo,
         String canalCodigo,
         String monedaCodigo,
-        BigDecimal monto,
+        @NotNull @Positive BigDecimal monto,
         String paisOrigenCodigo,
         String paisDestinoCodigo,
-        String documentoCliente,
-        OffsetDateTime fechaHora
+        @NotBlank String documentoCliente,
+        @NotBlank String tipoDocumentoCliente,
+        @NotBlank String paisEmisorDocumentoCliente,
+        String fechaHora
 ) {
 }
-

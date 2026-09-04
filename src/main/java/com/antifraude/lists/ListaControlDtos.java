@@ -25,6 +25,8 @@ public final class ListaControlDtos {
             @NotBlank String valor,
             String nombreMostrado,
             String documentoMostrado,
+            String paisCodigo,
+            String tipoDocumentoCodigo,
             String motivo,
             String observacion,
             String fuente,
@@ -53,8 +55,13 @@ public final class ListaControlDtos {
             String tipoIdentificador,
             String valorOriginal,
             String valorNormalizado,
+            String valorMostrado,
             String nombreMostrado,
             String documentoMostrado,
+            String paisCodigo,
+            String paisNombre,
+            String tipoDocumentoCodigo,
+            String tipoDocumentoNombre,
             String motivo,
             String observacion,
             String fuente,
@@ -76,4 +83,3 @@ public final class ListaControlDtos {
 
     public record ImportPreview(List<String> columnasEsperadas) {}
 }
-

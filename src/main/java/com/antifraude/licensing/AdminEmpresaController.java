@@ -3,7 +3,10 @@ package com.antifraude.licensing;
 import com.antifraude.audit.Auditoria;
 import com.antifraude.audit.AuditoriaRepository;
 import com.antifraude.audit.AuditoriaService;
+import com.antifraude.common.entity.Moneda;
+import com.antifraude.common.repository.MonedaRepository;
 import com.antifraude.config.ClientIpResolver;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.antifraude.dto.ApiErrorDescriptor;
 import com.antifraude.exception.BusinessException;
 import com.antifraude.security.tenant.TenantContext;
@@ -48,6 +51,8 @@ public class AdminEmpresaController {
     private final LicensingOnlineService onlineService;
     private final AuditoriaService auditoriaService;
     private final AdminEmpresaObservabilityService observabilityService;
+    private final MonedaRepository monedaRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     @Value("${app.licenses.jobs.enabled:true}")
     private boolean jobsHabilitados;
@@ -64,7 +69,9 @@ public class AdminEmpresaController {
                                   LicensingControlPlaneClient controlPlaneClient,
                                   LicensingOnlineService onlineService,
                                   AuditoriaService auditoriaService,
-                                  AdminEmpresaObservabilityService observabilityService) {
+                                  AdminEmpresaObservabilityService observabilityService,
+                                  MonedaRepository monedaRepository,
+                                  JdbcTemplate jdbcTemplate) {
         this.empresaRepository = empresaRepository;
         this.suscripcionRepository = suscripcionRepository;
         this.pagoRepository = pagoRepository;
@@ -78,6 +85,8 @@ public class AdminEmpresaController {
         this.onlineService = onlineService;
         this.auditoriaService = auditoriaService;
         this.observabilityService = observabilityService;
+        this.monedaRepository = monedaRepository;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @GetMapping("/resumen")
@@ -168,6 +177,13 @@ public class AdminEmpresaController {
         return ResponseEntity.ok(pagoRepository.findByEmpresaId(empresaId).stream().map(this::pagoDto).toList());
     }
 
+    @GetMapping("/recibos")
+    public ResponseEntity<Map<String, Object>> recibos() {
+        UUID empresaId = empresaActual();
+        Map<String, Object> recibos = controlPlaneClient.receipts(empresaId);
+        return ResponseEntity.ok(recibos);
+    }
+
     @PostMapping("/pagos/stripe-checkout")
     @Transactional
     public ResponseEntity<Map<String, Object>> iniciarPagoStripe(@RequestBody(required = false) Map<String, Object> body,
@@ -179,20 +195,28 @@ public class AdminEmpresaController {
         Long suscripcionId = suscripcion != null ? suscripcion.getId() : null;
         String successUrl = body != null && body.get("successUrl") != null ? String.valueOf(body.get("successUrl")) : null;
         String cancelUrl = body != null && body.get("cancelUrl") != null ? String.valueOf(body.get("cancelUrl")) : null;
+        Integer coverageYears = intValue(body != null ? body.get("coverageYears") : null, 1);
+        Integer cantidad = intValue(body != null ? body.get("cantidad") : null, 1);
+        String tipo = body != null && body.get("tipo") != null ? String.valueOf(body.get("tipo")) : "RENOVACION_LICENCIA";
+        String rolCodigo = body != null && body.get("rolCodigo") != null ? String.valueOf(body.get("rolCodigo")) : null;
+        String moneda = normalizarMoneda(body != null ? body.get("moneda") : null, "PYG");
+        BigDecimal montoLicencia = suscripcion != null && suscripcion.getPlanLicencia() != null && suscripcion.getPlanLicencia().getPrecioAnual() != null
+                ? suscripcion.getPlanLicencia().getPrecioAnual().multiply(BigDecimal.valueOf(coverageYears))
+                : BigDecimal.ZERO;
         Pago pago = Pago.builder()
                 .empresa(empresa)
                 .suscripcion(suscripcion)
                 .codigo("PAY-LIC-" + System.currentTimeMillis())
-                .monto(suscripcion != null && suscripcion.getPlanLicencia() != null && suscripcion.getPlanLicencia().getPrecioAnual() != null
-                        ? suscripcion.getPlanLicencia().getPrecioAnual()
-                        : BigDecimal.ZERO)
+                .monto(montoLicencia)
+                .monedaRef(monedaRef(moneda))
                 .metodoPago("STRIPE_CHECKOUT")
-                .concepto("Pago de licencia anual Regula")
+                .concepto("Pago de licencia Regula - cobertura " + coverageYears + " anio(s)")
                 .estado(Pago.EstadoPago.PENDIENTE)
                 .build();
         pagoRepository.save(pago);
 
-        Map<String, Object> checkout = controlPlaneClient.createStripeCheckout(empresaId, suscripcionId, successUrl, cancelUrl);
+        Map<String, Object> checkout = controlPlaneClient.createStripeCheckout(empresaId, null, coverageYears, tipo, cantidad, rolCodigo, moneda, successUrl, cancelUrl);
+        actualizarMontoLocalDesdeCheckout(pago, checkout, moneda);
         String sessionId = String.valueOf(checkout.getOrDefault("stripeCheckoutSessionId", ""));
         if (!sessionId.isBlank() && !"null".equalsIgnoreCase(sessionId)) {
             pago.setReferenciaExterna(sessionId);
@@ -368,6 +392,68 @@ public class AdminEmpresaController {
                 .stream().map(this::auditoriaDto).toList());
     }
 
+    @GetMapping("/logs")
+    public ResponseEntity<Map<String, Object>> logs(@RequestParam(required = false) String nivel,
+                                                    @RequestParam(required = false) String busca,
+                                                    @RequestParam(required = false) String desde,
+                                                    @RequestParam(required = false) String hasta,
+                                                    @RequestParam(defaultValue = "100") int size,
+                                                    @RequestParam(defaultValue = "0") int page) {
+        UUID empresaId = empresaActual();
+        StringBuilder where = new StringBuilder("WHERE empresa_id = ?");
+        List<Object> params = new java.util.ArrayList<>();
+        params.add(empresaId);
+
+        if (nivel != null && !nivel.isBlank()) {
+            where.append(" AND nivel = ?");
+            params.add(nivel.trim().toUpperCase());
+        }
+        if (busca != null && !busca.isBlank()) {
+            where.append(" AND mensaje ILIKE ?");
+            params.add("%" + busca.trim() + "%");
+        }
+        OffsetDateTime desdeDate = parseDate(desde);
+        if (desdeDate != null) {
+            where.append(" AND fecha >= ?");
+            params.add(desdeDate);
+        }
+        OffsetDateTime hastaDate = parseDate(hasta);
+        if (hastaDate != null) {
+            where.append(" AND fecha <= ?");
+            params.add(hastaDate);
+        }
+
+        Integer total = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM app_log " + where, Integer.class, params.toArray());
+
+        Object[] pageParams = java.util.Arrays.copyOf(params.toArray(), params.size() + 2);
+        pageParams[params.size()] = Math.max(0, size);
+        pageParams[params.size() + 1] = Math.max(0, page) * Math.max(0, size);
+
+        List<Map<String, Object>> filas = jdbcTemplate.queryForList(
+                "SELECT id, nivel, logger, mensaje, fecha FROM app_log " + where
+                        + " ORDER BY fecha DESC LIMIT ? OFFSET ?",
+                pageParams);
+
+        List<Map<String, Object>> logs = new java.util.ArrayList<>();
+        for (Map<String, Object> f : filas) {
+            logs.add(mapOf(
+                    "id", f.get("id"),
+                    "nivel", f.get("nivel"),
+                    "logger", f.get("logger"),
+                    "mensaje", f.get("mensaje"),
+                    "fecha", f.get("fecha")
+            ));
+        }
+
+        return ResponseEntity.ok(mapOf(
+                "total", total != null ? total : 0,
+                "page", page,
+                "size", size,
+                "logs", logs
+        ));
+    }
+
     private UUID empresaActual() {
         UUID empresaId = TenantContext.getEmpresaId();
         if (empresaId == null) {
@@ -403,7 +489,8 @@ public class AdminEmpresaController {
     private Map<String, Object> empresaDto(Empresa e) {
         if (e == null) return null;
         return mapOf("id", e.getId(), "codigo", e.getCodigo(), "nombre", e.getNombre(), "ruc", e.getRuc(),
-                "emailContacto", e.getEmailContacto(), "telefonoContacto", e.getTelefonoContacto(), "estado", e.getEstado());
+                "emailContacto", e.getEmailContacto(), "telefonoContacto", e.getTelefonoContacto(),
+                "direccionContacto", e.getDireccionContacto(), "estado", e.getEstado());
     }
 
     private Map<String, Object> suscripcionDto(Suscripcion s) {
@@ -543,6 +630,49 @@ public class AdminEmpresaController {
             return null;
         }
         return OffsetDateTime.parse(value);
+    }
+
+    private String normalizarMoneda(Object value, String fallback) {
+        String moneda = value != null ? String.valueOf(value).trim().toUpperCase() : fallback;
+        return switch (moneda) {
+            case "USD", "PYG" -> moneda;
+            default -> fallback;
+        };
+    }
+
+    private Moneda monedaRef(String codigo) {
+        return monedaRepository.findByCodigoIso(codigo).orElse(null);
+    }
+
+    private void actualizarMontoLocalDesdeCheckout(Pago pago, Map<String, Object> checkout, String monedaFallback) {
+        Object monto = checkout.get("monto");
+        if (monto != null) {
+            pago.setMonto(decimalValue(monto));
+        }
+        String moneda = normalizarMoneda(checkout.get("moneda"), monedaFallback);
+        pago.setMonedaRef(monedaRef(moneda));
+        pagoRepository.save(pago);
+    }
+
+    private BigDecimal decimalValue(Object value) {
+        if (value instanceof BigDecimal decimal) return decimal;
+        if (value instanceof Number number) return BigDecimal.valueOf(number.doubleValue());
+        if (value == null || String.valueOf(value).isBlank()) return BigDecimal.ZERO;
+        return new BigDecimal(String.valueOf(value));
+    }
+
+    private Integer intValue(Object value, int fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            return fallback;
+        }
     }
 
     private Map<String, Object> mapOf(Object... values) {

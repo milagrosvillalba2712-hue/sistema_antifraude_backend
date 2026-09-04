@@ -34,6 +34,12 @@ public class ExternalClientsConfig {
         return client(url, key);
     }
 
+    @Bean("screeningRestClient")
+    RestClient screening(@Value("${app.external.screening.url}") String url,
+                         @Value("${app.external.screening.api-key}") String key) {
+        return client(url, key);
+    }
+
     private RestClient client(String url, String key) {
         if (key == null || key.isBlank()) {
             throw new IllegalStateException("La integración externa requiere API key operacional explícita");

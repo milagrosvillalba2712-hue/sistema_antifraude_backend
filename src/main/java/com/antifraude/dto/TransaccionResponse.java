@@ -10,6 +10,12 @@ public record TransaccionResponse(
         String transactionUuid,
         String codigo,
         String identificadorDocumento,
+        String documentoRemitente,
+        String tipoDocumentoRemitente,
+        String paisEmisorDocumentoRemitente,
+        String documentoBeneficiario,
+        String tipoDocumentoBeneficiario,
+        String paisEmisorDocumentoBeneficiario,
         BigDecimal monto,
         String moneda,
         String canal,
@@ -24,5 +30,12 @@ public record TransaccionResponse(
         String productoNombre,
         String paisOrigenNombre,
         String paisDestinoNombre,
-        String nivelRiesgoCodigo) {
+        String nivelRiesgoCodigo,
+        String entidadOrigenTipo,
+        String entidadOrigenCodigo,
+        String entidadOrigenNombre,
+        String entidadDestinoTipo,
+        String entidadDestinoCodigo,
+        String entidadDestinoNombre,
+        String referenciaExterna) {
 }

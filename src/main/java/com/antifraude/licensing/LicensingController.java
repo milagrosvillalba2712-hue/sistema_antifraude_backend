@@ -25,6 +25,7 @@ public class LicensingController {
     private final UsuarioEmpresaRepository usuarioEmpresaRepository;
     private final PlanPlanPreciosRolRepository planPlanPreciosRolRepository;
     private final EnforcementService enforcementService;
+    private final LicensingControlPlaneClient controlPlaneClient;
 
     public LicensingController(EmpresaRepository empresaRepository,
                                PlanLicenciaRepository planLicenciaRepository,
@@ -36,7 +37,8 @@ public class LicensingController {
                                PermisoSistemaRepository permisoSistemaRepository,
                                UsuarioEmpresaRepository usuarioEmpresaRepository,
                                PlanPlanPreciosRolRepository planPlanPreciosRolRepository,
-                               EnforcementService enforcementService) {
+                               EnforcementService enforcementService,
+                               LicensingControlPlaneClient controlPlaneClient) {
         this.empresaRepository = empresaRepository;
         this.planLicenciaRepository = planLicenciaRepository;
         this.suscripcionRepository = suscripcionRepository;
@@ -48,13 +50,15 @@ public class LicensingController {
         this.usuarioEmpresaRepository = usuarioEmpresaRepository;
         this.planPlanPreciosRolRepository = planPlanPreciosRolRepository;
         this.enforcementService = enforcementService;
+        this.controlPlaneClient = controlPlaneClient;
     }
 
     @GetMapping("/empresas")
     public ResponseEntity<List<Map<String, Object>>> empresas() {
         return ResponseEntity.ok(empresaRepository.findAll().stream().map(e -> mapOf(
                 "id", e.getId(), "codigo", e.getCodigo(), "nombre", e.getNombre(), "ruc", e.getRuc(),
-                "emailContacto", e.getEmailContacto(), "telefonoContacto", e.getTelefonoContacto(), "estado", e.getEstado()
+                "emailContacto", e.getEmailContacto(), "telefonoContacto", e.getTelefonoContacto(),
+                "direccionContacto", e.getDireccionContacto(), "estado", e.getEstado()
         )).toList());
     }
 
@@ -131,6 +135,11 @@ public class LicensingController {
 
     @GetMapping("/planes/{planId}/precios-rol")
     public ResponseEntity<List<Map<String, Object>>> preciosRol(@PathVariable Long planId) {
+        Map<String, Object> paqueteControlPlane = controlPlaneClient.configurationPackage();
+        List<Map<String, Object>> tarifasControlPlane = rolePricesFromControlPlane(paqueteControlPlane);
+        if (!tarifasControlPlane.isEmpty()) {
+            return ResponseEntity.ok(tarifasControlPlane);
+        }
         PlanLicencia plan = planLicenciaRepository.findById(planId)
                 .orElseThrow(() -> new com.antifraude.exception.ResourceNotFoundException("PlanLicencia", "id", planId));
         return ResponseEntity.ok(planPlanPreciosRolRepository
@@ -139,8 +148,31 @@ public class LicensingController {
                         "rol", ppr.getRol().getCodigo(),
                         "rolNombre", ppr.getRol().getNombre(),
                         "precioAnual", ppr.getPrecioAnual(),
+                        "precioAnualUsd", ppr.getPrecioAnual(),
+                        "precioAnualPyg", ppr.getPrecioAnual(),
                         "activo", ppr.getActivo()
                 )).toList());
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> rolePricesFromControlPlane(Map<String, Object> paqueteControlPlane) {
+        Object rows = paqueteControlPlane != null ? paqueteControlPlane.get("rolePrices") : null;
+        if (!(rows instanceof List<?> list)) {
+            return List.of();
+        }
+        return list.stream()
+                .filter(Map.class::isInstance)
+                .map(Map.class::cast)
+                .map(row -> mapOf(
+                        "id", row.get("id"),
+                        "rol", row.get("rolCodigo"),
+                        "rolNombre", row.get("rolNombre"),
+                        "precioAnualUsd", row.get("precioAnualUsd"),
+                        "precioAnualPyg", row.get("precioAnualPyg"),
+                        "precioAnual", row.get("precioAnualUsd"),
+                        "activo", row.get("activo")
+                ))
+                .toList();
     }
 
     @GetMapping("/roles")

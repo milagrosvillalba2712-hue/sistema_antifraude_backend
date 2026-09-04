@@ -25,6 +25,6 @@ public class CalendarioRiesgo extends TenantAwareEntity {
     private String descripcion;
 
     public enum TipoDia {
-        FERIADO, NO_HABIL, EVENTO_ESPECIAL, CIERRE_MES
+        FERIADO, NO_HABIL, EVENTO_ESPECIAL, CIERRE_MES, ALTA_DEMANDA
     }
 }

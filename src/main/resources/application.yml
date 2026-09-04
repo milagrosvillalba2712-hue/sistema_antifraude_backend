@@ -3,7 +3,7 @@ server:
 
 spring:
   config:
-    import: optional:file:.env[.properties]
+    import: optional:file:.env[.properties],optional:file:sistema_antifraude_backend/.env[.properties]
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:demo}
   datasource:
@@ -65,6 +65,9 @@ app:
       api-key: ${LICENSES_CONTROL_PLANE_API_KEY:}
   audit:
     nivel: ${AUDIT_NIVEL:avanzada}
+  screening:
+    name-fuzzy-threshold: ${NAME_FUZZY_THRESHOLD:70}
+    name-fuzzy-enabled: ${NAME_FUZZY_ENABLED:true}
   jwt:
     secret: ${JWT_SECRET:jwt_secret_key_default_change_in_production}
     expiration-ms: 86400000
@@ -87,6 +90,19 @@ app:
     pep:
       url: ${PEP_API_URL:https://localhost:8443}
       api-key: ${PEP_API_KEY:}
+    screening:
+      url: ${SCREENING_API_URL:https://localhost:8443}
+      api-key: ${SCREENING_API_KEY:${IDENTIFICACIONES_API_KEY:}}
+  external-clients:
+    enabled: ${EXTERNAL_CLIENTS_ENABLED:true}
+    api-key-header: X-API-Key
+    request-signature-header: X-Request-Signature
+    request-timestamp-header: X-Request-Timestamp
+    signature-tolerance-seconds: 300
+    require-signature: false
+    require-mtls: false
+    rate-limit-enabled: true
+    default-rate-limit-per-minute: 600
 
 resilience4j:
   retry:

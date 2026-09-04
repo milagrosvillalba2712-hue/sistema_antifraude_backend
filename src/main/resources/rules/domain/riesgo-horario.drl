@@ -11,9 +11,10 @@ rule "Horario no habitual"
     when
         $ctx : RiskContext()
         $t : TransaccionFact(fechaTransaccion != null) from $ctx.getTransaccionFact()
-        eval($t.getFechaTransaccion().getHour() <= 5 || $t.getFechaTransaccion().getHour() >= 23)
+        eval($t.getFechaTransaccion().getHour() >= $ctx.getConfig().getHorarioRiesgoEmpieza()
+             || $t.getFechaTransaccion().getHour() < $ctx.getConfig().getHorarioRiesgoTermina())
     then
-        scoreTracker.addScore(15);
+        scoreTracker.addScore($ctx.getConfig().getHorarioScore());
         System.out.println("[Drools] Horario no habitual detectado: " + $t.getFechaTransaccion().getHour() + "h");
 end
 

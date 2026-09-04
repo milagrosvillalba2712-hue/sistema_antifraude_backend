@@ -6,6 +6,7 @@ import com.antifraude.common.entity.Pais;
 import com.antifraude.common.entity.Persona;
 import com.antifraude.common.entity.Producto;
 import com.antifraude.common.entity.Canal;
+import com.antifraude.common.entity.TipoDocumento;
 import com.antifraude.licensing.Empresa;
 import jakarta.persistence.*;
 import lombok.*;
@@ -120,17 +121,39 @@ public class Transaccion {
     @Column(name = "nombre_beneficiario", length = 180)
     private String nombreBeneficiario;
 
+    @Column(name = "remitente_nombre_completo", nullable = false, length = 220)
+    private String remitenteNombreCompleto;
+
+    @Column(name = "beneficiario_nombre_completo", nullable = false, length = 220)
+    private String beneficiarioNombreCompleto;
+
     @Column(name = "documento_remitente_enc")
     private byte[] documentoRemitenteEnc;
 
     @Column(name = "documento_remitente_hash")
     private byte[] documentoRemitenteHash;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tipo_documento_remitente_id", nullable = false)
+    private TipoDocumento tipoDocumentoRemitente;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pais_emisor_documento_remitente_id", nullable = false)
+    private Pais paisEmisorDocumentoRemitente;
+
     @Column(name = "documento_beneficiario_enc")
     private byte[] documentoBeneficiarioEnc;
 
     @Column(name = "documento_beneficiario_hash")
     private byte[] documentoBeneficiarioHash;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tipo_documento_beneficiario_id", nullable = false)
+    private TipoDocumento tipoDocumentoBeneficiario;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pais_emisor_documento_beneficiario_id", nullable = false)
+    private Pais paisEmisorDocumentoBeneficiario;
 
     @Column(name = "cuenta_origen_enc")
     private byte[] cuentaOrigenEnc;
@@ -193,6 +216,27 @@ public class Transaccion {
     @Column(name = "swift_bic_destino", length = 11)
     private String swiftBicDestino;
 
+    @Column(name = "entidad_origen_tipo", length = 40)
+    private String entidadOrigenTipo;
+
+    @Column(name = "entidad_origen_codigo", length = 80)
+    private String entidadOrigenCodigo;
+
+    @Column(name = "entidad_origen_nombre", length = 180)
+    private String entidadOrigenNombre;
+
+    @Column(name = "entidad_destino_tipo", length = 40)
+    private String entidadDestinoTipo;
+
+    @Column(name = "entidad_destino_codigo", length = 80)
+    private String entidadDestinoCodigo;
+
+    @Column(name = "entidad_destino_nombre", length = 180)
+    private String entidadDestinoNombre;
+
+    @Column(name = "referencia_externa", length = 120)
+    private String referenciaExterna;
+
     @Column(name = "score_riesgo", precision = 8, scale = 2)
     private BigDecimal scoreRiesgo;
 
@@ -218,6 +262,9 @@ public class Transaccion {
 
     @Transient
     private String identificadorDocumento;
+
+    @Transient
+    private String documentoBeneficiario;
 
     @Transient
     private String cuentaOrigen;
@@ -255,6 +302,34 @@ public class Transaccion {
         return null;
     }
 
+    public String getDocumentoRemitente() {
+        return identificadorDocumento;
+    }
+
+    public String getTipoDocumentoRemitenteCodigo() {
+        return tipoDocumentoRemitente != null ? tipoDocumentoRemitente.getCodigo() : null;
+    }
+
+    public String getTipoDocumentoBeneficiarioCodigo() {
+        return tipoDocumentoBeneficiario != null ? tipoDocumentoBeneficiario.getCodigo() : null;
+    }
+
+    public String getPaisEmisorDocumentoRemitenteCodigo() {
+        return paisEmisorDocumentoRemitente != null ? paisEmisorDocumentoRemitente.getCodigoIso() : null;
+    }
+
+    public String getPaisEmisorDocumentoBeneficiarioCodigo() {
+        return paisEmisorDocumentoBeneficiario != null ? paisEmisorDocumentoBeneficiario.getCodigoIso() : null;
+    }
+
+    public String getIdentificadorDocumentoEnmascarado() {
+        return maskDocument(identificadorDocumento, documentoRemitenteHash);
+    }
+
+    public String getDocumentoBeneficiarioEnmascarado() {
+        return maskDocument(documentoBeneficiario, documentoBeneficiarioHash);
+    }
+
     public String getCuentaOrigen() {
         return cuentaOrigen != null ? cuentaOrigen : masked(cuentaOrigenHash, "Cuenta Protegida");
     }
@@ -281,5 +356,16 @@ public class Transaccion {
 
     private String masked(byte[] hash, String label) {
         return hash == null ? null : label;
+    }
+
+    private String maskDocument(String value, byte[] hash) {
+        if (value != null && !value.isBlank()) {
+            String digits = value.replaceAll("\\D", "");
+            if (digits.length() >= 4) {
+                return "***" + digits.substring(digits.length() - 4);
+            }
+            return "***";
+        }
+        return hash == null ? null : "Documento Protegido";
     }
 }

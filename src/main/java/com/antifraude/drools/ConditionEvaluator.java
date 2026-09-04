@@ -28,10 +28,13 @@ public class ConditionEvaluator {
         }
         try {
             JsonNode root = objectMapper.readTree(condicionesJson);
-            String combinador = root.path("combinador").asText(root.path("operator").asText("ALL"));
+            String combinador = root.path("logic").asText(root.path("combinador").asText(root.path("operator").asText("ALL")));
             JsonNode items = root.path("items");
             if (!items.isArray()) {
                 items = root.path("condiciones");
+            }
+            if (!items.isArray()) {
+                items = root.path("conditions");
             }
             if (!items.isArray() || items.isEmpty()) {
                 return false;
@@ -139,8 +142,12 @@ public class ConditionEvaluator {
         facts.put("beneficiarioenlista", context.isBeneficiarioEnLista());
         facts.put("documentoenlista", context.isDocumentoEnLista());
         facts.put("cuentaenlista", context.isCuentaEnLista());
-        facts.put("paisorigenaltoriesgo", context.isPaisOrigenAltoRiesgo());
-        facts.put("paisdestinoaltoriesgo", context.isPaisDestinoAltoRiesgo());
+            facts.put("paisorigenaltoriesgo", context.isPaisOrigenAltoRiesgo());
+            facts.put("paisdestinoaltoriesgo", context.isPaisDestinoAltoRiesgo());
+            facts.put("paismonitoreado", context.isPaisOrigenMonitoreado() || context.isPaisDestinoMonitoreado());
+            facts.put("canalaltoriesgo", context.isCanalAltoRiesgo());
+            facts.put("canalriesgo", context.isCanalAltoRiesgo());
+            facts.put("canalaltorriesgo", context.isCanalAltoRiesgo());
         facts.put("paisorigenmonitoreado", context.isPaisOrigenMonitoreado());
         facts.put("paisdestinomonitoreado", context.isPaisDestinoMonitoreado());
         facts.put("tipolista", listValues(context, "categoria"));

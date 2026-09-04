@@ -6,10 +6,15 @@ import com.antifraude.exception.BusinessException;
 import com.antifraude.external.*;
 import com.antifraude.licensing.ConsumoService;
 import com.antifraude.licensing.EnforcementService;
+import com.antifraude.common.entity.Pais;
+import com.antifraude.common.entity.TipoDocumento;
+import com.antifraude.common.repository.PaisRepository;
+import com.antifraude.common.repository.TipoDocumentoRepository;
 import com.antifraude.security.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 public class KycService {
@@ -19,17 +24,23 @@ public class KycService {
     private final ExternalAuditService audit;
     private final EnforcementService enforcementService;
     private final ConsumoService consumoService;
+    private final PaisRepository paisRepository;
+    private final TipoDocumentoRepository tipoDocumentoRepository;
 
     public KycService(IdentificacionesClient identities, BcpSancionesClient sanctions,
                       SepreladPepClient pep, ExternalAuditService audit,
-                      EnforcementService enforcementService, ConsumoService consumoService) {
+                      EnforcementService enforcementService, ConsumoService consumoService,
+                      PaisRepository paisRepository, TipoDocumentoRepository tipoDocumentoRepository) {
         this.identities=identities; this.sanctions=sanctions; this.pep=pep; this.audit=audit;
         this.enforcementService = enforcementService;
         this.consumoService = consumoService;
+        this.paisRepository = paisRepository;
+        this.tipoDocumentoRepository = tipoDocumentoRepository;
     }
 
     public KycResponse consultar(KycRequest request, UUID usuarioId) {
         String type = request.tipoConsulta() == null ? "IDENTIDAD" : request.tipoConsulta().toUpperCase(Locale.ROOT);
+        validarDocumento(request);
         UUID empresaId = TenantContext.getEmpresaId();
         enforcementService.verificarSuscripcionVigente(empresaId);
         enforcementService.verificarModulo(empresaId, "KYC");
@@ -64,5 +75,21 @@ public class KycService {
                            int attempts, boolean match, String state, String category) {
         audit.record(TenantContext.getEmpresaId(), request.identificadorDocumento(), request.tipoConsulta(), provider,
                 correlation, status, duration, attempts, match, state, category);
+    }
+
+    private void validarDocumento(KycRequest request) {
+        Pais pais = paisRepository.findByCodigoIso(request.paisEmisorDocumento().trim().toUpperCase(Locale.ROOT))
+                .orElseThrow(() -> new BusinessException("DOCUMENT_COUNTRY_INVALID", "Pais emisor de documento invalido"));
+        TipoDocumento tipoDocumento = tipoDocumentoRepository.findByCodigo(request.tipoDocumento().trim().toUpperCase(Locale.ROOT))
+                .or(() -> tipoDocumentoRepository.findByCodigoTecnico(request.tipoDocumento().trim().toUpperCase(Locale.ROOT)))
+                .orElseThrow(() -> new BusinessException("DOCUMENT_TYPE_INVALID", "Tipo de documento invalido"));
+        if (tipoDocumento.getPaisRelacion() != null
+                && !tipoDocumento.getPaisRelacion().getCodigoIso().equalsIgnoreCase(pais.getCodigoIso())) {
+            throw new BusinessException("DOCUMENT_TYPE_COUNTRY_MISMATCH", "El tipo de documento no corresponde al pais indicado");
+        }
+        if (tipoDocumento.getFormatoRegex() != null && !tipoDocumento.getFormatoRegex().isBlank()
+                && !Pattern.matches(tipoDocumento.getFormatoRegex(), request.identificadorDocumento().trim())) {
+            throw new BusinessException("DOCUMENT_FORMAT_INVALID", "El documento no cumple el formato esperado");
+        }
     }
 }

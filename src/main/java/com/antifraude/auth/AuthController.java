@@ -1,6 +1,9 @@
 package com.antifraude.auth;
 
+import com.antifraude.audit.AuditoriaService;
+import com.antifraude.config.ClientIpResolver;
 import com.antifraude.dto.*;
+import com.antifraude.security.tenant.TenantContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -12,9 +15,11 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final AuditoriaService auditoriaService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, AuditoriaService auditoriaService) {
         this.authService = authService;
+        this.auditoriaService = auditoriaService;
     }
 
     @PostMapping("/login")
@@ -52,6 +57,25 @@ public class AuthController {
                                                            HttpServletRequest httpRequest) {
         String email = authentication.getName();
         return ResponseEntity.ok(authService.cambiarPassword(email, request, httpRequest));
+    }
+
+    @PostMapping("/logout-inactividad")
+    public ResponseEntity<MensajeResponse> logoutInactividad(HttpServletRequest httpRequest) {
+        if (TenantContext.getUsuarioId() != null) {
+            auditoriaService.registrar(
+                    TenantContext.getUsuarioId(),
+                    TenantContext.getEmpresaId(),
+                    "CIERRE_SESION_INACTIVIDAD",
+                    "La sesión fue cerrada automáticamente por inactividad del usuario.",
+                    ClientIpResolver.resolve(httpRequest),
+                    httpRequest.getHeader("User-Agent"),
+                    "auth_session",
+                    TenantContext.getUsuarioId(),
+                    null,
+                    "{\"motivo\":\"INACTIVIDAD\"}"
+            );
+        }
+        return ResponseEntity.ok(new MensajeResponse("Sesión cerrada por inactividad."));
     }
 
     /** Endpoint publico para validar si un codigo de invitacion es valido. */

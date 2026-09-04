@@ -91,7 +91,7 @@ public class RuleEngineEntityController {
 
     @GetMapping("/{entity}/{id}")
     @Transactional
-    public ResponseEntity<Map<String, Object>> detalle(@PathVariable String entity, @PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> detalle(@PathVariable String entity, @PathVariable String id) {
         Object row = findRequired(resolve(entity), id);
         return ResponseEntity.ok(flatten(row));
     }
@@ -101,6 +101,7 @@ public class RuleEngineEntityController {
     public ResponseEntity<Map<String, Object>> crear(@PathVariable String entity, @RequestBody Map<String, Object> payload,
                                                      Authentication authentication, HttpServletRequest request) {
         Class<?> type = resolve(entity);
+        rechazarCatalogoNoEditable(type, "crear");
         Object row = instantiate(type);
         applyPayload(row, payload);
         entityManager.persist(row);
@@ -110,14 +111,23 @@ public class RuleEngineEntityController {
         return ResponseEntity.ok(flatten(row));
     }
 
+    private void rechazarCatalogoNoEditable(Class<?> type, String operacion) {
+        if (esCatalogoControlPlane(type)) {
+            throw new IllegalArgumentException("El catálogo '" + tableName(type)
+                    + "' es administrado por el Control Plane y es de solo lectura; no se permite " + operacion);
+        }
+    }
+
     @PutMapping("/{entity}/{id}")
     @Transactional
     public ResponseEntity<Map<String, Object>> actualizar(@PathVariable String entity,
-                                                          @PathVariable Long id,
+                                                          @PathVariable String id,
                                                           @RequestBody Map<String, Object> payload,
                                                           Authentication authentication,
                                                           HttpServletRequest request) {
-        Object row = findRequired(resolve(entity), id);
+        Class<?> type = resolve(entity);
+        rechazarCatalogoNoEditable(type, "editar");
+        Object row = findRequired(type, id);
         String anterior = toJson(flatten(row));
         applyPayload(row, payload);
         entityManager.flush();
@@ -128,9 +138,11 @@ public class RuleEngineEntityController {
 
     @DeleteMapping("/{entity}/{id}")
     @Transactional
-    public ResponseEntity<Void> eliminar(@PathVariable String entity, @PathVariable Long id,
+    public ResponseEntity<Void> eliminar(@PathVariable String entity, @PathVariable String id,
                                          Authentication authentication, HttpServletRequest request) {
-        Object row = findRequired(resolve(entity), id);
+        Class<?> type = resolve(entity);
+        rechazarCatalogoNoEditable(type, "eliminar");
+        Object row = findRequired(type, id);
         String anterior = toJson(flatten(row));
         entityManager.remove(row);
         registrarAuditoria(authentication, request, "ELIMINAR_REGISTRO", tableName(row.getClass()), id,
@@ -149,6 +161,7 @@ public class RuleEngineEntityController {
                 ListaRegulatoria.class, Moneda.class, NivelRiesgo.class, Pais.class, PaisRiesgo.class,
                 PerfilCliente.class, PerfilUsuario.class, Persona.class, ProcesadoraTarjeta.class, Producto.class,
                 ReglaRiesgo.class, ReporteRos.class, ServicioExterno.class, TipoDocumento.class,
+                ConfiguracionDrools.class,
                 TipoTransaccion.class, Transaccion.class, Usuario.class,
                 Empresa.class, PlanLicencia.class, Suscripcion.class, Contrato.class, Pago.class,
                 UsoSuscripcion.class, RolSistema.class, PermisoSistema.class, RolPermiso.class, UsuarioEmpresa.class,
@@ -178,8 +191,9 @@ public class RuleEngineEntityController {
                 .getSingleResult();
     }
 
-    private Object findRequired(Class<?> type, Long id) {
-        Object row = entityManager.find(type, id);
+    private Object findRequired(Class<?> type, String id) {
+        Object pk = convertId(id, type);
+        Object row = entityManager.find(type, pk);
         if (row == null) throw new IllegalArgumentException("Registro no encontrado: " + type.getSimpleName() + "#" + id);
         return row;
     }
@@ -224,6 +238,7 @@ public class RuleEngineEntityController {
                 result.put(name, null);
             }
         }
+        result.putIfAbsent("id", readId(row));
         return result;
     }
 
@@ -245,6 +260,16 @@ public class RuleEngineEntityController {
         try {
             return value.getClass().getMethod("getId").invoke(value);
         } catch (Exception e) {
+            // Entidades cuya PK no se llama 'id' (p. ej. configuracion_drools por 'clave').
+            try {
+                for (Field field : fields(value.getClass())) {
+                    if (field.isAnnotationPresent(jakarta.persistence.Id.class)) {
+                        field.setAccessible(true);
+                        return field.get(value);
+                    }
+                }
+            } catch (Exception ignored) {
+            }
             return null;
         }
     }
@@ -273,6 +298,12 @@ public class RuleEngineEntityController {
 
     private boolean isEditable(Class<?> type) {
         return !List.of(EjecucionRegla.class, Auditoria.class, HistorialAsignacion.class, EstadisticaCargaAnalista.class)
+                .contains(type)
+                && !esCatalogoControlPlane(type);
+    }
+
+    private boolean esCatalogoControlPlane(Class<?> type) {
+        return Set.of(Pais.class, Moneda.class, Canal.class, TipoTransaccion.class, Producto.class, TipoDocumento.class)
                 .contains(type);
     }
 

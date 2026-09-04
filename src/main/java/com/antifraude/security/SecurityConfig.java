@@ -8,12 +8,11 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import com.antifraude.security.tenant.TenantTransactionFilter;
 import com.antifraude.licensing.LicenciaFilter;
+import com.antifraude.security.clienteExterno.ExternalClientApiKeyFilter;
 import org.springframework.http.HttpMethod;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -30,6 +29,7 @@ public class SecurityConfig {
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
     private final TenantTransactionFilter tenantTransactionFilter;
     private final LicenciaFilter licenciaFilter;
+    private final ExternalClientApiKeyFilter externalClientApiKeyFilter;
     private final String allowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
@@ -37,12 +37,14 @@ public class SecurityConfig {
                           JwtAccessDeniedHandler jwtAccessDeniedHandler,
                           TenantTransactionFilter tenantTransactionFilter,
                           LicenciaFilter licenciaFilter,
+                          ExternalClientApiKeyFilter externalClientApiKeyFilter,
                           @Value("${app.cors.allowed-origins:http://localhost:5173,http://127.0.0.1:5173}") String allowedOrigins) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
         this.jwtAccessDeniedHandler = jwtAccessDeniedHandler;
         this.tenantTransactionFilter = tenantTransactionFilter;
         this.licenciaFilter = licenciaFilter;
+        this.externalClientApiKeyFilter = externalClientApiKeyFilter;
         this.allowedOrigins = allowedOrigins;
     }
 
@@ -72,6 +74,7 @@ public class SecurityConfig {
                     .requestMatchers("/swagger-ui.html").permitAll()
                     .requestMatchers("/api-docs/**").permitAll()
                     .requestMatchers("/error").permitAll()
+                    .requestMatchers("/api/admin/clientes-externos/**").hasAuthority("CLIENTES_EXTERNOS_GESTIONAR")
                     .requestMatchers("/api/admin/**").hasAuthority("USUARIOS_VER")
                     .requestMatchers("/api/licensing/**").hasAuthority("LICENCIAS_VER")
                     .requestMatchers(HttpMethod.POST, "/api/listas-control/**").hasAuthority("CATALOGOS_EDITAR")
@@ -86,6 +89,7 @@ public class SecurityConfig {
                     .requestMatchers("/api/reportes/**").hasAuthority("REPORTES_VER")
                     .requestMatchers("/api/auditoria/**").hasAuthority("AUDITORIA_VER")
                     .anyRequest().authenticated())
+            .addFilterBefore(externalClientApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(tenantTransactionFilter, JwtAuthenticationFilter.class)
             .addFilterAfter(licenciaFilter, TenantTransactionFilter.class);
@@ -114,11 +118,6 @@ public class SecurityConfig {
                 .filter(origin -> !origin.isBlank())
                 .filter(origin -> !"*".equals(origin))
                 .toList();
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 
     @Bean

@@ -3,6 +3,8 @@ package com.antifraude.licensing;
 import com.antifraude.common.entity.AuditableEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "uso_suscripcion", uniqueConstraints = {
@@ -56,6 +58,7 @@ public class UsoSuscripcion extends AuditableEntity {
     @Builder.Default
     private Integer reportesGenerados = 0;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "consumo_json", columnDefinition = "jsonb")
     @Builder.Default
     private String consumoJson = "{}";
