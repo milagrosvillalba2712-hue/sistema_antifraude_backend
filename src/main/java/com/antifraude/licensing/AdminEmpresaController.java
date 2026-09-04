@@ -489,7 +489,8 @@ public class AdminEmpresaController {
     private Map<String, Object> empresaDto(Empresa e) {
         if (e == null) return null;
         return mapOf("id", e.getId(), "codigo", e.getCodigo(), "nombre", e.getNombre(), "ruc", e.getRuc(),
-                "emailContacto", e.getEmailContacto(), "telefonoContacto", e.getTelefonoContacto(), "estado", e.getEstado());
+                "emailContacto", e.getEmailContacto(), "telefonoContacto", e.getTelefonoContacto(),
+                "direccionContacto", e.getDireccionContacto(), "estado", e.getEstado());
     }
 
     private Map<String, Object> suscripcionDto(Suscripcion s) {

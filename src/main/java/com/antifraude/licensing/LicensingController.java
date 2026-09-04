@@ -57,7 +57,8 @@ public class LicensingController {
     public ResponseEntity<List<Map<String, Object>>> empresas() {
         return ResponseEntity.ok(empresaRepository.findAll().stream().map(e -> mapOf(
                 "id", e.getId(), "codigo", e.getCodigo(), "nombre", e.getNombre(), "ruc", e.getRuc(),
-                "emailContacto", e.getEmailContacto(), "telefonoContacto", e.getTelefonoContacto(), "estado", e.getEstado()
+                "emailContacto", e.getEmailContacto(), "telefonoContacto", e.getTelefonoContacto(),
+                "direccionContacto", e.getDireccionContacto(), "estado", e.getEstado()
         )).toList());
     }
 
